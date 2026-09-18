@@ -1088,16 +1088,20 @@ export class SupabaseService {
   }
 
   /**
-   * Registra retrabalho usando SQL function
+   * Registra retrabalho usando SQL function.
+   *
+   * As horas sao obrigatorias de proposito: registrar_retrabalho_dia e upsert por
+   * (atribuicao, dia) e o UPDATE sobrescreve as colunas, entao chamar sem elas apagaria
+   * as horas ja informadas no dia. Deixa-las opcionais permitia exatamente isso.
    */
   async registrarRetrabalho(
     eng_projeto_id: string,
     necessitou_retrabalho: boolean,
-    motivo?: string,
-    tipo?: string,
-    descricao?: string,
-    horasTrabalhadasTotal?: number,
-    horasRetrabalho?: number
+    motivo: string | undefined,
+    tipo: string | undefined,
+    descricao: string | undefined,
+    horasTrabalhadasTotal: number,
+    horasRetrabalho: number
   ): Promise<Retrabalho | null> {
     if (!this.connected) return null;
 

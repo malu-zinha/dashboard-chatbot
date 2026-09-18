@@ -891,6 +891,19 @@ _Digite o número da opção desejada_`;
     }
 
     if (resposta === '2') {
+      const horasTrabalhadasTotal = this.state.horasTrabalhadasTotal;
+
+      // O passo 'horas_trabalhadas' sempre roda antes deste, entao isto nao deveria
+      // acontecer. Mas a RPC sobrescreve as horas do dia, e gravar sem elas apagaria o que
+      // ja estava la — melhor devolver a pergunta do que perder o dado em silencio.
+      if (horasTrabalhadasTotal == null) {
+        this.goToStep('horas_trabalhadas');
+        return {
+          mensagem: `❌ Não encontrei as horas trabalhadas.\n\n⏱️ *Quantas horas foram trabalhadas hoje nesta tarefa/disciplina?*\n\n_Exemplo: 8 ou 7,5_`,
+          finalizado: false
+        };
+      }
+
       this.state.teveRetrabalho = false;
       this.state.horasRetrabalho = 0;
 
@@ -900,7 +913,7 @@ _Digite o número da opção desejada_`;
         undefined,
         undefined,
         undefined,
-        this.state.horasTrabalhadasTotal,
+        horasTrabalhadasTotal,
         0
       );
 
@@ -959,7 +972,8 @@ _Digite o número da opção desejada_`;
       this.state.motivoRetrabalho,
       undefined,
       undefined,
-      this.state.horasTrabalhadasTotal,
+      // validarHorasRetrabalho acima ja rejeitou null e <= 0
+      this.state.horasTrabalhadasTotal!,
       this.state.horasRetrabalho
     );
 
