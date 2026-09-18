@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react'
+import React from 'react'
 import { X, Search, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, Trash2, UserRoundCog, Eye, FileDown } from 'lucide-react'
 import { buildCompletedDisciplineKey, getProjetoAreaDisplayName } from '@/lib/compatibilizacao'
 import { isProjetoConcluido, projetoMatchesStatusFilter, type ProjetoStatusFilter } from '@/lib/projetoFilters'
@@ -6,6 +6,7 @@ import { searchScore } from '@/lib/search'
 import { verificarAtribuicaoInfo, fetchRelatorioProjetoPdf, type Engenheiro } from '@/lib/supabase'
 import { gerarRelatorioPdf } from '@/lib/gerarRelatorioPdf'
 import ProjetoDetalhesModal from './ProjetoDetalhesModal'
+import ModalShell from './ModalShell'
 
 interface Projeto {
   atribuicao_id?: string
@@ -41,6 +42,8 @@ interface ProjetosTableProps {
   onTransferirResponsavel?: (projeto: Projeto, novoEngId: string) => Promise<void>
   onExcluirTarefa?: (projeto: Projeto) => Promise<void>
   onExcluirProjeto?: (projeto: Projeto) => Promise<void>
+  fullscreen: boolean
+  onToggleFullscreen: () => void
 }
 
 export default function ProjetosTable({ 
@@ -55,6 +58,8 @@ export default function ProjetosTable({
   onTransferirResponsavel,
   onExcluirTarefa,
   onExcluirProjeto,
+  fullscreen,
+  onToggleFullscreen,
 }: ProjetosTableProps) {
   const [searchTerm, setSearchTerm] = React.useState('')
   const [filterStatus, setFilterStatus] = React.useState<ProjetoStatusFilter>(initialFilter)
@@ -70,27 +75,6 @@ export default function ProjetosTable({
   const [detalheProjeto, setDetalheProjeto] = React.useState<Projeto | null>(null)
   const [gerandoPdfProjetoId, setGerandoPdfProjetoId] = React.useState<string | null>(null)
   
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') onClose()
-  }, [onClose])
-
-  useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown)
-      return () => document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isOpen, handleKeyDown])
-
-  // Trava scroll do body quando modal abre, destrava quando fecha
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
-    return () => { document.body.style.overflow = '' }
-  }, [isOpen])
-
   // Atualiza o filtro e limpa busca quando o modal abre com um filtro inicial
   React.useEffect(() => {
     if (isOpen) {
@@ -237,14 +221,29 @@ export default function ProjetosTable({
     }
   }
 
-  const fecharAcao = () => {
+  const fecharAcao = React.useCallback(() => {
     if (isActionSubmitting || isCheckingInfo) return
     setTransferProjeto(null)
     setDeleteProjeto(null)
     setNovoResponsavelId('')
     setActionError(null)
     setIsUltimaDisciplina(false)
-  }
+  }, [isActionSubmitting, isCheckingInfo])
+
+  // Escape fecha a confirmacao do topo. O ModalShell fica com closeOnEscape
+  // desligado enquanto ela existe — para nao derrubar a tabela por baixo —, entao
+  // sem este listener a tecla nao faria nada. O ProjetoDetalhesModal ja tem o seu.
+  // fecharAcao ignora a chamada durante uma requisicao em voo.
+  React.useEffect(() => {
+    if (!transferProjeto && !deleteProjeto) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') fecharAcao()
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [transferProjeto, deleteProjeto, fecharAcao])
 
   const confirmarTransferencia = async () => {
     if (!transferProjeto || !onTransferirResponsavel) return
@@ -307,26 +306,18 @@ export default function ProjetosTable({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col animate-fade-in" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div className={`bg-gradient-to-r ${colorClasses[color]} p-6 rounded-t-xl`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-white">{title}</h2>
-              <p className="text-white text-opacity-90 text-sm mt-1">
-                {filteredData.length} projeto(s) encontrado(s)
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-        </div>
-
+    <>
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      fullscreen={fullscreen}
+      onToggleFullscreen={onToggleFullscreen}
+      title={title}
+      subtitle={`${filteredData.length} projeto(s) encontrado(s)`}
+      headerGradientClass={colorClasses[color]}
+      // Com uma confirmacao aberta por cima, o Escape nao pode fechar a tabela por baixo
+      closeOnEscape={!transferProjeto && !deleteProjeto && !detalheProjeto}
+    >
         {/* Busca */}
         <div className="p-4 border-b border-gray-200 bg-gray-50">
           <div className="relative">
@@ -628,12 +619,16 @@ export default function ProjetosTable({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+        <div
+          className={`p-4 border-t border-gray-200 bg-gray-50 ${
+            fullscreen ? '' : 'rounded-b-xl'
+          }`}
+        >
           <div className="text-sm text-gray-600 text-center">
             Mostrando {filteredData.length} de {data.length} projetos
           </div>
         </div>
-      </div>
+    </ModalShell>
 
       {transferProjeto && (
         <div
@@ -794,7 +789,7 @@ export default function ProjetosTable({
         onClose={() => setDetalheProjeto(null)}
         projeto={detalheProjeto}
       />
-    </div>
+    </>
   )
 }
 

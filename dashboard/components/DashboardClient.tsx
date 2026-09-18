@@ -114,6 +114,8 @@ export default function DashboardClient() {
   const [showAtribuirTaskModal, setShowAtribuirTaskModal] = useState(false)
   const [showCriarProjetoModal, setShowCriarProjetoModal] = useState(false)
   const [showRetrabalhoDetalhesModal, setShowRetrabalhoDetalhesModal] = useState(false)
+  // Um so estado: apenas um dos modais de KPI fica aberto por vez
+  const [modalFullscreen, setModalFullscreen] = useState(false)
   const [returnProjetosModal, setReturnProjetosModal] = useState<
     'all' | 'concluido' | 'em_execucao' | 'atrasado' | null
   >(null)
@@ -398,7 +400,8 @@ export default function DashboardClient() {
               subtitle={`${visaoGeral?.total_areas || 0} áreas`}
               icon={Briefcase}
               color="warning"
-              onClick={() => setShowProjetosModal(true)}
+              onClick={() => { setModalFullscreen(false); setShowProjetosModal(true) }}
+              onExpand={() => { setModalFullscreen(true); setShowProjetosModal(true) }}
             />
             <KPICard
               title="Projetos Concluídos"
@@ -406,7 +409,8 @@ export default function DashboardClient() {
               subtitle={`${visaoGeral?.areas_concluidas || 0} áreas concluídas`}
               icon={CheckCircle}
               color="warning"
-              onClick={() => setShowProjetosConcluidosModal(true)}
+              onClick={() => { setModalFullscreen(false); setShowProjetosConcluidosModal(true) }}
+              onExpand={() => { setModalFullscreen(true); setShowProjetosConcluidosModal(true) }}
             />
             <KPICard
               title="Em Execução"
@@ -414,7 +418,8 @@ export default function DashboardClient() {
               subtitle={`${visaoGeral?.areas_ativas || 0} áreas ativas`}
               icon={Play}
               color="warning"
-              onClick={() => setShowProjetosExecucaoModal(true)}
+              onClick={() => { setModalFullscreen(false); setShowProjetosExecucaoModal(true) }}
+              onExpand={() => { setModalFullscreen(true); setShowProjetosExecucaoModal(true) }}
             />
             <KPICard
               title="Engenheiros em Execução"
@@ -422,7 +427,8 @@ export default function DashboardClient() {
               subtitle={`${totalTarefasEngenheirosExecucao} tarefa(s) em execução`}
               icon={Users}
               color="warning"
-              onClick={() => setShowEngenheirosExecucaoModal(true)}
+              onClick={() => { setModalFullscreen(false); setShowEngenheirosExecucaoModal(true) }}
+              onExpand={() => { setModalFullscreen(true); setShowEngenheirosExecucaoModal(true) }}
             />
             <KPICard
               title="Atrasados"
@@ -430,7 +436,8 @@ export default function DashboardClient() {
               subtitle="Requer atenção"
               icon={AlertTriangle}
               color="warning"
-              onClick={() => setShowAtrasadosModal(true)}
+              onClick={() => { setModalFullscreen(false); setShowAtrasadosModal(true) }}
+              onExpand={() => { setModalFullscreen(true); setShowAtrasadosModal(true) }}
             />
           </div>
         </section>
@@ -447,6 +454,8 @@ export default function DashboardClient() {
           onTransferirResponsavel={handleTransferirResponsavel}
           onExcluirTarefa={handleExcluirTarefa}
           onExcluirProjeto={handleExcluirProjeto}
+          fullscreen={modalFullscreen}
+          onToggleFullscreen={() => setModalFullscreen((v) => !v)}
         />
         <ProjetosTable
           isOpen={showProjetosConcluidosModal}
@@ -460,6 +469,8 @@ export default function DashboardClient() {
           onTransferirResponsavel={handleTransferirResponsavel}
           onExcluirTarefa={handleExcluirTarefa}
           onExcluirProjeto={handleExcluirProjeto}
+          fullscreen={modalFullscreen}
+          onToggleFullscreen={() => setModalFullscreen((v) => !v)}
         />
         <ProjetosTable
           isOpen={showProjetosExecucaoModal}
@@ -473,6 +484,8 @@ export default function DashboardClient() {
           onTransferirResponsavel={handleTransferirResponsavel}
           onExcluirTarefa={handleExcluirTarefa}
           onExcluirProjeto={handleExcluirProjeto}
+          fullscreen={modalFullscreen}
+          onToggleFullscreen={() => setModalFullscreen((v) => !v)}
         />
         <ProjetosTable
           isOpen={showAtrasadosModal}
@@ -486,6 +499,8 @@ export default function DashboardClient() {
           onTransferirResponsavel={handleTransferirResponsavel}
           onExcluirTarefa={handleExcluirTarefa}
           onExcluirProjeto={handleExcluirProjeto}
+          fullscreen={modalFullscreen}
+          onToggleFullscreen={() => setModalFullscreen((v) => !v)}
         />
         <EngenheirosTable
           isOpen={showEngenheirosModal}
@@ -496,6 +511,8 @@ export default function DashboardClient() {
           isOpen={showEngenheirosExecucaoModal}
           onClose={() => setShowEngenheirosExecucaoModal(false)}
           projetos={projetos}
+          fullscreen={modalFullscreen}
+          onToggleFullscreen={() => setModalFullscreen((v) => !v)}
         />
         <AreasTable
           isOpen={showAreasModal}
