@@ -981,51 +981,11 @@ export class SupabaseService {
   // PREVISÕES E RETRABALHOS
   // =====================================================
 
-  /**
-   * Registra feito do dia (noite) usando SQL function
-   */
-  async registrarFeitoDia(
-    eng_projeto_id: string,
-    feito_texto: string,
-    necessitou_retrabalho: boolean = false,
-    motivo?: string,
-    nova_data_prevista?: string
-  ): Promise<Previsao | null> {
-    if (!this.connected) return null;
-
-    try {
-      const dataPrevistaFormatada = nova_data_prevista ? this.formatarDataParaDB(nova_data_prevista) : null;
-
-      const { data, error } = await this.supabase.rpc('atualizar_feito_dia', {
-        p_atribuicao_id: eng_projeto_id,
-        p_feito_texto: feito_texto,
-        p_nova_data_prevista: dataPrevistaFormatada,
-      });
-
-      if (error) {
-        console.error('❌ Erro ao registrar feito:', error);
-        return null;
-      }
-
-      if (!data || !data.sucesso) {
-        console.error('❌ Erro ao registrar feito:', data?.mensagem);
-        return null;
-      }
-
-      console.log(`✅ Feito registrado - registro agora é imutável`);
-
-      // Se teve retrabalho, registrar
-      if (necessitou_retrabalho) {
-        await this.registrarRetrabalho(eng_projeto_id, necessitou_retrabalho, motivo);
-      }
-
-      // Retornar previsão atualizada
-      return await this.buscarUltimaPrevisao(eng_projeto_id);
-    } catch (error: any) {
-      console.error('❌ Erro ao registrar feito:', error.message);
-      return null;
-    }
-  }
+  // Dead code removed: registrarFeitoDia().
+  // Seu unico chamador era o salvar() do engineerProjectFlow, que estava inalcancavel.
+  // Ela chamava registrarRetrabalho sem as horas, e como registrar_retrabalho_dia e
+  // upsert por (atribuicao, dia) com UPDATE que sobrescreve, isso gravaria NULL em
+  // horas_trabalhadas_total e horas_retrabalho, apagando as horas ja informadas.
 
   /**
    * Busca última previsão de uma atribuição
@@ -1128,16 +1088,20 @@ export class SupabaseService {
   }
 
   /**
-   * Registra retrabalho usando SQL function
+   * Registra retrabalho usando SQL function.
+   *
+   * As horas sao obrigatorias de proposito: registrar_retrabalho_dia e upsert por
+   * (atribuicao, dia) e o UPDATE sobrescreve as colunas, entao chamar sem elas apagaria
+   * as horas ja informadas no dia. Deixa-las opcionais permitia exatamente isso.
    */
   async registrarRetrabalho(
     eng_projeto_id: string,
     necessitou_retrabalho: boolean,
-    motivo?: string,
-    tipo?: string,
-    descricao?: string,
-    horasTrabalhadasTotal?: number,
-    horasRetrabalho?: number
+    motivo: string | undefined,
+    tipo: string | undefined,
+    descricao: string | undefined,
+    horasTrabalhadasTotal: number,
+    horasRetrabalho: number
   ): Promise<Retrabalho | null> {
     if (!this.connected) return null;
 
