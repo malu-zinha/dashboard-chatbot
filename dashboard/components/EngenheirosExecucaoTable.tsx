@@ -59,10 +59,21 @@ export default function EngenheirosExecucaoTable({
   const totalTarefas = filteredGroups.reduce((acc, grupo) => acc + grupo.total_tarefas, 0)
 
   // Os dois modos sao o mesmo kanban: uma linha de colunas com rolagem horizontal. Em tela
-  // cheia as colunas ficam mais estreitas, entao cabem ~6 engenheiros em vez de 4.
+  // cheia as colunas ficam mais estreitas (cabem ~6 engenheiros em vez de 4) e cada uma rola
+  // por dentro, em vez de o board inteiro rolar junto.
   const layout = fullscreen
-    ? { board: 'gap-3', column: 'w-56' }
-    : { board: 'gap-4', column: 'w-80' }
+    ? {
+        scroller: 'min-h-0 overflow-x-auto overflow-y-hidden',
+        board: 'h-full gap-3',
+        column: 'w-56',
+        taskList: 'min-h-0 overflow-y-auto gap-3 p-3',
+      }
+    : {
+        scroller: 'overflow-auto',
+        board: 'gap-4',
+        column: 'w-80',
+        taskList: 'gap-3 p-3',
+      }
 
   return (
     <ModalShell
@@ -87,7 +98,7 @@ export default function EngenheirosExecucaoTable({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-gray-50 p-4">
+      <div className={`flex-1 bg-gray-50 p-4 ${layout.scroller}`}>
         {filteredGroups.length === 0 ? (
           <div className="flex h-64 items-center justify-center text-sm text-gray-500">
             Nenhum engenheiro com projetos em execução
@@ -114,11 +125,11 @@ export default function EngenheirosExecucaoTable({
                   </div>
                 </div>
 
-                <div className="flex flex-1 flex-col gap-3 p-3">
+                <div className={`flex flex-1 flex-col ${layout.taskList}`}>
                   {grupo.tarefas.map((tarefa) => (
                     <article
                       key={tarefa.atribuicao_id || `${tarefa.projeto_id}-${tarefa.area_display_name}`}
-                      className={`rounded-lg border p-3 text-sm shadow-sm ${
+                      className={`flex-shrink-0 rounded-lg border p-3 text-sm shadow-sm ${
                         tarefa.dias_atraso > 0
                           ? 'border-red-200 bg-red-50'
                           : 'border-gray-200 bg-white'
