@@ -58,6 +58,12 @@ export default function EngenheirosExecucaoTable({
 
   const totalTarefas = filteredGroups.reduce((acc, grupo) => acc + grupo.total_tarefas, 0)
 
+  // Os dois modos sao o mesmo kanban: uma linha de colunas com rolagem horizontal. Em tela
+  // cheia as colunas ficam mais estreitas, entao cabem ~6 engenheiros em vez de 4.
+  const layout = fullscreen
+    ? { board: 'gap-3', column: 'w-56' }
+    : { board: 'gap-4', column: 'w-80' }
+
   return (
     <ModalShell
       isOpen={isOpen}
@@ -81,33 +87,21 @@ export default function EngenheirosExecucaoTable({
         </div>
       </div>
 
-      <div
-        className={`flex-1 overflow-y-auto bg-gray-50 p-4 ${
-          fullscreen ? '' : 'overflow-x-auto'
-        }`}
-      >
+      <div className="flex-1 overflow-auto bg-gray-50 p-4">
         {filteredGroups.length === 0 ? (
           <div className="flex h-64 items-center justify-center text-sm text-gray-500">
             Nenhum engenheiro com projetos em execução
           </div>
         ) : (
-          <div
-            className={
-              fullscreen
-                ? 'grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'
-                : 'flex min-w-max gap-4'
-            }
-          >
+          <div className={`flex min-w-max ${layout.board}`}>
             {filteredGroups.map((grupo) => (
               <section
                 key={grupo.eng_id}
-                className={`flex flex-col rounded-lg border border-gray-200 bg-white ${
-                  fullscreen ? 'w-full' : 'w-80 flex-shrink-0'
-                }`}
+                className={`flex flex-shrink-0 flex-col rounded-lg border border-gray-200 bg-white ${layout.column}`}
               >
                 <div className="border-b border-gray-200 p-4">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-tecpred-primary text-white">
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-tecpred-primary text-white">
                       <User className="h-5 w-5" />
                     </div>
                     <div className="min-w-0">
