@@ -221,14 +221,29 @@ export default function ProjetosTable({
     }
   }
 
-  const fecharAcao = () => {
+  const fecharAcao = React.useCallback(() => {
     if (isActionSubmitting || isCheckingInfo) return
     setTransferProjeto(null)
     setDeleteProjeto(null)
     setNovoResponsavelId('')
     setActionError(null)
     setIsUltimaDisciplina(false)
-  }
+  }, [isActionSubmitting, isCheckingInfo])
+
+  // Escape fecha a confirmacao do topo. O ModalShell fica com closeOnEscape
+  // desligado enquanto ela existe — para nao derrubar a tabela por baixo —, entao
+  // sem este listener a tecla nao faria nada. O ProjetoDetalhesModal ja tem o seu.
+  // fecharAcao ignora a chamada durante uma requisicao em voo.
+  React.useEffect(() => {
+    if (!transferProjeto && !deleteProjeto) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') fecharAcao()
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [transferProjeto, deleteProjeto, fecharAcao])
 
   const confirmarTransferencia = async () => {
     if (!transferProjeto || !onTransferirResponsavel) return
