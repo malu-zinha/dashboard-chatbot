@@ -59,20 +59,32 @@ export default function EngenheirosExecucaoTable({
   const totalTarefas = filteredGroups.reduce((acc, grupo) => acc + grupo.total_tarefas, 0)
 
   // Os dois modos sao o mesmo kanban: uma linha de colunas com rolagem horizontal. Em tela
-  // cheia as colunas ficam mais estreitas (cabem ~6 engenheiros em vez de 4) e cada uma rola
-  // por dentro, em vez de o board inteiro rolar junto.
+  // cheia as colunas ficam mais estreitas e densas (cabem ~6 engenheiros em vez de 4) e cada
+  // uma rola por dentro, em vez de o board inteiro rolar junto.
   const layout = fullscreen
     ? {
         scroller: 'min-h-0 overflow-x-auto overflow-y-hidden',
         board: 'h-full gap-3',
         column: 'w-56',
-        taskList: 'min-h-0 overflow-y-auto gap-3 p-3',
+        colHeader: 'p-3',
+        avatar: 'h-8 w-8',
+        avatarIcon: 'h-4 w-4',
+        engName: 'text-xs',
+        taskList: 'min-h-0 overflow-y-auto gap-2 p-2',
+        taskCard: 'p-2 text-xs',
+        meta: 'text-[11px]',
       }
     : {
         scroller: 'overflow-auto',
         board: 'gap-4',
         column: 'w-80',
+        colHeader: 'p-4',
+        avatar: 'h-10 w-10',
+        avatarIcon: 'h-5 w-5',
+        engName: 'text-sm',
         taskList: 'gap-3 p-3',
+        taskCard: 'p-3 text-sm',
+        meta: 'text-xs',
       }
 
   return (
@@ -110,13 +122,15 @@ export default function EngenheirosExecucaoTable({
                 key={grupo.eng_id}
                 className={`flex flex-shrink-0 flex-col rounded-lg border border-gray-200 bg-white ${layout.column}`}
               >
-                <div className="border-b border-gray-200 p-4">
+                <div className={`border-b border-gray-200 ${layout.colHeader}`}>
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-tecpred-primary text-white">
-                      <User className="h-5 w-5" />
+                    <div
+                      className={`flex flex-shrink-0 items-center justify-center rounded-full bg-tecpred-primary text-white ${layout.avatar}`}
+                    >
+                      <User className={layout.avatarIcon} />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="truncate text-sm font-bold text-gray-900">{grupo.engenheiro_nome}</h3>
+                      <h3 className={`truncate font-bold text-gray-900 ${layout.engName}`}>{grupo.engenheiro_nome}</h3>
                       <p className="text-xs text-gray-500">
                         {grupo.total_tarefas} tarefa(s)
                         {grupo.total_atrasadas > 0 ? `, ${grupo.total_atrasadas} atrasada(s)` : ''}
@@ -129,7 +143,7 @@ export default function EngenheirosExecucaoTable({
                   {grupo.tarefas.map((tarefa) => (
                     <article
                       key={tarefa.atribuicao_id || `${tarefa.projeto_id}-${tarefa.area_display_name}`}
-                      className={`flex-shrink-0 rounded-lg border p-3 text-sm shadow-sm ${
+                      className={`flex-shrink-0 rounded-lg border shadow-sm ${layout.taskCard} ${
                         tarefa.dias_atraso > 0
                           ? 'border-red-200 bg-red-50'
                           : 'border-gray-200 bg-white'
@@ -148,7 +162,9 @@ export default function EngenheirosExecucaoTable({
                         )}
                       </div>
 
-                      <div className="mb-3 inline-flex rounded-full bg-tecpred-light px-2 py-1 text-xs font-medium text-tecpred-primary">
+                      <div
+                        className={`mb-3 inline-flex rounded-full bg-tecpred-light px-2 py-1 font-medium text-tecpred-primary ${layout.meta}`}
+                      >
                         {tarefa.area_display_name}
                       </div>
 
@@ -168,7 +184,7 @@ export default function EngenheirosExecucaoTable({
                         </span>
                       </div>
 
-                      <div className="mt-2 text-xs text-gray-500">
+                      <div className={`mt-2 text-gray-500 ${layout.meta}`}>
                         Prazo: {formatPrazo(tarefa.data_prevista)}
                       </div>
                     </article>
