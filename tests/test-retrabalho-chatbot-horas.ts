@@ -33,4 +33,37 @@ assert.deepEqual(validarHorasRetrabalho({ horasTrabalhadasTotal: 8, horasRetraba
   valido: true,
 })
 
+// Sem exigirHorasRetrabalho, null significa "nao informado": e assim que o passo
+// horas_trabalhadas reusa a funcao para validar so o total.
+assert.deepEqual(validarHorasRetrabalho({ horasTrabalhadasTotal: 8, horasRetrabalho: null }), {
+  valido: true,
+})
+
+// Ja no passo retrabalho_horas, null significa "o usuario digitou algo invalido" —
+// parseHorasRetrabalho devolve null para 'abc', '2h', '-1' e vazio. Sem exigir, isso
+// passava e gravava um retrabalho com horas nulas.
+for (const entradaInvalida of ['abc', '', '  ', '2h', '-1']) {
+  assert.equal(parseHorasRetrabalho(entradaInvalida), null)
+  assert.deepEqual(
+    validarHorasRetrabalho({
+      horasTrabalhadasTotal: 8,
+      horasRetrabalho: parseHorasRetrabalho(entradaInvalida),
+      exigirHorasRetrabalho: true,
+    }),
+    {
+      valido: false,
+      mensagem: 'Informe um número maior que zero para as horas de retrabalho.',
+    }
+  )
+}
+
+assert.deepEqual(
+  validarHorasRetrabalho({
+    horasTrabalhadasTotal: 8,
+    horasRetrabalho: 2,
+    exigirHorasRetrabalho: true,
+  }),
+  { valido: true }
+)
+
 console.log('test-retrabalho-chatbot-horas: OK')

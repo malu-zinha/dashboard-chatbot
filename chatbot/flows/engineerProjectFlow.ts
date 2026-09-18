@@ -165,8 +165,15 @@ export function calcularPercentualRetrabalhoHoras(
 export function validarHorasRetrabalho(input: {
   horasTrabalhadasTotal?: number | null;
   horasRetrabalho?: number | null;
+  /**
+   * Quem so valida o total (passo horas_trabalhadas) deixa de fora e null significa
+   * "nao informado". Quem esta lendo a resposta do passo retrabalho_horas precisa marcar
+   * true: ali null vem de parseHorasRetrabalho recusando a entrada, e aceitar isso gravaria
+   * um retrabalho sem horas.
+   */
+  exigirHorasRetrabalho?: boolean;
 }): { valido: true } | { valido: false; mensagem: string } {
-  const { horasTrabalhadasTotal, horasRetrabalho } = input;
+  const { horasTrabalhadasTotal, horasRetrabalho, exigirHorasRetrabalho } = input;
 
   if (horasTrabalhadasTotal == null || horasTrabalhadasTotal <= 0) {
     return {
@@ -175,7 +182,13 @@ export function validarHorasRetrabalho(input: {
     };
   }
 
-  if (horasRetrabalho == null) return { valido: true };
+  if (horasRetrabalho == null) {
+    if (!exigirHorasRetrabalho) return { valido: true };
+    return {
+      valido: false,
+      mensagem: 'Informe um número maior que zero para as horas de retrabalho.',
+    };
+  }
 
   if (horasRetrabalho <= 0) {
     return {
@@ -955,6 +968,8 @@ _Digite o número da opção desejada_`;
     const validacao = validarHorasRetrabalho({
       horasTrabalhadasTotal: this.state.horasTrabalhadasTotal,
       horasRetrabalho,
+      // sem isto, uma entrada invalida ('2h', 'abc', vazio) vira null e passa batido
+      exigirHorasRetrabalho: true,
     });
 
     if (!validacao.valido) {
@@ -964,6 +979,7 @@ _Digite o número da opção desejada_`;
       };
     }
 
+    // A validacao acima, com exigirHorasRetrabalho, ja rejeitou null nos dois campos
     this.state.horasRetrabalho = horasRetrabalho!;
 
     await this.supabase.registrarRetrabalho(
