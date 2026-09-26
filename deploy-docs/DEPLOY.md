@@ -85,7 +85,7 @@ TWILIO_PHONE_NUMBER=+14155238886
 OPENAI_API_KEY=sk-proj-...
 
 # Google Sheets (se quiser visualização em planilhas)
-GOOGLE_SHEETS_ENGINEER_ID=1aarPLXxntXJrivOa-rLY5uugSwO59Of7KWm8PorTqXs
+GOOGLE_SHEETS_ENGINEER_ID=<id-da-planilha-do-engenheiro>
 GOOGLE_SHEETS_ENGINEER_NAME=Engenheira(o)
 ```
 

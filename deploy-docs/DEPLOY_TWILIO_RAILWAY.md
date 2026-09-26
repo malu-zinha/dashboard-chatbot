@@ -62,12 +62,12 @@ No Railway, vá em **Variables** e adicione:
 ```env
 # Google Sheets
 GOOGLE_APPLICATION_CREDENTIALS=./credentials.json
-GOOGLE_SHEETS_ENGINEER_ID=1aarPLXxntXJrivOa-rLY5uugSwO59Of7KWm8PorTqXs
+GOOGLE_SHEETS_ENGINEER_ID=<id-da-planilha-do-engenheiro>
 GOOGLE_SHEETS_ENGINEER_NAME=Engenheira(o)
 GOOGLE_SHEETS_ENGINEER_RANGE=A3:AE1000
 
 # Supabase (opcional mas recomendado)
-SUPABASE_URL=https://fdwvddfuaqxwllciqcbl.supabase.co
+SUPABASE_URL=https://<seu-projeto>.supabase.co
 SUPABASE_ANON_KEY=<SUA_ANON_KEY_AQUI>
 SUPABASE_SERVICE_ROLE_KEY=<SUA_SERVICE_ROLE_KEY_AQUI>
 

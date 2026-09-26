@@ -30,7 +30,7 @@ Depois do primeiro deploy, você precisa adicionar as variáveis:
 ```bash
 vercel env add NEXT_PUBLIC_SUPABASE_URL
 ```
-Cole: `https://fdwvddfuaqxwllciqcbl.supabase.co`
+Cole: `https://<seu-projeto>.supabase.co`
 
 ```bash
 vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY
