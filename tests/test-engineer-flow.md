@@ -379,6 +379,73 @@ Testar isolamento de sessões entre usuários.
 
 ---
 
+## Teste 13: Confirmação das Horas (Notificação Noturna)
+
+### Objetivo
+Garantir que as horas do dia só vão ao banco depois de o engenheiro revisar e confirmar.
+A RPC `registrar_retrabalho_dia` é upsert por (atribuição, dia): gravar antes da revisão deixa um
+número errado sobrescrever o certo.
+
+> Os Testes 1 e 2 acima são da época em que o fluxo salvava na planilha e **não** descrevem a
+> Notificação Noturna atual (não têm o passo de horas, e os motivos listados não são os de
+> `MOTIVOS_RETRABALHO`). Para o fluxo de horas, use este teste.
+
+### 13.1: Ramo com retrabalho — confirmar
+
+1. Menu → `2` (Notificação Noturna) → escolher projeto → escolher disciplina
+2. **O que foi feito:** `Revisao das pranchas do 3o pavimento`
+3. **Horas trabalhadas:** `8`
+4. **Teve retrabalho:** `1` (Sim)
+5. **Motivo:** `3` (Erro de projeto (TecPred))
+6. **Horas de retrabalho:** `2`
+   - Esperado: tela `🔎 Confirme as horas do dia:` com `Horas trabalhadas: *8h*`,
+     `Motivo: Erro de projeto (TecPred)`, `Horas de retrabalho: *2h* (25.0%)`,
+     `1️⃣ Confirmar e gravar` / `2️⃣ Corrigir as horas`
+   - [ ] **No Supabase: nenhuma linha em `retrabalho` para hoje nesta atribuição ainda**
+7. **Confirmar:** `1`
+   - Esperado: `✅ Retrabalho registrado: 2h de 8h (25.0%)` + pergunta de observações
+   - [ ] Linha gravada com `horas_trabalhadas_total = 8`, `horas_retrabalho = 2`
+
+### 13.2: Corrigir as horas
+
+1. Repetir 13.1 até a tela de confirmação
+2. **Enviar:** `2` (Corrigir as horas)
+   - Esperado: volta a `⏱️ Quantas horas foram trabalhadas hoje...` (sem mensagem de erro)
+   - [ ] Nada gravado no banco
+3. Refazer a sequência com `4` / `1` / `3` / `1` e confirmar
+   - [ ] Linha gravada com as horas **novas** (4 e 1), sem resquício das anteriores
+
+### 13.3: Voltar com `0` na confirmação
+
+1. Repetir 13.1 até a tela de confirmação
+2. **Enviar:** `0`
+   - Esperado: volta a `⏱️ Quantas horas foram gastas no retrabalho/paralisação?`
+   - [ ] Sem `❌` na resposta — voltar não é erro de validação
+   - [ ] Nada gravado no banco
+
+### 13.4: Ramo sem retrabalho
+
+1. Menu → `2` → projeto → disciplina → feito do dia → **Horas:** `8`
+2. **Teve retrabalho:** `2` (Não)
+   - Esperado: confirmação com `Horas trabalhadas: *8h*` e `🔄 Sem retrabalho hoje`, sem percentual
+   - [ ] Nada gravado no banco ainda
+3. **Confirmar:** `1`
+   - Esperado: `✅ Sem retrabalho!` + pergunta de observações
+   - [ ] Linha com `horas_trabalhadas_total = 8`, `horas_retrabalho = 0`
+
+### 13.5: Entrada inválida na confirmação
+
+1. Na tela de confirmação, enviar `x`, `3`, `sim`
+   - Esperado: `❌ Digite *1* para confirmar ou *2* para corrigir.` nas três
+   - [ ] Continua na tela de confirmação, nada gravado
+
+### Resultados Esperados
+- ✅ Zero gravações antes do `1`
+- ✅ `2` reabre a pergunta de horas trabalhadas e descarta motivo/horas de retrabalho antigos
+- ✅ Percentual do dashboard bate com o mostrado no resumo
+
+---
+
 ## Checklist de Validação Final
 
 Antes de considerar o fluxo pronto para produção:
