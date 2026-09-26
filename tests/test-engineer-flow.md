@@ -1,503 +1,267 @@
-# Plano de Testes - Fluxo de Gestão de Projetos de Engenharia
+# Roteiro de testes manuais — fluxo do engenheiro
+
+Testes que só fazem sentido à mão, no WhatsApp de verdade: navegação, mensagens que o engenheiro vê,
+e o que chega ao banco. O que dá para automatizar já está automatizado — veja
+[Testes no README](../README.md#testes) antes de percorrer isto.
 
 ## Pré-requisitos
 
-Antes de iniciar os testes:
+- Engenheiro cadastrado em `engenheiros` com o telefone a ser usado e `ativo = true`. O caminho é o
+  dashboard, `/admin` → "Engenheiros do chatbot". Sem isso o bot responde
+  `❌ *Número não cadastrado*`.
+- **Atribuições** desse engenheiro em `engenheiros_projetos`, com pavimentos e etapas. Sem elas todo
+  fluxo morre em `📭 Você não tem projetos pendentes para atualizar no momento.`
+- `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` configuradas.
+- Para testar sem enviar mensagem real, `WHATSAPP_PROVIDER=development` imprime as respostas no
+  console.
 
-- [ ] Variáveis de ambiente configuradas no `.env`
-- [ ] Planilha compartilhada com a service account
-- [ ] Bot rodando (`npm run dev`)
-- [ ] WhatsApp Web conectado (QR Code escaneado)
-
----
-
-## Teste 1: Cadastro de Novo Projeto Completo
-
-### Objetivo
-Testar o fluxo completo de cadastro de um novo projeto com todos os campos.
-
-### Passos
-
-1. **Iniciar conversa**
-   - Enviar: `projeto`
-   - Esperado: Mensagem com opções 1️⃣ Cadastrar novo projeto / 2️⃣ Atualizar projeto existente
-
-2. **Escolher cadastrar**
-   - Enviar: `1`
-   - Esperado: 
-     - Mensagem confirmando "Novo Projeto"
-     - Código gerado automaticamente (ex: PRJ-004)
-     - Pergunta sobre tipo de projeto com botões H1-H6, T2, T4, G2
-
-3. **Escolher tipo**
-   - Enviar: `3` (H3)
-   - Esperado:
-     - Confirmação "Tipo H3 selecionado ✅"
-     - Pergunta sobre área com botões (Climatização, Elétrica, Hidrossanitária)
-
-4. **Escolher área**
-   - Enviar: `2` (Elétrica)
-   - Esperado:
-     - Confirmação "Área Elétrica selecionada ✅"
-     - Pergunta sobre data de início (formato DD/MM/AAAA)
-
-5. **Informar data de início**
-   - Enviar: `05/12/2024`
-   - Esperado:
-     - Confirmação "Data 05/12/2024 registrada ✅"
-     - Pergunta sobre data de previsão de entrega interna
-
-6. **Informar data de previsão**
-   - Enviar: `20/12/2024`
-   - Esperado:
-     - Confirmação "Data de previsão: 20/12/2024 ✅"
-     - Pergunta sobre status com botões (7 opções)
-
-7. **Escolher status**
-   - Enviar: `2` (Em Execução)
-   - Esperado:
-     - Confirmação "Status: Em Execução ✅"
-     - Pergunta sobre previsão para o dia (texto livre)
-
-8. **Informar previsão do dia**
-   - Enviar: `Concluir instalação do quadro elétrico principal`
-   - Esperado:
-     - Confirmação "Previsão registrada ✅"
-     - Pergunta sobre o que foi feito ao final do dia
-
-9. **Informar feito ao final do dia**
-   - Enviar: `Instalado 80% do quadro elétrico, faltam apenas os disjuntores`
-   - Esperado:
-     - Confirmação "Feito registrado ✅"
-     - Pergunta sobre retrabalho (1=Sim / 2=Não)
-
-10. **Informar retrabalho**
-    - Enviar: `2` (Não)
-    - Esperado:
-      - Confirmação "Sem retrabalho ✅"
-      - Pergunta sobre etapa com botões (10 opções)
-
-11. **Escolher etapa**
-    - Enviar: `4` (Instalações de Primeira Fase (Grosso))
-    - Esperado:
-      - Resumo completo com todos os dados
-      - Pergunta de confirmação (1=Sim, salvar / 2=Não, cancelar)
-
-12. **Confirmar salvamento**
-    - Enviar: `1`
-    - Esperado:
-      - Mensagem "✅ Projeto criado com sucesso!"
-      - Código do projeto
-      - Status e etapa
-      - "Dados salvos na planilha de engenheiros"
-
-13. **Verificar na planilha**
-    - [ ] Abrir a planilha no Google Sheets
-    - [ ] Verificar se nova linha foi adicionada
-    - [ ] Verificar todos os campos preenchidos corretamente
-
-### Resultados Esperados
-- ✅ Projeto criado com sucesso
-- ✅ Todos os campos preenchidos
-- ✅ Código gerado automaticamente
-- ✅ Data de retrabalho NÃO preenchida (respondeu não)
+Ao conferir o banco, as tabelas que interessam são `projetos_previsao` (previsão e feito do dia) e
+`retrabalho_projetos` (horas do dia).
 
 ---
 
-## Teste 2: Cadastro com Retrabalho
+## Teste 1: Notificação Matinal
 
-### Objetivo
-Testar cadastro incluindo retrabalho e verificar preenchimento automático da data.
-
-### Passos
-
-Seguir passos 1-9 do Teste 1, mas na etapa de retrabalho:
-
-10. **Informar retrabalho**
-    - Enviar: `1` (Sim)
-    - Esperado:
-      - Mensagem "⚠️ Motivo do retrabalho"
-      - Botões com 6 opções de motivo
-
-11. **Escolher motivo**
-    - Enviar: `1` (Erro interno)
-    - Esperado:
-      - Confirmação "Motivo: Erro interno ✅"
-      - Data automática preenchida (data de hoje)
-      - Pergunta sobre etapa
-
-12. **Verificar na confirmação**
-    - Conferir se o resumo mostra:
-      - "🔄 Retrabalho: sim"
-      - "⚠️ Motivo: Erro interno"
-      - "📅 Data retrabalho: [data de hoje]"
-
-13. **Salvar e verificar planilha**
-    - [ ] Campo "Necessitou de retrabalho?" = "sim"
-    - [ ] Campo "motivo da revisão" = "Erro interno"
-    - [ ] Campo "Data do registro do retrabalho" = data de hoje (DD/MM/AAAA)
-
-### Resultados Esperados
-- ✅ Data de retrabalho preenchida automaticamente
-- ✅ Motivo registrado corretamente
+1. `menu` → esperado: `📋 *Menu do Engenheiro*` com as 4 opções
+2. `1` → esperado: `🌅 *Notificação Matinal*` + `📋 Escolha o projeto:` + lista com `Área:` e
+   `Status:` por item
+3. `1` (ou o número de um projeto da lista) → esperado:
+   `📝 *O que você pretende fazer hoje?*`
+4. `abc` → esperado: `❌ Previsão muito curta. Digite pelo menos 5 caracteres.`
+5. `Dimensionar os quadros do 2o pavimento` → esperado:
+   `✅ *Notificação Matinal Registrada!*` com projeto e previsão, terminando em
+   `Tenha um ótimo dia de trabalho! 🚀`
+   - [ ] `projetos_previsao` tem linha de hoje para a atribuição, com `previsao_texto` preenchido
 
 ---
 
-## Teste 3: Atualização de Projeto Existente
+## Teste 2: Notificação Noturna (fluxo completo)
 
-### Objetivo
-Testar o fluxo de atualização diária de um projeto já cadastrado.
+O fluxo mais longo, e o que alimenta os indicadores.
 
-### Passos
+1. `menu` → `2` → esperado: `🌙 *Notificação Noturna*` + lista de projetos
+2. escolher o projeto → esperado: `✅ Projeto: *<CODIGO>*` seguido de
+   `✔️ *O que foi feito hoje?*`
+3. `abc` → esperado: `❌ Descrição muito curta. Digite pelo menos 5 caracteres.`
+4. `Revisao das pranchas do 3o pavimento` → esperado: `✅ Feito registrado!` +
+   `⏱️ *Quantas horas foram trabalhadas hoje nesta tarefa/disciplina?*`
+5. `abc` → esperado: `❌ Informe um número maior que zero para as horas trabalhadas.`
+6. `8` → esperado: `✅ Horas registradas: 8` + `🔄 *Teve retrabalho/paralisação hoje?*`
+7. `1` (sim) → esperado: `⚠️ *Motivo do Retrabalho / Paralisação*` com os 6 motivos
+8. `3` → esperado: `✅ Motivo registrado: Erro de projeto (TecPred)` +
+   `⏱️ *Quantas horas foram gastas no retrabalho/paralisação?*`
+9. `9` → esperado:
+   `❌ As horas de retrabalho não podem ser maiores que as horas trabalhadas totais.`
+10. `2` → **cai na tela de confirmação** (Teste 3)
+11. `1` para confirmar → esperado: `✅ Retrabalho registrado: 2h de 8h (25.0%)` +
+    `📝 *Quer adicionar observações?*`
+12. `1` → `📝 *Observações*`; `ab` → `❌ Observação muito curta. Digite pelo menos 3 caracteres.`
+13. `Cliente enviou revisao no fim do dia` → esperado:
+    `✅ *Notificação Noturna Registrada!*` com projeto, feito, retrabalho e observações
+14. Se a disciplina tiver etapa pendente, a mensagem emenda
+    `📐 *Alguma etapa foi concluída hoje?*`; `2` encerra com `Descanse bem! 🌙`
 
-1. **Iniciar conversa**
-   - Enviar: `atualizar projeto`
-   - Esperado:
-     - Mensagem "📋 Seus Projetos"
-     - Lista numerada de projetos existentes
+Verificações no banco:
 
-2. **Escolher projeto**
-   - Enviar: `1` (primeiro projeto da lista)
-   - Esperado:
-     - Confirmação do projeto selecionado
-     - Dados do projeto (código, cliente, obra)
-     - Pergunta sobre status
-
-3. **Seguir fluxo de execução diária**
-   - Status → Previsão → Feito → Retrabalho → Etapa
-   - Confirmar e salvar
-
-4. **Verificar na planilha**
-   - [ ] Campos atualizados: Status, Previsão, Feito, Retrabalho, Etapa
-   - [ ] Campos NÃO alterados: Código, Cliente, Tipo, Área, Datas
-
-### Resultados Esperados
-- ✅ Apenas campos de execução diária atualizados
-- ✅ Dados básicos do projeto preservados
-
----
-
-## Teste 4: Validações de Data
-
-### Objetivo
-Testar validações de formato de data.
-
-### Cenários
-
-#### 4.1: Data com formato inválido
-- Enviar: `05-12-2024` (formato errado)
-- Esperado: ❌ "Formato inválido. Use DD/MM/AAAA"
-
-#### 4.2: Data com barras mas inválida
-- Enviar: `32/13/2024` (dia e mês inválidos)
-- Esperado: ❌ "Data inválida. Verifique o dia, mês e ano."
-
-#### 4.3: Data com formato correto
-- Enviar: `05/12/2024`
-- Esperado: ✅ "Data 05/12/2024 registrada"
-
-### Resultados Esperados
-- ✅ Formatos inválidos rejeitados
-- ✅ Datas inválidas rejeitadas
-- ✅ Datas válidas aceitas
+- [ ] `retrabalho_projetos` tem **uma** linha de hoje, com `horas_trabalhadas_total = 8`,
+      `horas_retrabalho = 2` e o motivo
+- [ ] `projetos_previsao` de hoje tem `feito_texto` e `data_fim_dia` preenchidos
+- [ ] o percentual de retrabalho no dashboard bate com os 25,0% mostrados
 
 ---
 
-## Teste 5: Validações de Botões
+## Teste 3: Confirmação das horas
 
-### Objetivo
-Testar validações de opções numéricas.
+A tela de confirmação é o **único ponto de gravação** das horas. Ela existe porque
+`registrar_retrabalho_dia` é upsert por (atribuição, dia): sem revisão, um `80` digitado no lugar de
+`8` sobrescreveria o valor certo e contaminaria o indicador.
 
-### Cenários
+### 3.1 Ramo com retrabalho — confirmar
 
-#### 5.1: Número fora do range
-- Contexto: Escolher tipo de projeto (9 opções)
-- Enviar: `15`
-- Esperado: ❌ "Número inválido. Digite um número entre 1 e 9."
+Percorra o Teste 2 até o passo 10. Esperado:
 
-#### 5.2: Texto ao invés de número
-- Contexto: Escolher status (7 opções)
-- Enviar: `Em Execução` (texto)
-- Esperado: ❌ "Número inválido. Digite um número entre 1 e 7."
+```
+🔎 *Confirme as horas do dia:*
 
-#### 5.3: Número negativo
-- Contexto: Escolher área (3 opções)
-- Enviar: `-1`
-- Esperado: ❌ "Número inválido. Digite um número entre 1 e 3."
+⏱️ Horas trabalhadas: *8h*
+⚠️ Motivo: Erro de projeto (TecPred)
+🔄 Horas de retrabalho: *2h* (25.0%)
 
-### Resultados Esperados
-- ✅ Validações numéricas funcionando
-- ✅ Mensagens de erro claras
+1️⃣ Confirmar e gravar
+2️⃣ Corrigir as horas
 
----
+*0.* Voltar | *menu* — início
+```
 
-## Teste 6: Validações de Texto
+- [ ] **No Supabase: nenhuma linha de hoje em `retrabalho_projetos` para esta atribuição ainda**
+- [ ] Depois de `1`: a linha aparece, com 8 e 2
 
-### Objetivo
-Testar validações de campos de texto livre.
+### 3.2 Corrigir as horas
 
-### Cenários
-
-#### 6.1: Texto muito curto (previsão do dia)
-- Enviar: `ok` (2 caracteres)
-- Esperado: ❌ "Texto muito curto. Digite pelo menos 5 caracteres."
-
-#### 6.2: Texto adequado
-- Enviar: `Concluir instalação` (18 caracteres)
-- Esperado: ✅ "Previsão registrada"
-
-### Resultados Esperados
-- ✅ Textos muito curtos rejeitados
-- ✅ Textos adequados aceitos
-
----
-
-## Teste 7: Comando Cancelar
-
-### Objetivo
-Testar cancelamento do fluxo em diferentes momentos.
-
-### Cenários
-
-#### 7.1: Cancelar no início
-- Iniciar fluxo com `projeto`
-- Enviar: `cancelar`
-- Esperado: ❌ "Fluxo cancelado. Digite 'menu' para voltar ao início."
-
-#### 7.2: Cancelar no meio do cadastro
-- Iniciar fluxo, preencher tipo e área
-- Enviar: `cancelar`
-- Esperado: ❌ "Fluxo cancelado"
-
-#### 7.3: Cancelar na confirmação
-- Chegar até a confirmação
-- Enviar: `2` (Não, cancelar)
-- Esperado: ❌ "Fluxo cancelado"
-
-### Resultados Esperados
-- ✅ Cancelamento funciona em qualquer etapa
-- ✅ Dados não são salvos ao cancelar
-- ✅ Usuário pode iniciar novo fluxo
-
----
-
-## Teste 8: Lista de Projetos Vazia
-
-### Objetivo
-Testar comportamento quando engenheiro não tem projetos.
-
-### Passos
-
-1. Criar planilha sem projetos para o engenheiro
-2. Enviar: `atualizar projeto`
-3. Esperado:
-   - ❌ "Nenhum projeto encontrado para você."
-   - "Cadastre um novo projeto primeiro."
-   - Fluxo finalizado
-
-### Resultados Esperados
-- ✅ Mensagem clara quando não há projetos
-- ✅ Sugestão de cadastrar novo projeto
-
----
-
-## Teste 9: Geração de Código Automático
-
-### Objetivo
-Testar geração sequencial de códigos de projeto.
-
-### Passos
-
-1. Verificar último código na planilha (ex: PRJ-003)
-2. Cadastrar novo projeto
-3. Verificar código gerado (deve ser PRJ-004)
-4. Cadastrar outro projeto
-5. Verificar código gerado (deve ser PRJ-005)
-
-### Resultados Esperados
-- ✅ Códigos gerados sequencialmente
-- ✅ Formato PRJ-XXX (3 dígitos)
-- ✅ Sem duplicatas
-
----
-
-## Teste 10: Integração com Menu Principal
-
-### Objetivo
-Testar integração do novo fluxo com o menu existente.
-
-### Passos
-
-1. Enviar: `menu` ou `oi`
-2. Verificar se aparece opção de "Gestão de Projetos"
-3. Testar outros comandos ainda funcionam:
-   - `registrar execução`
-   - `registrar retrabalho`
-   - `consultar status`
-
-### Resultados Esperados
-- ✅ Novo fluxo aparece no menu
-- ✅ Fluxos antigos continuam funcionando
-- ✅ Comandos não interferem uns com os outros
-
----
-
-## Teste 11: Compatibilidade com Áudio
-
-### Objetivo
-Verificar se mensagens de voz são processadas corretamente.
-
-### Passos
-
-1. Gravar áudio dizendo: "projeto"
-2. Verificar se fluxo inicia
-3. Testar respostas por áudio durante o fluxo
-
-### Resultados Esperados
-- ✅ Áudio transcrito corretamente
-- ✅ Fluxo iniciado com áudio
-- ✅ Respostas por áudio funcionam
-
----
-
-## Teste 12: Múltiplos Usuários
-
-### Objetivo
-Testar isolamento de sessões entre usuários.
-
-### Passos
-
-1. Usuário A inicia cadastro de projeto
-2. Usuário B inicia atualização de projeto
-3. Usuário A continua seu cadastro
-4. Verificar se não há interferência
-
-### Resultados Esperados
-- ✅ Sessões isoladas por usuário
-- ✅ Dados não se misturam
-- ✅ Cada usuário mantém seu contexto
-
----
-
-## Teste 13: Confirmação das Horas (Notificação Noturna)
-
-### Objetivo
-Garantir que as horas do dia só vão ao banco depois de o engenheiro revisar e confirmar.
-A RPC `registrar_retrabalho_dia` é upsert por (atribuição, dia): gravar antes da revisão deixa um
-número errado sobrescrever o certo.
-
-> Os Testes 1 e 2 acima são da época em que o fluxo salvava na planilha e **não** descrevem a
-> Notificação Noturna atual (não têm o passo de horas, e os motivos listados não são os de
-> `MOTIVOS_RETRABALHO`). Para o fluxo de horas, use este teste.
-
-### 13.1: Ramo com retrabalho — confirmar
-
-1. Menu → `2` (Notificação Noturna) → escolher projeto → escolher disciplina
-2. **O que foi feito:** `Revisao das pranchas do 3o pavimento`
-3. **Horas trabalhadas:** `8`
-4. **Teve retrabalho:** `1` (Sim)
-5. **Motivo:** `3` (Erro de projeto (TecPred))
-6. **Horas de retrabalho:** `2`
-   - Esperado: tela `🔎 Confirme as horas do dia:` com `Horas trabalhadas: *8h*`,
-     `Motivo: Erro de projeto (TecPred)`, `Horas de retrabalho: *2h* (25.0%)`,
-     `1️⃣ Confirmar e gravar` / `2️⃣ Corrigir as horas`
-   - [ ] **No Supabase: nenhuma linha em `retrabalho` para hoje nesta atribuição ainda**
-7. **Confirmar:** `1`
-   - Esperado: `✅ Retrabalho registrado: 2h de 8h (25.0%)` + pergunta de observações
-   - [ ] Linha gravada com `horas_trabalhadas_total = 8`, `horas_retrabalho = 2`
-
-### 13.2: Corrigir as horas
-
-1. Repetir 13.1 até a tela de confirmação
-2. **Enviar:** `2` (Corrigir as horas)
-   - Esperado: volta a `⏱️ Quantas horas foram trabalhadas hoje...` (sem mensagem de erro)
+1. Chegue à tela de confirmação
+2. `2` → esperado: volta a `⏱️ *Quantas horas foram trabalhadas hoje...*`, **sem** mensagem de erro
    - [ ] Nada gravado no banco
-3. Refazer a sequência com `4` / `1` / `3` / `1` e confirmar
-   - [ ] Linha gravada com as horas **novas** (4 e 1), sem resquício das anteriores
+3. Refaça com `4` / `1` / `1` / `1` e confirme
+   - [ ] A linha tem as horas **novas** (4 e 1), sem resquício das anteriores
 
-### 13.3: Voltar com `0` na confirmação
+### 3.3 Voltar com `0` na confirmação
 
-1. Repetir 13.1 até a tela de confirmação
-2. **Enviar:** `0`
-   - Esperado: volta a `⏱️ Quantas horas foram gastas no retrabalho/paralisação?`
+1. Chegue à tela de confirmação
+2. `0` → esperado: volta a `⏱️ *Quantas horas foram gastas no retrabalho/paralisação?*`
    - [ ] Sem `❌` na resposta — voltar não é erro de validação
    - [ ] Nada gravado no banco
 
-### 13.4: Ramo sem retrabalho
+### 3.4 Ramo sem retrabalho
 
-1. Menu → `2` → projeto → disciplina → feito do dia → **Horas:** `8`
-2. **Teve retrabalho:** `2` (Não)
-   - Esperado: confirmação com `Horas trabalhadas: *8h*` e `🔄 Sem retrabalho hoje`, sem percentual
-   - [ ] Nada gravado no banco ainda
-3. **Confirmar:** `1`
-   - Esperado: `✅ Sem retrabalho!` + pergunta de observações
-   - [ ] Linha com `horas_trabalhadas_total = 8`, `horas_retrabalho = 0`
+1. Percorra até as horas trabalhadas, informe `8`, responda `2` (não teve retrabalho)
+   - Esperado: confirmação com `⏱️ Horas trabalhadas: *8h*` e `🔄 Sem retrabalho hoje`, **sem**
+     percentual
+   - [ ] Nada gravado ainda
+2. `1` → esperado: `✅ Sem retrabalho!` + pergunta de observações
+   - [ ] Linha com `horas_trabalhadas_total = 8` e `horas_retrabalho = 0`
 
-### 13.5: Entrada inválida na confirmação
+### 3.5 Entrada inválida
 
-1. Na tela de confirmação, enviar `x`, `3`, `sim`
-   - Esperado: `❌ Digite *1* para confirmar ou *2* para corrigir.` nas três
-   - [ ] Continua na tela de confirmação, nada gravado
+Na tela de confirmação, enviar `x`, `3` e `sim`:
 
-### Resultados Esperados
-- ✅ Zero gravações antes do `1`
-- ✅ `2` reabre a pergunta de horas trabalhadas e descarta motivo/horas de retrabalho antigos
-- ✅ Percentual do dashboard bate com o mostrado no resumo
+- Esperado nas três: `❌ Digite *1* para confirmar ou *2* para corrigir.`
+- [ ] Continua na tela de confirmação, nada gravado
 
 ---
 
-## Checklist de Validação Final
+## Teste 4: Visualizar Meus Projetos
+
+1. `menu` → `3` → esperado: `📊 *Meus Projetos (N)*` com código, área, status, andamento e data
+   prevista por item
+2. escolher um número → esperado: bloco `📊 *Detalhes do Projeto*` com projeto, cliente, área,
+   status da área, andamento global e datas
+3. [ ] Nada é gravado — este fluxo é só leitura
+
+---
+
+## Teste 5: Marcar Etapa Concluída
+
+1. `menu` → `4` → esperado: `📐 *Marcar Etapa Concluída*` + lista de projetos
+2. escolher projeto → esperado: `📦 *Áreas do Projeto <CODIGO>:*` com o percentual por disciplina
+3. escolher uma disciplina **não** concluída → esperado:
+   `📋 *O que deseja marcar em <CODIGO>?*` com as opções de escopo
+4. Escolher um escopo e percorrer até a confirmação `🔎 *Confirme a marcação:*`
+5. `1` → esperado: `✅ *N etapa(s) marcada(s) como concluída(s)!*` + `⚡ Andamento: *X%*`
+   - [ ] O percentual subiu de acordo com o peso da etapa (ver
+         [progresso ponderado](../README.md#progresso-ponderado))
+   - [ ] `pavimento_etapas.concluida` e `data_conclusao` preenchidos
+   - [ ] `engenheiros_projetos.percentual_ponderado` recalculado, e
+         `projetos.percentual_ponderado` também (o trigger propaga na mesma transação)
+6. Depois de confirmar, `0` → esperado:
+   `ℹ️ Esta ação já foi registrada. Digite *menu* para voltar ao início.`
+
+### 5.1 Disciplina sem etapas cadastradas
+
+Se a disciplina não tiver estrutura, esperado
+`ℹ️ Esta disciplina de *<CODIGO>* não possui etapas cadastradas.` com a opção de marcar 100%
+manualmente (RPC `marcar_area_concluida`).
+
+---
+
+## Teste 6: Navegação
+
+O ponto fraco histórico do fluxo — teste com atenção.
+
+1. Em **qualquer** tela intermediária, `0` deve devolver a **pergunta anterior**, nunca um `❌`.
+   Percorra a noturna e aperte `0` em cada passo:
+   - [ ] horas trabalhadas → `✔️ *O que foi feito hoje?*`
+   - [ ] motivo do retrabalho → `🔄 *Teve retrabalho/paralisação hoje?*`
+   - [ ] horas de retrabalho → `⚠️ *Motivo do Retrabalho / Paralisação*`
+   - [ ] observações → `📝 *Quer adicionar observações?*`
+   - [ ] "alguma etapa foi concluída" → `📝 *Observações*`
+2. `menu` em qualquer ponto → esperado: `⬅️ *Voltando ao menu principal*` + o menu
+3. `cancelar` → esperado: `❌ *Fluxo cancelado*`
+4. Opção inexistente no menu (`9`) → esperado: `❌ Opção inválida. Digite *1*, *2*, *3* ou *4*.`
+
+> **Limitação conhecida:** nas telas de **lista de projetos**, o `0` re-renderiza a mesma lista e
+> nunca sobe até o menu, apesar do rodapé anunciar "Voltar". Use `menu`. Ver
+> [Limitações](../README.md#limitações-conhecidas).
+
+---
+
+## Teste 7: Listas vazias e disciplina concluída
+
+1. Engenheiro sem nenhuma atribuição pendente, opção `1` ou `2` → esperado:
+   `📭 Você não tem projetos pendentes para atualizar no momento.`
+   (nas opções `3` e `4` a mensagem é `📭 Você não tem projetos pendentes no momento.`)
+2. Escolher uma atribuição já em 100% → esperado:
+   `✅ *<CODIGO>* (<Área>) já está concluída!` com o andamento
+3. Projeto com todas as disciplinas em 100%, na opção `4` → esperado:
+   `🎉 Todas as disciplinas do projeto *<CODIGO>* já foram concluídas!`
+
+---
+
+## Teste 8: Número não reconhecido e banco fora
+
+1. Mandar mensagem de um número **não cadastrado** → esperado: `❌ *Número não cadastrado*`
+2. Cadastrar esse número em `/admin` e mandar **outra** mensagem, sem reiniciar o processo →
+   esperado: o menu aparece (o handler reautentica a cada mensagem)
+3. Derrubar o acesso ao banco (ex.: `SUPABASE_URL` inválida) e mandar mensagem → esperado:
+   `⚠️ *Serviço temporariamente indisponível*`
+   - [ ] Nenhum detalhe técnico ou credencial aparece na resposta
+   - [ ] Ao restaurar o banco, a mensagem seguinte já funciona — o veredito errado **não** ficou em
+         cache por 15 minutos
+
+O comportamento dos três casos é coberto por `npm run test:seguranca`; o teste manual serve para
+confirmar o texto que o usuário final vê.
+
+---
+
+## Teste 9: Áudio
+
+**Só funciona no caminho legado.** Com `npm run dev:whatsapp-web` (whatsapp-web.js + QR Code), o
+áudio é transcrito pelo Whisper e tratado como texto — exige `OPENAI_API_KEY`.
+
+1. `npm run dev:whatsapp-web`, escanear o QR Code
+2. Enviar áudio dizendo `menu` → esperado: o menu aparece
+3. Enviar áudio com um número (`dois`) → **provavelmente falha**: o fluxo espera o dígito `2`, e a
+   transcrição devolve a palavra
+
+> **Em produção áudio não funciona.** O servidor Twilio lê apenas o campo `Body` do webhook e ignora
+> mídia: um áudio chega sem `Body` e devolve `400 Bad Request`. Não teste áudio contra o ambiente de
+> produção esperando que funcione.
+
+---
+
+## Teste 10: Múltiplos usuários
+
+Isolamento de sessões — cada número tem sua própria instância de fluxo.
+
+1. Engenheiro A inicia a Notificação Noturna e para no passo das horas
+2. Engenheiro B inicia a Notificação Matinal e conclui
+3. Engenheiro A envia as horas
+   - [ ] A continua exatamente onde parou, com o projeto que **ele** escolheu
+   - [ ] Os registros vão para as atribuições corretas, sem troca
+4. Aguardar 15 minutos sem interagir e mandar mensagem
+   - [ ] A sessão expirou e o fluxo recomeça do menu
+
+> Sessões vivem em memória: **um deploy no meio de um fluxo derruba as conversas em andamento**. Vale
+> testar reiniciando o processo com um fluxo aberto, para saber como isso aparece para o usuário.
+
+---
+
+## Checklist final
 
 Antes de considerar o fluxo pronto para produção:
 
-### Funcionalidades Core
-- [ ] Cadastro completo funciona
-- [ ] Atualização funciona
-- [ ] Retrabalho com data automática funciona
-- [ ] Cancelamento funciona
+- [ ] Notificação matinal grava `previsao_texto` em `projetos_previsao`
+- [ ] Notificação noturna grava feito, horas e retrabalho, cada um na sua tabela
+- [ ] **Nenhuma** gravação de horas acontece antes do `1` na tela de confirmação
+- [ ] `2` na confirmação reabre a pergunta de horas e descarta motivo e horas antigos
+- [ ] `0` devolve a pergunta anterior em todos os passos intermediários, sem `❌`
+- [ ] `menu` e `cancelar` funcionam de qualquer ponto
+- [ ] Marcar etapa recalcula o percentual da disciplina e do projeto
+- [ ] Disciplina e projeto concluídos são bloqueados para nova ação
+- [ ] Número não cadastrado, e banco fora, dão mensagens **diferentes**
+- [ ] Nenhuma credencial ou detalhe técnico aparece nas respostas
+- [ ] O percentual de retrabalho no dashboard bate com as horas apontadas
 
-### Validações
-- [ ] Datas validadas corretamente
-- [ ] Botões validados corretamente
-- [ ] Textos validados corretamente
-- [ ] Códigos únicos gerados
+## Bugs encontrados
 
-### Integração
-- [ ] Integra com menu principal
-- [ ] Não quebra fluxos existentes
-- [ ] Funciona com áudio
-- [ ] Sessões isoladas por usuário
-
-### Planilha
-- [ ] Dados salvos corretamente
-- [ ] Todos os campos preenchidos
-- [ ] Formato de data correto (DD/MM/AAAA)
-- [ ] Atualização não sobrescreve dados básicos
-
-### Performance
-- [ ] Responde em menos de 3 segundos
-- [ ] Não trava em planilhas grandes
-- [ ] Cache funcionando
-
-### UX
-- [ ] Mensagens claras e objetivas
-- [ ] Emojis ajudam na navegação
-- [ ] Erros explicam o problema
-- [ ] Confirmação antes de salvar
-
----
-
-## Bugs Conhecidos / To-Do
-
-Liste aqui bugs encontrados durante os testes:
-
-1. [ ] _Nenhum bug conhecido ainda_
-
----
-
-## Notas
-
-- Sempre testar com dados reais (nomes de clientes, obras, etc)
-- Verificar formatação na planilha após cada teste
-- Testar em diferentes horários para validar data automática
-- Fazer backup da planilha antes de testes em massa
+Registre aqui o que aparecer durante os testes. As limitações já conhecidas estão em
+[Limitações conhecidas](../README.md#limitações-conhecidas) — não precisa repetir.

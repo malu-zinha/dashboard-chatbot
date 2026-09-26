@@ -594,10 +594,15 @@ Coisas em que você vai tropeçar. Estão aqui de propósito — um README que e
 
 **Documentação**
 
-Este README é a fonte de verdade. Os documentos abaixo estão **defasados** e descrevem status
-manual, criação de projeto pelo engenheiro e/ou gravação em planilha — coisas que não existem mais:
-`docs/architecture.md`, `docs/business_rules.md`, `docs/data_flow.md`,
-`docs/AUTENTICACAO_CHATBOT.md`, `dashboard/README.md`, `tests/README-TEST.md`,
-`tests/test-engineer-flow.md` (Testes 1 a 10), `deploy-docs/ENV_VARIABLES.md` e a maior parte de
-`supabase/docs-bd/`. Em particular, `supabase/docs-bd/new_db_schema.sql` declara `areas.area_id`
-como `SERIAL` quando o banco usa `UUID`.
+Este README é a fonte de verdade. Os documentos que sobraram e são confiáveis:
+
+| Documento | Para quê |
+|---|---|
+| [`docs/AUTENTICACAO_CHATBOT.md`](docs/AUTENTICACAO_CHATBOT.md) | Como o bot identifica quem fala, e por que "não cadastrado" e "banco fora" são desfechos distintos |
+| [`dashboard/README.md`](dashboard/README.md) | Rodar e mexer no dashboard: telas, Realtime, acesso, armadilhas |
+| [`tests/test-engineer-flow.md`](tests/test-engineer-flow.md) | Roteiro de testes manuais do fluxo do engenheiro |
+
+Ainda **defasados**, descrevendo status manual, criação de projeto pelo engenheiro e/ou gravação em
+planilha: `deploy-docs/` (5 arquivos) e a maior parte de `supabase/docs-bd/` (14). Em particular,
+`supabase/docs-bd/new_db_schema.sql` declara `areas.area_id` como `SERIAL` quando o banco usa
+`UUID`, e `deploy-docs/ENV_VARIABLES.md` omite o Twilio, que é o provider de produção.

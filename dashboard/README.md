@@ -1,290 +1,147 @@
-# 📊 TecPred Dashboard - Visão Executiva em Tempo Real
+# Dashboard TecPred
 
-Dashboard executivo desenvolvido para o Evandro (dono) visualizar o banco de dados ao vivo, com atualizações em tempo real.
+Aplicação Next.js que mostra o andamento dos projetos a partir do que os engenheiros apontam pelo
+WhatsApp. É **um dos dois apps deste repositório** — tem `package.json`, variáveis de ambiente e
+serviço de deploy próprios, e não compartilha código por import com o chatbot.
 
-## 🎨 Design
+Para entender o sistema como um todo (modelo de dados, como progresso ponderado e retrabalho são
+calculados, fluxos do WhatsApp), leia o [README da raiz](../README.md). Aqui fica só o que é
+específico do dashboard.
 
-- **Cores:** Baseadas no logo TecPred (#2E3192 - azul escuro/roxo)
-- **Responsivo:** Funciona perfeitamente em desktop, tablet e mobile
-- **Tempo Real:** Atualização automática via Supabase Realtime
-- **Animações:** Transições suaves e feedback visual
+## Stack
 
-## 🚀 Features
+Next.js 14 (App Router) · React 18 · TypeScript · Tailwind · Recharts (gráficos) · jsPDF
+(relatório) · `@supabase/ssr` (sessão em cookie)
 
-### ✅ Blocos Implementados
-
-1. **Visão Geral da Produção**
-   - Total de Projetos
-   - Projetos Concluídos
-   - Projetos em Execução
-   - Projetos Atrasados
-   - Percentual Concluído Médio
-
-2. **Gráfico: Projetos por Status** (Pizza)
-   - Concluído
-   - Em Andamento
-   - Atrasado
-   - Aguardando
-
-3. **Gráfico: Carga de Trabalho** (Barras Empilhadas)
-   - Dias Executados vs Dias Restantes
-   - Por engenheiro
-
-4. **Tabela: Atrasos por Engenheiro**
-   - Qtde projetos atrasados
-   - Qtde áreas atrasadas
-   - Média de atraso
-   - Atraso máximo
-
-5. **Card: Retrabalho por Engenheiro**
-   - Total de retrabalhos
-   - Média geral
-   - Detalhes por engenheiro
-
-### ⚡ Tempo Real
-
-- **Atualização automática** quando dados mudam no banco
-- **Indicador visual** de conexão ao vivo
-- **Timestamp** da última atualização
-- **Animações** suaves nas transições
-
-## 📦 Instalação
-
-### 1. Instalar dependências
+## Rodando
 
 ```bash
-cd dashboard
 npm install
+npm run dev      # next dev em 0.0.0.0:3000
+npm run build
+npm run start
 ```
 
-### 2. Configurar variáveis de ambiente
-
-```bash
-cp .env.local.example .env.local
-```
-
-Edite `.env.local` e adicione suas credenciais Supabase:
+`.env.local` nesta pasta:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-chave-anonima
+NEXT_PUBLIC_SUPABASE_URL=https://<seu-projeto>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<sua-anon-key>
+SUPABASE_SERVICE_ROLE_KEY=<sua-service-role-key>
 ```
 
-### 3. Executar em desenvolvimento
+As duas `NEXT_PUBLIC_*` são usadas pelo cliente e pelo middleware. A service role key é usada
+**somente no servidor**, nas rotas `/api/admin/*`.
 
-```bash
-npm run dev
-```
+> **Sem as duas `NEXT_PUBLIC_*`, o dashboard sobe com dados falsos** de `lib/mockData.ts` e Realtime
+> desligado. Aparece um warning no console, mas a tela parece normal — é fácil passar meia hora
+> analisando números inventados. Se os dados parecerem estranhos, confira primeiro se o `.env.local`
+> está lido.
 
-Acesse: http://localhost:3000
+## Habilitar Realtime no Supabase
 
-### 4. Build para produção
+A tela principal se atualiza sozinha quando alguém aponta algo no WhatsApp. Isso depende de
+**replication habilitada no Supabase** — em *Database → Replication*, habilite exatamente estas três
+tabelas:
 
-```bash
-npm run build
-npm start
-```
+- `engenheiros_projetos`
+- `projetos`
+- `retrabalho_projetos`
 
-## 🗄️ Pré-requisitos no Supabase
+São as que `components/DashboardClient.tsx` assina. Sem isso o dashboard funciona, mas só atualiza
+com refresh manual — e o sintoma (dados velhos, sem erro nenhum) não aponta para a causa.
 
-Execute os seguintes scripts SQL no Supabase (nesta ordem):
+## Rotas
 
-1. ✅ `MASTER_SCHEMA_COMPLETO.sql`
-2. ✅ `tabela_evandro_dono.sql`
-3. ✅ `functions_dono.sql`
-4. ✅ `views_dashboard_blocos.sql`
-5. ✅ `security_policies.sql`
+| Rota | O que é |
+|---|---|
+| `/` e `/inicio` | A tela principal — as duas renderizam o mesmo `DashboardClient` |
+| `/login` | Email e senha via Supabase Auth |
+| `/admin` | Só owner ativo; qualquer outro é redirecionado para `/` |
+| `/test` | Devolve `OK`. Health check |
 
-**Views necessárias:**
-- `vw_bloco1_visao_geral`
-- `vw_bloco2_atrasos_engenheiro`
-- `vw_bloco3_carga_trabalho`
-- `vw_bloco5_retrabalho_engenheiro`
-- `vw_grafico_projetos_status`
+## A tela principal
 
-## 🔐 Segurança
+Página única e longa, com modais. Cada KPI abre uma tabela detalhada, e os modais têm modo tela cheia
+(`components/ModalShell.tsx`).
 
-O dashboard usa as políticas RLS configuradas no Supabase.
+| Bloco | Componente | Fonte do dado |
+|---|---|---|
+| Criar / atribuir projeto | `CriarProjeto`, `AtribuirTask` | RPCs `criar_projeto`, `dashboard_atribuir_projeto_com_pavimentos` |
+| 5 KPIs + progresso geral | `KPICard` | `vw_bloco1_visao_geral` |
+| Pizza de status | `ProjetosStatusChart` | `vw_grafico_projetos_status` |
+| Carga por engenheiro | `CargaTrabalhoChart` | `vw_bloco3_carga_trabalho` |
+| Atrasos | `AtrasosTable` | `vw_bloco2_atrasos_engenheiro` |
+| Produção no período (**só owner**) | `ProducaoPeriodoCard` | `vw_dashboard_producao_apontamentos` |
+| Retrabalho | `RetrabalhoCard` + gráficos | views `vw_retrabalho_*` |
 
-**Para o dono ter acesso:**
+`ProjetosTable` é o maior componente do app e é instanciado quatro vezes, mudando só o
+`initialFilter` (`all`, `concluido`, `em_execucao`, `atrasado`). De lá saem as ações: transferir
+responsável, excluir atribuição ou projeto, ver detalhes, ver retrabalho e gerar o relatório PDF.
+`EngenheirosExecucaoTable` vira um kanban por engenheiro no modo tela cheia.
 
-Configure o JWT claims com:
-```json
-{
-  "role": "dono",
-  "email": "evandro@empresa.com"
-}
-```
+## Acesso
 
-## 📱 Responsividade
+Supabase Auth (email e senha), em três camadas:
 
-- ✅ **Desktop:** Layout em grid com 4 colunas
-- ✅ **Tablet:** Layout adaptativo com 2 colunas
-- ✅ **Mobile:** Layout em coluna única
+1. **`middleware.ts`** — sem sessão, redireciona para `/login`. Rotas `/api/*` não são
+   redirecionadas: devolvem 401/403. Se as variáveis de ambiente não estiverem definidas o middleware
+   **não bloqueia nada** (decisão deliberada, para não derrubar o desenvolvimento local).
+2. **RLS permissiva** — a policy é `for all to authenticated using (true)` em todas as tabelas:
+   qualquer usuário logado lê e escreve tudo. `anon` não lê nada. A exceção é `user_profiles`, onde
+   cada um lê só o próprio perfil e a escrita é restrita a `service_role` — é isso que impede alguém
+   se promover a owner.
+3. **Papel owner** — `user_profiles.role = 'owner'` com `status = 'active'`. No servidor, todas as
+   rotas `/api/admin/*` passam por `guardOwnerRoute` (`lib/apiGuard.ts`) e usam a service key. No
+   cliente, `hooks/useIsOwnerActive.ts` apenas **esconde UI** — não é proteção.
 
-## 🎨 Customização de Cores
+Ou seja: a separação real é **logado vs. não logado**, mais o papel de owner aplicado na aplicação.
+Não há isolamento por engenheiro no banco.
 
-Edite `tailwind.config.js` para personalizar as cores:
+`lib/supabaseServer.ts` distingue `unauthorized` (403) de `unavailable` (503), para um banco fora do
+ar não parecer falta de permissão.
 
-```js
-colors: {
-  tecpred: {
-    primary: '#2E3192',    // Azul principal
-    secondary: '#4A4FB7',  // Azul médio
-    accent: '#6B70D9',     // Azul claro
-    dark: '#1A1D5E',       // Azul escuro
-    light: '#E8E9F8',      // Azul muito claro
-  },
-}
-```
+## `/admin`
 
-## 🧩 Componentes
+Duas responsabilidades:
 
-### `Header`
-- Logo TecPred
-- Status de conexão
-- Timestamp da última atualização
+- **Logins da plataforma** (`user_profiles`) — criar, listar, ativar e desativar
+- **Engenheiros do chatbot** (`engenheiros`) — nome, telefone, exclusivo, ativo
 
-### `KPICard`
-- Card de métrica com ícone
-- Suporte a trends (↑ ↓ →)
-- 5 variantes de cor
+É por aqui que um número passa a ser reconhecido no WhatsApp. Cadastrar o engenheiro aqui é o que
+faz o bot deixar de responder "número não cadastrado".
 
-### `ProjetosStatusChart`
-- Gráfico de pizza (Recharts)
-- Tooltips interativos
-- Legendas personalizadas
+## Deploy
 
-### `CargaTrabalhoChart`
-- Gráfico de barras empilhadas
-- Dias executados vs restantes
-- Detalhes por engenheiro
-
-### `AtrasosTable`
-- Tabela responsiva
-- Destaque para maiores atrasos
-- Badges coloridos
-
-### `RetrabalhoCard`
-- Resumo de retrabalhos
-- Ranking de engenheiros
-- Indicadores visuais
-
-## 📊 Estrutura de Dados
-
-```typescript
-interface VisaoGeral {
-  total_projetos: number
-  projetos_concluidos: number
-  projetos_em_execucao: number
-  projetos_atrasados: number
-  percentual_concluido_medio: number
-  total_areas: number
-  areas_concluidas: number
-  areas_ativas: number
-}
-
-// ... outros tipos em lib/supabase.ts
-```
-
-## 🔄 Fluxo de Atualização em Tempo Real
+Railway, serviço próprio (`railway.json`):
 
 ```
-1. Usuário abre dashboard
-2. Carrega dados iniciais
-3. Conecta ao Supabase Realtime
-4. Escuta mudanças nas tabelas:
-   - engenheiros_projetos
-   - projetos_previsao
-   - retrabalho_projetos
-5. Quando há mudança → recarrega dados
-6. UI atualiza automaticamente
+build:  npm install && (rm -rf .next/cache/* || true) && npm run build
+deploy: npm run start
 ```
 
-## 🐛 Troubleshooting
+O `rm -rf .next/cache/*`, o `config.cache = false` no webpack e o `Cache-Control: no-store` em
+`next.config.js` existem porque o volume persistente do Railway servia bundles antigos. É também por
+isso que quase toda página declara `export const dynamic = 'force-dynamic'`. **Não remova esses
+ajustes sem testar um deploy real** — o sintoma é o app servir código de versões anteriores.
 
-### Dashboard não atualiza em tempo real
+`vercel.json` existe, mas a Vercel é caminho alternativo/legado. Railway é o que está em uso.
 
-**Solução:** Verifique se Realtime está habilitado no Supabase:
-- Dashboard Supabase → Database → Replication
-- Habilite replicação nas tabelas necessárias
+## Coisas a saber antes de mexer
 
-### Erro "Failed to fetch"
-
-**Solução:** Verifique:
-1. URL e chave do Supabase em `.env.local`
-2. RLS policies permitem acesso
-3. Views foram criadas corretamente
-
-### Gráficos vazios
-
-**Solução:**
-1. Insira dados de teste no banco
-2. Verifique queries nas views
-3. Confira console do browser (F12)
-
-## 🚀 Deploy
-
-### Vercel (Recomendado)
-
-```bash
-# 1. Instalar Vercel CLI
-npm i -g vercel
-
-# 2. Deploy
-vercel
-
-# 3. Adicionar variáveis de ambiente na dashboard Vercel
-```
-
-### Netlify
-
-```bash
-# 1. Build
-npm run build
-
-# 2. Deploy pasta .next
-netlify deploy --prod --dir=.next
-```
-
-### Docker
-
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
-EXPOSE 3000
-CMD ["npm", "start"]
-```
-
-## 📈 Performance
-
-- **Lazy loading** de componentes
-- **Memoização** de dados pesados
-- **Debounce** em atualizações
-- **Otimização** de queries
-
-## 📝 Licença
-
-Desenvolvido para **TecPred**.
-
----
-
-## 🎯 Roadmap
-
-- [ ] Adicionar filtros por período
-- [ ] Exportar dados para Excel
-- [ ] Notificações push
-- [ ] Modo escuro
-- [ ] Gráficos adicionais
-- [ ] Dashboard mobile app
-
----
-
-**Desenvolvido com ❤️ usando Next.js + Supabase + TailwindCSS**
-
-**Última atualização:** Janeiro 2026
-
+- **`lib/secrets.ts` é cópia deliberada** de `logic/security/redactSecrets.ts` e
+  `logic/security/envSecret.ts` da raiz, porque o `tsconfig` do Next não alcança pastas fora de
+  `dashboard/`. Se corrigir um, corrija o outro.
+- **O card "Média por Horas"** do retrabalho é média aritmética simples dos percentuais por
+  engenheiro, **não ponderada por horas** — então ele diverge do "% Geral TecPred", que é ponderado.
+  Não é bug de dado.
+- **O "valor da hora"** da produção por período é digitado na tela e **não é persistido**.
+- **Componentes não referenciados:** `MemoriaisDescritivosTab.tsx` (tela planejada, nunca ligada) e
+  `RetrabalhoPorProjetoTable.tsx` (absorvido pelo `RetrabalhoCard`).
+- **Funções não chamadas** em `lib/supabase.ts`: `fetchRetrabalhoGeralLegado`,
+  `fetchRetrabalhoPorProjetoLegado`, `fetchRetrabalhoTaxaPorAreaLegado` e
+  `fetchProducaoEngenheiroPeriodo`. As três "legado" recalculavam métricas quando as views não
+  existiam e devolvem horas zeradas — não use como referência.
+- **Os testes do dashboard ficam na raiz**, em `tests/test-dashboard-*.ts`, e validam o código
+  **lendo os arquivos como texto** com regex, não importando os módulos. Rodam com
+  `npx tsx tests/<arquivo>.ts`.

@@ -1,348 +1,134 @@
-# 🔐 Autenticação por WhatsApp - Sistema de Fluxos Diferenciados
+# Autenticação do chatbot
 
-## 📋 Visão Geral
+Como o bot decide quem está falando com ele, e por que existem **quatro** desfechos em vez de dois.
 
-O chatbot implementa **autenticação automática por número de WhatsApp**, direcionando cada usuário para o fluxo apropriado:
+Para a visão geral do sistema, veja o [README](../README.md). Este documento detalha só a
+autenticação, que tem sutilezas que já causaram bug em produção.
 
-- ✅ **Engenheiros**: Acesso ao fluxo de gerenciamento de projetos
-- ✅ **Dono da Empresa**: Acesso ao fluxo de distribuição de tarefas e relatórios
-- ❌ **Não Cadastrados**: Mensagem de acesso negado
+> Este documento cita funções e arquivos, **não números de linha** — de propósito. A versão anterior
+> apontava para "linhas 234-254" e estava errada em poucos meses.
 
----
+## O modelo
 
-## 🔍 Como Funciona
+Não há senha, token nem login. A identidade é o **número de WhatsApp**, e a autorização é a presença
+desse número no banco. Consequências que valem entender antes de mexer:
 
-### 1. Processo de Autenticação
+- Quem cadastra um engenheiro é o dashboard, em `/admin` → "Engenheiros do chatbot" (tabela
+  `engenheiros`). Sem passar por lá, o número não é reconhecido.
+- O bot usa a **service role key** do Supabase, que **ignora RLS**. Nenhuma policy do banco protege
+  nada aqui; o controle é a consulta que o código faz.
+- `engenheiros.telefone` tem constraint `UNIQUE`, adicionada por
+  `supabase/adicionar_telefone_auth.sql` (não está no schema base).
 
-Quando uma mensagem chega no WhatsApp:
-
-```
-Mensagem recebida
-    ↓
-Normalizar número (+5511999999999)
-    ↓
-Buscar no banco de dados:
-  - Tabela `engenheiros` (campo `telefone`)
-  - Tabela `dono_empresa` (campo `telefone`)
-    ↓
-┌────────────────────────────────────────┐
-│  Número encontrado em `engenheiros`?   │ → SIM → Fluxo de Engenheiro
-│                                        │
-│  Número encontrado em `dono_empresa`?  │ → SIM → Fluxo de Dono
-│                                        │
-│  Não encontrado em nenhuma tabela?     │ → NÃO → Mensagem de erro
-└────────────────────────────────────────┘
-```
-
-### 2. Sessão do Usuário
-
-Após a autenticação, uma sessão é criada com:
-
-```typescript
-interface UserSession {
-  whatsapp: string;              // Número normalizado
-  tipo_usuario: 'engenheiro' | 'dono' | 'nao_cadastrado';
-  user_id: string;               // eng_id ou dono_id
-  fluxo_ativo: 'engineer_project' | 'owner' | null;
-  ultima_interacao: Date;
-}
-```
-
----
-
-## 🎭 Fluxos por Tipo de Usuário
-
-### 👷 Fluxo do Engenheiro
-
-**Menu Principal:**
-```
-🤖 Menu do Engenheiro
-
-📋 Gestão de Projetos
-1️⃣ Criar novo projeto
-2️⃣ Editar projeto existente
-3️⃣ Notificações diárias (Manhã/Noite)
-
-❓ Ajuda
-Digite "ajuda" para instruções
-```
-
-**Funcionalidades:**
-- ✅ **Criar Projeto**: Cadastrar novo projeto com todos os dados
-- ✅ **Editar Projeto**: Modificar informações de projetos existentes
-- ✅ **Notificações**:
-  - 🌅 **Manhã (11:20)**: Status + Previsão do dia
-  - 🌙 **Noite (16:30)**: Feito + Retrabalho + Observações
-
-**Restrições:**
-- ❌ Não pode distribuir tarefas
-- ❌ Não pode ver projetos de outros engenheiros
-- ✅ Vê apenas seus próprios projetos (RLS no Supabase)
-
----
-
-### 👔 Fluxo do Dono
-
-**Menu Principal:**
-```
-👔 Menu do Dono
-
-📊 Gestão da Empresa
-1️⃣ Distribuir tarefa para engenheiro
-2️⃣ Verificar status dos projetos
-3️⃣ Consultar histórico e relatórios
-
-❓ Ajuda
-Digite "ajuda" para instruções
-```
-
-**Funcionalidades:**
-- ✅ **Distribuir Tarefas**: Atribuir projetos aos engenheiros
-  - Escolher engenheiro
-  - Definir área e tipo de projeto
-  - Configurar prazos e complexidade
-- ✅ **Verificar Projetos**: Ver status de TODOS os projetos
-- ✅ **Relatórios**: Histórico e indicadores de performance
-
-**Permissões:**
-- ✅ Acesso total a todos os projetos (RLS no Supabase)
-- ✅ Pode criar, editar e deletar projetos
-- ✅ Pode atribuir tarefas a qualquer engenheiro
-
----
-
-## 🚫 Mensagem para Não Cadastrados
+## Fluxo
 
 ```
-🚫 Número não cadastrado
-
-Seu número de WhatsApp não está cadastrado no sistema.
-
-Para obter acesso, entre em contato com o administrador da TecPred.
-
-📞 Informações necessárias:
-• Seu nome completo
-• Cargo/função (Engenheiro ou Dono)
-• Número de WhatsApp (este número)
-
-Após o cadastro, você receberá acesso automático ao sistema.
+mensagem chega (webhook Twilio)
+  → normalizarWhatsapp(numero)
+  → buscarEngenheiroPorTelefone()        engenheiros, telefone + ativo = true
+       ├─ achou  → tipo_usuario = 'engenheiro'  → menu do engenheiro
+       └─ nao achou
+            → buscarDonoPorTelefone()    dono_empresa
+                 ├─ achou  → tipo_usuario = 'dono'  → ownerFlow inicia direto
+                 └─ nao achou → tipo_usuario = 'nao_cadastrado'
+  → se o banco falhar em qualquer ponto acima → 'indisponivel' (nao e um tipo_usuario)
 ```
 
----
+Tudo isso vive em `MessageHandler.autenticarUsuario()`
+(`chatbot/handlers/messageHandler.ts`).
 
-## 🔧 Configuração no Banco de Dados
+### Normalização do número
 
-### Cadastrar um Engenheiro
+`normalizarWhatsapp()` precisa existir porque o mesmo telefone chega em formatos diferentes
+dependendo do provider e do dispositivo. Ela:
 
-```sql
--- 1. Inserir engenheiro
-INSERT INTO engenheiros (nome, email, telefone)
-VALUES (
-  'João Silva',
-  'joao.silva@tecpred.com',
-  '+5511999999999'  -- ⚠️ FORMATO IMPORTANTE: +55XXXXXXXXXXX
-);
+1. remove os sufixos `@c.us` e `@lid` (formatos do whatsapp-web.js)
+2. tira tudo que não é dígito
+3. garante o prefixo `+55` **sem duplicar** o `55` quando ele já está lá
 
--- 2. Atribuir áreas de atuação
-INSERT INTO engenheiros_areas (eng_id, area_codigo)
-SELECT 
-  (SELECT eng_id FROM engenheiros WHERE telefone = '+5511999999999'),
-  area_codigo
-FROM areas
-WHERE codigo IN ('ELETRICO', 'HIDRAULICO');
-```
+O passo 3 é o que mais dá problema: sem ele, `5583999990000` viraria `+555583999990000` e nunca
+casaria com o cadastro.
 
-### Cadastrar o Dono
+## Os quatro desfechos
 
-```sql
--- Inserir dono (já existe no seed)
-INSERT INTO dono_empresa (nome, email, telefone, empresa_nome)
-VALUES (
-  'Evandro',
-  'evandro@tecpred.com',
-  '+5583988990772',  -- ⚠️ FORMATO IMPORTANTE: +55XXXXXXXXXXX
-  'TecPred Engenharia'
-);
-```
+O tipo de retorno (`ResultadoAutenticacao`) separa deliberadamente "não cadastrado" de "banco
+indisponível". Eles parecem iguais para quem escreve o código e são **completamente diferentes** para
+quem usa o bot.
 
-### ⚠️ Formato do Telefone
+| Desfecho | O que o usuário recebe | Sessão é criada? |
+|---|---|---|
+| Engenheiro | Menu do engenheiro | Sim, `tipo_usuario = 'engenheiro'` |
+| Dono | `ownerFlow` já iniciado | Sim, `tipo_usuario = 'dono'` |
+| Número não cadastrado | `mensagemNaoCadastrado()` | Sim, mas **reautentica a cada mensagem** |
+| Banco indisponível | `mensagemServicoIndisponivel()` | **Não** |
 
-**CRÍTICO**: O telefone deve estar no formato:
+### Por que "não cadastrado" reautentica
 
-```
-+55XXXXXXXXXXX
-```
+Um engenheiro novo manda mensagem antes de estar no banco, recebe "não cadastrado", e alguém o
+cadastra pelo `/admin` cinco minutos depois. Se a sessão guardasse esse veredito por 15 minutos, ele
+continuaria barrado sem entender por quê — e ninguém pensaria em reiniciar o processo.
 
-**Exemplos corretos:**
-- ✅ `+5511999999999` (11 dígitos após +55)
-- ✅ `+5583988990772` (11 dígitos após +55)
+Então a cada mensagem seguinte o handler **tenta autenticar de novo** no banco, e promove a sessão
+quando encontra o cadastro. Coberto por `tests/test-reauth-sessao.ts`.
 
-**Exemplos errados:**
-- ❌ `11999999999` (sem +55)
-- ❌ `5511999999999` (sem +)
-- ❌ `+55 (11) 99999-9999` (com formatação)
-- ❌ `+55 11 9 9999-9999` (com espaços)
+### Por que "banco indisponível" não cria sessão
 
----
+Se a consulta falhar e o código gravasse `nao_cadastrado`, esse veredito errado ficaria em cache por
+15 minutos: o banco volta em 30 segundos e o engenheiro continua recebendo "número não cadastrado"
+por um quarto de hora.
 
-## 🔄 Comandos Globais
+Por isso `buscarEngenheiroPorTelefone()` **lança** `SupabaseUnavailableError` em vez de devolver
+`null` quando o problema é infraestrutura. Ela cobre três casos:
 
-Funcionam para **todos os tipos de usuário**:
+- o cliente Supabase nunca conectou (falta de env, credencial inválida)
+- o PostgREST devolveu erro
+- a chamada estourou em rede — DNS, timeout, fetch
 
-| Comando | Descrição |
-|---------|-----------|
-| `menu` ou `oi` | Volta ao menu principal |
-| `ajuda` | Mostra ajuda contextual (engenheiro ou dono) |
-| `cancelar` | Sai do fluxo atual |
-| `sync` | Força sincronização Supabase → Sheets |
+`autenticarUsuario()` traduz isso em `{ indisponivel: true }`, e o handler responde sem criar sessão.
+Coberto por `tests/test-mensagem-indisponivel.ts` e
+`tests/test-auth-erro-vs-nao-cadastrado.ts`.
 
----
+Nenhum detalhe técnico vaza na resposta ao usuário. Os logs passam por
+`logic/security/redactSecrets.ts` antes de sair.
 
-## 🧪 Testando a Autenticação
+## Sessões
 
-### Teste via Terminal
+Sessões são um `Map` **em memória** no `MessageHandler`:
+
+- chave: o número normalizado
+- TTL: **15 minutos** de inatividade
+- limpeza: varredura a cada 5 minutos
+- guardam `tipo_usuario`, `user_id`, qual fluxo está ativo e a **instância do flow** com todo o
+  estado da conversa
+
+Duas consequências operacionais:
+
+- **Reiniciar o processo derruba todas as conversas em andamento.** Um deploy no meio da notificação
+  noturna faz o engenheiro recomeçar. Não há persistência.
+- Existe um `SessionService` com Redis em `integrations/session/sessionService.ts`, **não integrado**
+  a nada — e `ioredis` não está nem declarado no `package.json`. Não confie nele.
+
+Quando um fluxo termina (`finalizado: true`), o handler descarta a instância e limpa
+`fluxo_ativo`, para a próxima mensagem começar do menu.
+
+## Como testar
 
 ```bash
-npm run test:bot-completo
+npm run test:seguranca      # roda os três testes de autenticação em sequência
 ```
 
-**Simule diferentes números:**
+Individualmente:
 
-```
-Digite o número de telefone (ex: +5511999999999):
-> +5511999999999  # Engenheiro
-
-Digite uma mensagem:
-> oi
-
-# Deve mostrar: 🤖 Menu do Engenheiro
+```bash
+npx tsx tests/test-auth-erro-vs-nao-cadastrado.ts   # erro de banco != numero desconhecido
+npx tsx tests/test-mensagem-indisponivel.ts         # banco fora nao envenena a sessao
+npx tsx tests/test-reauth-sessao.ts                 # sessao stale reautentica
 ```
 
-```
-Digite o número de telefone (ex: +5511999999999):
-> +5583988990772  # Dono
+O padrão desses testes é trocar os métodos do `SupabaseService` na instância antes de processar
+qualquer mensagem — o handler resolve o serviço de forma preguiçosa, então a troca vale para ele
+também. Copie de `tests/test-mensagem-indisponivel.ts` se precisar escrever outro.
 
-Digite uma mensagem:
-> oi
-
-# Deve mostrar: 👔 Menu do Dono
-```
-
-```
-Digite o número de telefone (ex: +5511999999999):
-> +5511000000000  # Não cadastrado
-
-Digite uma mensagem:
-> oi
-
-# Deve mostrar: 🚫 Número não cadastrado
-```
-
-### Teste via WhatsApp
-
-1. **Cadastre seu número** no Supabase
-2. **Inicie o bot**: `npm start`
-3. **Escaneie o QR Code** com seu WhatsApp
-4. **Envie**: `oi`
-5. **Verifique** qual menu aparece (engenheiro ou dono)
-
----
-
-## 🛡️ Segurança: Row Level Security (RLS)
-
-O Supabase aplica políticas de segurança automáticas:
-
-### Engenheiros (RLS Limitado)
-
-```sql
--- Engenheiros veem apenas seus próprios projetos
-CREATE POLICY "engenheiros_veem_seus_projetos"
-ON projetos
-FOR SELECT
-USING (
-  eng_id = auth.uid()  -- Apenas projetos atribuídos a ele
-);
-```
-
-### Dono (RLS Completo)
-
-```sql
--- Dono vê todos os projetos
-CREATE POLICY "dono_ve_todos_projetos"
-ON projetos
-FOR ALL
-USING (
-  EXISTS (
-    SELECT 1 FROM dono_empresa
-    WHERE dono_id = auth.uid()
-  )
-);
-```
-
----
-
-## 🐛 Troubleshooting
-
-### Problema: "Número não cadastrado"
-
-**Causa**: O número do WhatsApp não está na tabela `engenheiros` ou `dono_empresa`
-
-**Solução:**
-```sql
--- Verificar se o número existe
-SELECT * FROM engenheiros WHERE telefone = '+5511999999999';
-SELECT * FROM dono_empresa WHERE telefone = '+5511999999999';
-
--- Se não existir, adicionar
-INSERT INTO engenheiros (nome, email, telefone)
-VALUES ('Seu Nome', 'email@tecpred.com', '+5511999999999');
-```
-
-### Problema: Menu errado aparece
-
-**Causa**: Número cadastrado em tabela errada
-
-**Solução:**
-```sql
--- Verificar em qual tabela está
-SELECT 'engenheiro' as tipo, nome, telefone FROM engenheiros WHERE telefone = '+5511999999999'
-UNION
-SELECT 'dono' as tipo, nome, telefone FROM dono_empresa WHERE telefone = '+5511999999999';
-
--- Mover para tabela correta se necessário
-```
-
-### Problema: Formato @lid em vez de @c.us
-
-**Causa**: WhatsApp está usando Linked Device ID
-
-**Solução**: O bot já trata isso automaticamente, convertendo `@lid` para `@c.us` via `contact.number`
-
----
-
-## 📚 Arquivos Relacionados
-
-- **Autenticação**: `chatbot/handlers/messageHandler.ts` (linhas 234-254)
-- **Fluxo Engenheiro**: `chatbot/flows/engineerProjectFlow.ts`
-- **Fluxo Dono**: `chatbot/flows/ownerFlow.ts`
-- **Supabase Service**: `integrations/supabase/supabaseService.ts`
-- **Banco de Dados**: `supabase/MASTER_SCHEMA_COMPLETO.sql`
-
----
-
-## ✅ Checklist de Implementação
-
-- [x] ✅ Autenticação por número de WhatsApp
-- [x] ✅ Fluxos separados (engenheiro vs dono)
-- [x] ✅ Mensagem para não cadastrados
-- [x] ✅ Sessões persistentes
-- [x] ✅ Menus contextuais
-- [x] ✅ Comandos globais
-- [x] ✅ RLS no Supabase
-- [x] ✅ Normalização de números (+55XXXXXXXXXXX)
-- [x] ✅ Tratamento de @lid (Linked Device ID)
-
----
-
-**Sistema pronto para produção! 🚀**
-
+Para testar à mão com um número real, cadastre-o em `/admin` no dashboard e mande mensagem para o
+número do Twilio. Em desenvolvimento, `WHATSAPP_PROVIDER=development` imprime as respostas no console
+em vez de enviá-las.
