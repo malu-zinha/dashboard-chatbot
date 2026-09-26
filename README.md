@@ -191,6 +191,14 @@ patch e bancos que não receberam **calculam progresso de forma diferente**. Nã
 repositório qual é o estado de um banco; confira as funções antes de investigar divergência de
 percentual.
 
+**Dois seeds de disciplinas se destroem mutuamente.** `supabase/seed_areas_completo.sql` insere a
+taxonomia antiga de códigos (`H1`–`H6`, `E1`–`E4`, `T1`–`T4`, `G1`–`G4`, `CL1`–`CL4`), e
+`supabase/reverter_areas_genericas.sql` **apaga exatamente esses códigos** e insere os genéricos
+(`ELETRICO`, `HIDRAULICO`, `COMPATIBILIZACAO`, `DRT`…). As duas listas não têm interseção, e é a
+segunda que vale hoje. Rodar na ordem errada deixa o banco com a taxonomia errada — e o chatbot não
+encontra disciplina nenhuma. Os códigos antigos sobrevivem apenas no caminho legado do Sheets
+(`integrations/sheets/engineerSheetService.ts`), então não podem ser removidos do código.
+
 Há ainda dezenas de `.sql` soltos em `supabase/` (`CORRIGIR_RETRABALHO*.sql`,
 `RECRIAR_TODAS_VIEWS.sql`, `views_retrabalho_apenas.sql`, `NOVAS_VIEWS_RETRABALHO.sql`…) com
 versões **antigas e conflitantes** das mesmas views. Quando houver dúvida sobre qual definição vale,
@@ -312,7 +320,8 @@ Cuidado ao ler SQL antigo: arquivos como `supabase/CRIAR_VIEWS.sql` e
 ### Outros indicadores
 
 - **Carga de trabalho**: `dias_restantes = SUM(tempo_trabalho_dias × (100 − percentual) / 100)` das
-  atribuições não concluídas.
+  atribuições não concluídas. As funções do fluxo do dono classificam esse número em quatro faixas:
+  `> 30` dias → `SOBRECARREGADO`, `> 15` → `CARGA_ALTA`, `> 7` → `CARGA_MEDIA`, senão `DISPONIVEL`.
 - **Atraso**: `data_prevista < hoje AND percentual < 100` → `hoje − data_prevista`.
 - **Paralisação**: dias em status `PARADO_CLIENTE`, `PARADO_TECPRED`, `AGUARDANDO_INF_CLIENTE` ou
   `AGUARDANDO_INICIO`, contados de `status_historico`. Alimenta o relatório PDF.
@@ -580,6 +589,20 @@ Coisas em que você vai tropeçar. Estão aqui de propósito — um README que e
 - `20260529_sync_ponderado_dashboard.sql` se autodeclara obsoleta.
   `20260831_dashboard_producao_apontamentos.sql` é byte a byte idêntica à de `20260901`.
 - `20260319_progresso_ponderado.sql` cria triggers sem `IF NOT EXISTS`: reexecutar falha.
+- **`gerar_proximo_codigo_projeto()` quebra com código que tenha ano embutido.** Ele monta `PRJ-%03d`
+  a partir do maior número já usado, extraindo **todos os dígitos** do código. Um projeto cadastrado
+  como `PRJ-2025-001` é lido como o número `2025001` e congela a numeração automática nesse patamar.
+- **Os 5 níveis de `complexidade_tarefas` são provisórios.** O seed traz 1/3/7/15/30 dias com o
+  comentário "ajustar conforme sua tabela" — nunca foram validados pelo cliente. Qualquer número
+  derivado de complexidade é estimativa de placeholder.
+
+**Sheets**
+
+- **Pelo repositório, `credentials.json` não tem como chegar ao Railway.** O arquivo está no
+  `.gitignore`, o código só aceita caminho de arquivo (`keyFile`) e não há volume configurado.
+  `GOOGLE_CREDENTIALS_JSON` não é lida por nenhum código, apesar de guias antigos sugerirem. O boot
+  passa de qualquer forma — a validação checa a variável, não o arquivo — então a sincronização falha
+  só em runtime. Nada além do Sheets depende disso. Ver [docs/DEPLOY.md](docs/DEPLOY.md).
 
 **Dashboard**
 
@@ -594,15 +617,17 @@ Coisas em que você vai tropeçar. Estão aqui de propósito — um README que e
 
 **Documentação**
 
-Este README é a fonte de verdade. Os documentos que sobraram e são confiáveis:
+Este README é a fonte de verdade e é autocontido. Os documentos abaixo detalham um assunto cada, sem
+repeti-lo — todos foram verificados contra o código:
 
 | Documento | Para quê |
 |---|---|
+| [`docs/MODELO_DE_DADOS.md`](docs/MODELO_DE_DADOS.md) | Diagrama do schema, nomes de coluna, instâncias, views vigentes e as armadilhas de leitura |
+| [`docs/DEPLOY.md`](docs/DEPLOY.md) | O que fazer nos painéis: Railway, Twilio (sandbox, templates), Supabase |
 | [`docs/AUTENTICACAO_CHATBOT.md`](docs/AUTENTICACAO_CHATBOT.md) | Como o bot identifica quem fala, e por que "não cadastrado" e "banco fora" são desfechos distintos |
 | [`dashboard/README.md`](dashboard/README.md) | Rodar e mexer no dashboard: telas, Realtime, acesso, armadilhas |
 | [`tests/test-engineer-flow.md`](tests/test-engineer-flow.md) | Roteiro de testes manuais do fluxo do engenheiro |
 
-Ainda **defasados**, descrevendo status manual, criação de projeto pelo engenheiro e/ou gravação em
-planilha: `deploy-docs/` (5 arquivos) e a maior parte de `supabase/docs-bd/` (14). Em particular,
-`supabase/docs-bd/new_db_schema.sql` declara `areas.area_id` como `SERIAL` quando o banco usa
-`UUID`, e `deploy-docs/ENV_VARIABLES.md` omite o Twilio, que é o provider de produção.
+Se encontrar um documento que contradiz este README, o README está certo — e o documento deveria ter
+sido apagado. Vinte e nove arquivos de documentação foram removidos por descreverem um sistema que não
+existe mais; o histórico do git preserva todos.
