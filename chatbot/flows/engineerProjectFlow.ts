@@ -908,7 +908,14 @@ _Digite o número da opção desejada_`;
     this.goToStep('feito_dia');
 
     return {
-      mensagem: `✅ Projeto: *${atribuicao.codigo}*\n\n✔️ *O que foi feito hoje?*\n\n_Descreva o trabalho realizado no dia_`,
+      mensagem: `✅ Projeto: *${atribuicao.codigo}*\n\n${this.renderFeitoDia().mensagem}`,
+      finalizado: false
+    };
+  }
+
+  private renderFeitoDia(): FlowResult {
+    return {
+      mensagem: `✔️ *O que foi feito hoje?*\n\n_Descreva o trabalho realizado no dia_`,
       finalizado: false
     };
   }
@@ -932,20 +939,29 @@ _Digite o número da opção desejada_`;
     };
   }
 
+  private renderRetrabalhoPergunta(): FlowResult {
+    return {
+      mensagem: `🔄 *Teve retrabalho/paralisação hoje?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
+      finalizado: false
+    };
+  }
+
+  private renderRetrabalhoMotivo(): FlowResult {
+    let mensagem = `⚠️ *Motivo do Retrabalho / Paralisação*\n\n`;
+    MOTIVOS_RETRABALHO.forEach((motivo, index) => {
+      mensagem += `${index + 1}️⃣ ${motivo}\n`;
+    });
+    mensagem += `\n_Digite o número do motivo_\n\n*0.* Voltar | *menu* — início`;
+    return { mensagem, finalizado: false };
+  }
+
   private async stepRetrabalhoPerguntaComHoras(msg: string): Promise<FlowResult> {
     const resposta = msg.trim();
 
     if (resposta === '1') {
       this.state.teveRetrabalho = true;
       this.goToStep('retrabalho_motivo');
-
-      let mensagem = `⚠️ *Motivo do Retrabalho / Paralisação*\n\n`;
-      MOTIVOS_RETRABALHO.forEach((motivo, index) => {
-        mensagem += `${index + 1}️⃣ ${motivo}\n`;
-      });
-      mensagem += `\n_Digite o número do motivo_\n\n*0.* Voltar | *menu* — início`;
-
-      return { mensagem, finalizado: false };
+      return this.renderRetrabalhoMotivo();
     }
 
     if (resposta === '2') {
@@ -1043,7 +1059,7 @@ _Digite o número da opção desejada_`;
     this.goToStep('retrabalho_pergunta');
 
     return {
-      mensagem: `✅ Horas registradas: ${horas}\n\n🔄 *Teve retrabalho/paralisação hoje?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
+      mensagem: `✅ Horas registradas: ${horas}\n\n${this.renderRetrabalhoPergunta().mensagem}`,
       finalizado: false
     };
   }
@@ -1099,7 +1115,7 @@ _Digite o número da opção desejada_`;
 
       this.goToStep('observacoes_pergunta');
 
-      const perguntaObs = `📝 *Quer adicionar observações?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`;
+      const perguntaObs = this.renderObservacoesPergunta().mensagem;
 
       if (!teveRetrabalho) {
         return { mensagem: `✅ Sem retrabalho!\n\n${perguntaObs}`, finalizado: false };
@@ -1128,17 +1144,27 @@ _Digite o número da opção desejada_`;
     return { mensagem: '❌ Digite *1* para confirmar ou *2* para corrigir.', finalizado: false };
   }
 
+  private renderObservacoesPergunta(): FlowResult {
+    return {
+      mensagem: `📝 *Quer adicionar observações?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
+      finalizado: false
+    };
+  }
+
+  private renderObservacoesTexto(): FlowResult {
+    return {
+      mensagem: `📝 *Observações*\n\n_Digite suas observações sobre o dia de trabalho_`,
+      finalizado: false
+    };
+  }
+
   private async stepObservacoesPergunta(msg: string): Promise<FlowResult> {
     const resposta = msg.trim();
 
     if (resposta === '1') {
       // Quer adicionar observações
       this.goToStep('observacoes_texto');
-
-      return {
-        mensagem: `📝 *Observações*\n\n_Digite suas observações sobre o dia de trabalho_`,
-        finalizado: false
-      };
+      return this.renderObservacoesTexto();
 
     } else if (resposta === '2') {
       // Não quer observações
@@ -1219,12 +1245,7 @@ _Digite o número da opção desejada_`;
 
         if (temPendencia) {
           this.goToStep('noite_etapa_pergunta');
-
-          mensagem += `\n📐 *Alguma etapa foi concluída hoje?*\n\n`;
-          mensagem += `1️⃣ Sim\n`;
-          mensagem += `2️⃣ Não\n\n`;
-          mensagem += `_Digite 1 ou 2_`;
-
+          mensagem += `\n${this.renderNoiteEtapaPergunta().mensagem}`;
           return { mensagem, finalizado: false };
         }
       } catch (error) {
@@ -2087,6 +2108,13 @@ _Digite o número da opção desejada_`;
   // =====================================================
   // STEPS: PROGRESSO PONDERADO INTEGRADO NA NOITE
   // =====================================================
+
+  private renderNoiteEtapaPergunta(): FlowResult {
+    return {
+      mensagem: `📐 *Alguma etapa foi concluída hoje?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
+      finalizado: false
+    };
+  }
 
   private async stepNoiteEtapaPergunta(msg: string): Promise<FlowResult> {
     const resposta = msg.trim();
