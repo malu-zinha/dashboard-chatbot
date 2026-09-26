@@ -1118,7 +1118,7 @@ _Digite o número da opção desejada_`;
         };
       }
 
-      await this.supabase.registrarRetrabalho(
+      const gravado = await this.supabase.registrarRetrabalho(
         this.state.selectedAtribuicaoId!,
         teveRetrabalho,
         this.state.motivoRetrabalho,
@@ -1128,6 +1128,19 @@ _Digite o número da opção desejada_`;
         this.state.horasTrabalhadasTotal!,
         this.state.horasRetrabalho ?? 0
       );
+
+      // registrarRetrabalho devolve null em quatro casos: sem conexao, erro da RPC, a RPC
+      // respondendo sucesso:false (a validacao do banco rejeitou) e excecao. Avancar aqui
+      // diria "horas registradas" com nada gravado, e as horas do dia se perderiam em
+      // silencio — ninguem percebe ate o indicador de retrabalho sair errado. Ficar no
+      // mesmo passo mantem o resumo na tela e deixa o "1" tentar de novo.
+      if (!gravado) {
+        const resumo = await this.renderHorasConfirmar();
+        return {
+          mensagem: `❌ Não consegui gravar as horas. Nada foi registrado.\n\n${resumo.mensagem}`,
+          finalizado: false
+        };
+      }
 
       this.goToStep('observacoes_pergunta');
 

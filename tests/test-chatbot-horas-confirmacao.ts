@@ -188,6 +188,52 @@ const enviar = async (flow: any, msg: string): Promise<string> =>
 }
 
 // =====================================================
+// Gravacao que falha nao pode parecer sucesso
+// =====================================================
+// registrarRetrabalho devolve null em quatro casos: sem conexao, erro da RPC, a RPC
+// respondendo sucesso:false (validacao do banco rejeitou) e excecao. Avancar nesses casos
+// diria ao engenheiro que as horas foram gravadas quando nada foi, e as horas do dia se
+// perderiam em silencio — ninguem percebe ate o indicador de retrabalho sair errado.
+{
+  const flow = criarFlow().flow
+  let falhar = true
+  const gravacoes: Gravacao[] = []
+  flow.supabase = {
+    registrarRetrabalho: async (
+      _id: string, necessitou: boolean, motivo: string | undefined,
+      _t: undefined, _d: undefined, horasTotal: number, horasRetrabalho: number
+    ) => {
+      if (falhar) return null
+      gravacoes.push({ necessitou, motivo, horasTotal, horasRetrabalho })
+      return {}
+    },
+  }
+
+  await enviar(flow, '8')
+  await enviar(flow, '1')
+  await enviar(flow, '3')
+  await enviar(flow, '2')
+
+  const erro = await enviar(flow, '1')
+  assert.match(erro, /❌/, 'falha de gravacao precisa aparecer')
+  assert.doesNotMatch(erro, /Retrabalho registrado/, 'nao pode afirmar que gravou')
+  assert.doesNotMatch(erro, /Quer adicionar observações/, 'nao pode avancar para observacoes')
+  assert.equal(flow.state.step, 'horas_confirmar', 'precisa continuar na confirmacao')
+  assert.match(erro, /Confirme as horas do dia|Confirmar e gravar/, 'o resumo segue disponivel')
+
+  // O passo continua disponivel: quando o banco volta, o mesmo "1" grava
+  falhar = false
+  const gravado = await enviar(flow, '1')
+  assert.deepEqual(gravacoes, [
+    { necessitou: true, motivo: MOTIVO_ESCOLHIDO, horasTotal: 8, horasRetrabalho: 2 },
+  ])
+  assert.match(gravado, /Retrabalho registrado: 2h de 8h \(25\.0%\)/)
+  assert.equal(flow.state.step, 'observacoes_pergunta')
+
+  console.log('   ✅ gravacao que falha nao avanca e permite tentar de novo')
+}
+
+// =====================================================
 // Horas com virgula atravessam o resumo intactas
 // =====================================================
 {
