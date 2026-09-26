@@ -1,566 +1,603 @@
-# 🤖 Chatbot Tril Consult - Sistema de Gestão de Projetos
+# TecPred — Chatbot de apontamento + Dashboard
 
-Sistema integrado de gestão de projetos de engenharia via WhatsApp, com armazenamento em Supabase e sincronização com Google Sheets.
+Sistema de acompanhamento de projetos de engenharia da TecPred. Um bot de WhatsApp coleta o
+apontamento diário dos engenheiros (o que foi feito, quantas horas, quanto foi retrabalho, quais
+etapas concluíram) e um dashboard web transforma isso em indicadores de progresso, retrabalho,
+carga de trabalho e atraso.
 
-## 🎯 Visão Geral
+**O Supabase (Postgres) é a fonte de verdade.** Todo o resto lê ou escreve nele. A sincronização com
+Google Sheets existe, mas é legado e unidirecional (banco → planilha), apenas para visualização.
 
-Engenheiros registram execução diária e retrabalhos pelo WhatsApp. O sistema processa, valida e armazena os dados no Supabase, e sincroniza automaticamente com a planilha do CEO para acompanhamento consolidado.
+## Índice
 
-## ✨ Funcionalidades
-
-### Para Engenheiros (via WhatsApp)
-- 🆕 **Criar Novo Projeto**: Cadastro completo com dados automáticos e manuais
-- ✏️ **Editar Projeto Existente**: Atualização de qualquer campo do projeto
-- 📅 **Notificações Diárias**: Registro matinal (status + previsão) e noturno (feito + retrabalho)
-- 📊 **Registrar Execução Diária**: Percentual previsto, realizado e observações
-- 🔧 **Registrar Retrabalhos**: Motivo, descrição e impacto
-- 📈 **Consultar Status**: Progresso do projeto, estatísticas e tendências
-- 🤖 **Conversação Natural**: Fluxos guiados em português com menus numerados
-- 🔄 **Sincronização Manual**: Comando `sync` para forçar sincronização Supabase → Sheets
-
-### Para Gestores
-- 📋 **Dashboard CEO**: Planilha consolidada com progresso de todos os projetos
-- 📊 **Análise de Retrabalhos**: Categorização automática e sugestões preventivas
-- 🎯 **Indicadores**: Fase do projeto, tendência, dias restantes
-
-### Recursos Técnicos
-- 💬 **WhatsApp**: Interface principal de comunicação (suporta formatos @c.us e @lid)
-- 🗄️ **Supabase**: Banco PostgreSQL com RLS (armazenamento primário)
-- ⚡ **Edge Functions**: APIs serverless (Deno)
-- 🔄 **Google Sheets**: Sincronização automática Supabase → Sheets (a cada 5 minutos)
-- 🤖 **OpenAI**: Processamento de linguagem natural (opcional)
-- ⏰ **Cron Jobs**: Sincronização automática e notificações agendadas
+1. [Os dois apps deste repositório](#os-dois-apps-deste-repositório)
+2. [Setup local](#setup-local)
+3. [Variáveis de ambiente](#variáveis-de-ambiente)
+4. [Banco de dados: como montar](#banco-de-dados-como-montar)
+5. [Modelo de dados](#modelo-de-dados)
+6. [Como os números são calculados](#como-os-números-são-calculados)
+7. [Fluxos no WhatsApp](#fluxos-no-whatsapp)
+8. [Dashboard](#dashboard)
+9. [Testes](#testes)
+10. [Deploy](#deploy)
+11. [Convenções do projeto](#convenções-do-projeto)
+12. [Limitações conhecidas](#limitações-conhecidas)
 
 ---
 
-## 🚀 Instalação e Configuração
+## Os dois apps deste repositório
 
-### 1. Pré-requisitos
+São **duas aplicações independentes** no mesmo repo, com `package.json`, dependências, variáveis de
+ambiente e deploy separados. Não compartilham código por import — integram-se pelo banco.
 
-- Node.js v18+
-- npm ou yarn
-- Conta Supabase
-- Conta Google Cloud (para Sheets API)
-- WhatsApp ativo
+| | Chatbot | Dashboard |
+|---|---|---|
+| Onde | raiz do repo | `dashboard/` |
+| `name` | `whatsapp-sheets-bot` | `tecpred-dashboard-evandro` |
+| Stack | Node 20 + TypeScript (ESM), Express, Twilio | Next.js 14 (App Router), React 18, Tailwind, Recharts, jsPDF |
+| Roda com | `npm start` (porta `PORT`, default 3000) | `npm run dev` / `npm run start` (porta 3000) |
+| Build | **não compila** — roda TypeScript direto com `tsx` | `next build` |
+| Deploy | Railway (serviço próprio) | Railway (outro serviço) |
 
-### 2. Instalar Dependências
+Estrutura do chatbot:
+
+```
+src/server-twilio.ts      entrypoint de produção: Express + webhook Twilio
+src/index.ts              entrypoint legado: whatsapp-web.js com QR Code (uso local)
+chatbot/flows/            máquinas de estado da conversa
+  engineerProjectFlow.ts    fluxo do engenheiro (~2200 linhas)
+  ownerFlow.ts              fluxo do dono
+chatbot/handlers/
+  messageHandler.ts         roteamento, autenticação e sessões
+  sheetsBot.ts              cliente whatsapp-web.js (só no caminho legado)
+  whisperService.ts         transcrição de áudio (só no caminho legado)
+logic/                    funções puras, sem I/O — é aqui que mora a lógica testável
+integrations/supabase/    acesso ao banco (supabaseService.ts)
+integrations/sheets/      sincronização legada com Google Sheets
+integrations/cron/        agendamentos (notificações e sync)
+supabase/migrations/      SQL do schema
+tests/                    78 arquivos de teste (64 deles .ts)
+```
+
+> Uma nota sobre `logic/`: o dashboard tem uma **cópia deliberada** de
+> `logic/security/redactSecrets.ts` em `dashboard/lib/secrets.ts`, porque o `tsconfig` do Next não
+> alcança pastas fora de `dashboard/`. Se mexer em um, mexa no outro.
+
+---
+
+## Setup local
+
+**Pré-requisitos**
+
+- Node 20 (não há `engines` nem `.nvmrc`; o `nixpacks.toml` fixa `nodejs_20`)
+- Projeto Supabase com as migrations aplicadas (ver [seção 4](#banco-de-dados-como-montar))
+- Conta Twilio, se for testar envio real de WhatsApp
+- Service account do Google Cloud, **só** se for usar a sincronização com Sheets
+
+**Instalação** — são dois `npm install`:
 
 ```bash
-npm install
+npm install                      # chatbot, na raiz
+cd dashboard && npm install      # dashboard
 ```
 
-### 3. Configurar Variáveis de Ambiente
-
-Crie um arquivo `.env` na raiz:
-
-```env
-# OpenAI
-OPENAI_API_KEY=sua-chave-openai
-
-# Supabase
-SUPABASE_URL=https://[seu-projeto].supabase.co
-SUPABASE_ANON_KEY=sua-chave-anonima
-SUPABASE_SERVICE_ROLE_KEY=sua-chave-service-role
-SUPABASE_FUNCTIONS_URL=https://[seu-projeto].supabase.co/functions/v1
-
-# Google Sheets (Obrigatório)
-GOOGLE_APPLICATION_CREDENTIALS=./path/to/credentials.json
-GOOGLE_SHEETS_ENGINEER_ID=id-da-planilha-do-engenheiro
-GOOGLE_SHEETS_ENGINEER_NAME=Nome da aba (ex: "Engenheira(o)")
-
-# Google Sheets - Filtro opcional por WhatsApp
-GOOGLE_SHEETS_ENG1_WHATSAPP=+5511999999999  # Filtrar projetos por engenheiro
-
-# Supabase (Opcional - se não configurar, usa apenas Google Sheets)
-SUPABASE_URL=https://[seu-projeto].supabase.co
-SUPABASE_ANON_KEY=sua-chave-anonima
-SUPABASE_SERVICE_ROLE_KEY=sua-chave-service-role
-
-# Sincronização Automática (Opcional)
-SYNC_CRON_SCHEDULE=*/5 * * * *  # Padrão: a cada 5 minutos
-```
-
-### 4. Configurar Supabase
-
-#### 4.1 Criar Tabelas
+**Rodando o chatbot**
 
 ```bash
-# Executar no Supabase SQL Editor
-psql < supabase/db_schema.sql
-psql < supabase/policies.sql
-psql < supabase/views.sql
+npm run dev          # nodemon + tsx src/server-twilio.ts (webhook Twilio)
+npm start            # produção: tsx src/server-twilio.ts
+npm run build        # NÃO gera dist/ — o tsconfig usa noEmit, então isto é só typecheck
 ```
 
-#### 4.2 Fazer Deploy das Edge Functions
+O servidor expõe `GET /` e `GET /health` (health check com status do banco),
+`POST /webhook/whatsapp` (mensagens) e `POST /webhook/status` (callbacks de entrega do Twilio).
+
+Para desenvolvimento sem Twilio, deixe `WHATSAPP_PROVIDER=development`: as respostas vão para o
+console em vez de serem enviadas.
+
+Existe também o caminho legado com QR Code, útil para testar no seu próprio WhatsApp:
 
 ```bash
-# Instalar Supabase CLI
-npm install -g supabase
-
-# Login
-supabase login
-
-# Deploy das functions
-supabase functions deploy registrarExecucao
-supabase functions deploy registrarRetrabalho
-supabase functions deploy statusProjeto
+npm run dev:whatsapp-web    # src/index.ts, imprime QR Code no terminal
 ```
 
-### 5. Configurar Google Sheets API
+É o **único** caminho que transcreve áudio (via Whisper). O servidor Twilio de produção lê apenas o
+campo `Body` do webhook e ignora mídia.
 
-1. Acesse [Google Cloud Console](https://console.cloud.google.com/)
-2. Crie um projeto
-3. Ative a **Google Sheets API**
-4. Crie credenciais **Service Account**
-5. Baixe o JSON de credenciais
-6. Compartilhe suas planilhas com o email da service account
-
-### 6. Executar
+**Rodando o dashboard**
 
 ```bash
-# Desenvolvimento
-npm run dev
-
-# Produção
-npm start
+cd dashboard
+npm run dev      # next dev em 0.0.0.0:3000
 ```
+
+Sem `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`, o dashboard sobe com **dados
+falsos** de `dashboard/lib/mockData.ts` e Realtime desligado — útil para mexer na UI, enganoso se
+você achar que está vendo dados reais.
 
 ---
 
-## 💬 Como Usar
+## Variáveis de ambiente
 
-### 🚀 Iniciar o Bot
+Copie `.env.example` para `.env` na raiz. O dashboard usa um `.env.local` próprio dentro de
+`dashboard/`.
 
-**Terminal:**
+### Chatbot (raiz)
+
+| Variável | Para quê | Obrigatória | Default |
+|---|---|---|---|
+| `SUPABASE_URL` | Projeto Supabase | **Sim, na prática** — sem ela nenhuma autenticação resolve e todo usuário recebe "serviço indisponível" | `''` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Chave de serviço (ignora RLS) | **Sim, na prática** | `''` |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Caminho do JSON da service account | **Sim** — o boot faz `exit(1)` se faltar | — |
+| `GOOGLE_SHEETS_ENGINEER_ID` | Planilha do engenheiro | **Sim** — `exit(1)` se faltar | `''` |
+| `GOOGLE_SHEETS_ENGINEER_NAME` | Nome da aba | **Sim** — `exit(1)` se faltar | `Engenheiro(a)` |
+| `GOOGLE_SHEETS_ENGINEER_RANGE` | Intervalo lido | Não | `A1:AE1000` |
+| `WHATSAPP_PROVIDER` | `development` \| `twilio` \| `meta` | Não | `development` |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` | Credenciais Twilio | Se `WHATSAPP_PROVIDER=twilio` (a falta só gera warning no boot) | `''` |
+| `META_ACCESS_TOKEN` / `META_PHONE_NUMBER_ID` / `META_API_VERSION` | Credenciais Meta | Se `WHATSAPP_PROVIDER=meta` | `''` / `''` / `v18.0` |
+| `PORT` | Porta do Express | Não | `3000` |
+| `OPENAI_API_KEY` | Whisper (áudio, caminho legado) | Não | — |
+| `SYNC_CRON_SCHEDULE` | Frequência do sync banco → Sheets | Não | `*/5 * * * *` |
+| `ENABLE_PROJECT_CLEANUP_CRON` | Liga a limpeza semestral de projetos | Não | desligado (ativa só com a string `true`) |
+| `GOOGLE_SHEETS_ENG1_*` … `ENG3_*` | Planilhas adicionais por engenheiro | Não | fallback para as `_ENGINEER_` |
+| `GOOGLE_SHEETS_CEO_ID` / `_NAME` / `_RANGE` | Planilha consolidada | Não | — / `Dashboard` / `A2:Z1000` |
+
+Atenção a duas armadilhas:
+
+- A validação de boot checa se a **variável** está definida, não se o arquivo de credenciais
+  existe. Com `GOOGLE_APPLICATION_CREDENTIALS=./credentials.json` e nenhum `credentials.json` no
+  disco, o servidor sobe normalmente e só falha quando tenta falar com o Sheets.
+- `GOOGLE_SHEETS_ENGINEER_ID` e `_NAME` são exigidas no boot mesmo que você não use Sheets. Para
+  rodar só com Supabase, defina qualquer valor nelas.
+
+### Dashboard (`dashboard/.env.local`)
+
+| Variável | Para quê |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Cliente e middleware |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Cliente e middleware (sujeita a RLS) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Apenas no servidor, nas rotas `/api/admin/*` |
+
+---
+
+## Banco de dados: como montar
+
+Não há `supabase/config.toml` nem migrations versionadas pelo CLI. A prática real — declarada nos
+cabeçalhos dos próprios arquivos — é **colar o SQL no SQL Editor do Supabase, na ordem**:
+
+1. `supabase/MASTER_SCHEMA_COMPLETO.sql` — schema base (tabelas do núcleo)
+2. `supabase/migrations/*.sql` — 28 arquivos, em ordem cronológica pelo nome
+3. Os arquivos soltos em `supabase/` que definem funções e views usadas em produção:
+   `chatbot_functions.sql`, `functions_dono.sql`, `seed_complemento_chatbot.sql`,
+   `criar_tipos_projeto.sql`, `CRIAR_VIEWS.sql`, `triggers_e_views.sql`
+
+Três coisas que você precisa saber antes de confiar num banco novo:
+
+**Parte das RPCs vive fora de `migrations/`.** Funções que o código chama em produção —
+`cadastrar_engenheiro`, `atribuir_area_projeto`, `buscar_meus_projetos`, `listar_areas_disponiveis`,
+`gerar_proximo_codigo_projeto`, `dono_distribuir_tarefa` e outras — estão apenas nos arquivos soltos
+listados acima. Aplicar só `migrations/` deixa o chatbot quebrado em tempo de execução.
+
+**O owner inicial é um UUID fixo.** `supabase/migrations/20260601_auth_dashboard.sql` insere o
+primeiro `user_profiles` com role `owner` a partir de um UUID hardcoded. Num Supabase novo esse
+insert não encontra ninguém e **o projeto nasce sem owner** — o dashboard sobe, mas `/admin` e tudo
+que depende de owner ficam inacessíveis. Crie o usuário no Auth e insira o `user_profiles`
+manualmente.
+
+**`supabase/sql-editor-patches/` pode divergir a semântica.** O patch
+`20260804_corrigir_filtros_instancia_legada.sql` redefine funções de cálculo de progresso para
+tratar `eng_projeto_id IS NULL` como instância legada em vez de coringa. Bancos que receberam o
+patch e bancos que não receberam **calculam progresso de forma diferente**. Não há como saber pelo
+repositório qual é o estado de um banco; confira as funções antes de investigar divergência de
+percentual.
+
+Há ainda dezenas de `.sql` soltos em `supabase/` (`CORRIGIR_RETRABALHO*.sql`,
+`RECRIAR_TODAS_VIEWS.sql`, `views_retrabalho_apenas.sql`, `NOVAS_VIEWS_RETRABALHO.sql`…) com
+versões **antigas e conflitantes** das mesmas views. Quando houver dúvida sobre qual definição vale,
+a resposta é: **a mais recente em `supabase/migrations/`**.
+
+---
+
+## Modelo de dados
+
+### `engenheiros_projetos` é o centro de tudo
+
+Uma linha de `engenheiros_projetos` é uma **atribuição**: um engenheiro responsável por uma
+disciplina de um projeto. Quase tudo pendura nela por `eng_projeto_id` — apontamentos diários,
+prazos, pavimentos, etapas, histórico de status, tasks.
+
+```
+engenheiros ──┐
+projetos ─────┼──> engenheiros_projetos (atribuição) ──┬──> projetos_previsao   (previsão e feito do dia)
+areas ────────┘         │                              ├──> retrabalho_projetos (horas do dia)
+                        │                              ├──> prazos
+                        │                              ├──> projeto_pavimentos ──> pavimento_etapas
+                        │                              ├──> projeto_etapas_globais
+                        │                              └──> status_historico
+                        └──> instancia_label, complemento_area_ref_id
+```
+
+### Vocabulário
+
+- **Disciplina** = uma linha de `areas` (`ELETRICO`, `HIDRAULICO`, `COMPATIBILIZACAO`,
+  `COMPLEMENTO`, `DRT`…). A UI diz "disciplina"; as views expõem `area_descricao`. `areas.area_id` é
+  **UUID**.
+- **Atribuição** = engenheiro × projeto × disciplina × instância.
+- **Instância** = Compatibilização e Complemento podem se repetir no mesmo projeto (várias rodadas),
+  cada uma com seu `instancia_label` e sua própria árvore de pavimentos e etapas. É por isso que
+  `projeto_pavimentos` e `projeto_etapas_globais` têm `eng_projeto_id`: sem ele, concluir uma rodada
+  de Compatibilização concluiria todas.
+- **Pavimento** = subdivisão física ("Térreo", "Tipo", "Cobertura"), com peso.
+- **Etapa global** = trabalho que não pertence a nenhum pavimento, com peso.
+
+### Tabelas principais
+
+| Tabela | O que guarda |
+|---|---|
+| `engenheiros` | Cadastro. `telefone` é a chave de autenticação no WhatsApp |
+| `projetos` | `codigo_projeto`, cliente, `percentual_ponderado` (roll-up) |
+| `areas` | As disciplinas, com `tempo_trabalho_dias` (base das estimativas de carga) |
+| `engenheiros_projetos` | **A atribuição.** Datas, `percentual_ponderado`, `instancia_label` |
+| `projetos_previsao` | Um registro por atribuição por dia: previsão da manhã e feito da noite |
+| `retrabalho_projetos` | Um registro por atribuição por dia: `horas_trabalhadas_total`, `horas_retrabalho`, motivo. Apesar do nome, é o **apontamento diário de horas** |
+| `prazos` | As quatro datas (início, início esperado pelo cliente, prazo interno, prazo cliente) |
+| `projeto_pavimentos` / `pavimento_etapas` | A árvore de progresso, com pesos |
+| `projeto_etapas_globais` | Etapas sem pavimento, com peso |
+| `area_pavimentos_template` / `area_etapas_template` | Templates por disciplina, usados para semear uma atribuição nova |
+| `dono_empresa` | Cadastro do dono (outro fluxo no WhatsApp) |
+| `evandro_distribuicao_tasks` | Distribuição de tarefas feita pelo dono |
+| `notificacoes_whatsapp` | Fila de notificações proativas |
+| `status_historico` | Auditoria de mudança de status (base do cálculo de paralisação) |
+| `user_profiles` | Login do dashboard: `role` = `owner` \| `engenheiro` |
+
+### Duas colunas que enganam
+
+- **`engenheiros_projetos.percentual_andamento` está morta.** O valor real é
+  `percentual_ponderado`. Para não quebrar o front, as views expõem um campo *chamado*
+  `percentual_andamento` que na verdade lê `percentual_ponderado` — nome igual, fonte diferente.
+- **`status_codes` / `status_id` são vestigiais.** Ainda são populados, mas o status exibido não vem
+  deles: é derivado do percentual (ver abaixo).
+
+---
+
+## Como os números são calculados
+
+### Progresso ponderado
+
+Ninguém digita percentual. Ele é **derivado de etapas marcadas como concluídas**, cada uma com peso,
+em dois níveis:
+
+```
+percentual da disciplina =
+    Σ  peso_do_pavimento × (Σ pesos das etapas concluídas dentro dele ÷ 100)
+  + Σ  peso_das_etapas_globais concluídas
+```
+
+Nível 1 são os pavimentos **e** as etapas globais; seus pesos somam 100. Nível 2 são as etapas
+dentro de cada pavimento; seus pesos somam 100 *dentro daquele pavimento*.
+
+Os pesos são distribuídos **igualmente e automaticamente** quando a atribuição é criada (trigger
+`trg_seed_pav_etapa` → `seed_pavimentos_etapas`, a partir do template da disciplina). Com 4
+pavimentos + 1 etapa global, cada item de nível 1 vale 20,00. Como o arredondamento gera resíduo
+(3 × 33,33 = 99,99), `ajustar_residuo_pesos` joga a diferença no último item para fechar exatamente
+100.
+
+Exemplo: 2 pavimentos de peso 50, cada um com 2 etapas de peso 50. Concluir uma etapa do Térreo dá
+`50 × 50/100 = 25%`.
+
+Marcar uma etapa dispara um trigger que recalcula a disciplina e propaga até
+`projetos.percentual_ponderado` na mesma transação. O roll-up do projeto é a **média** das
+atribuições ativas.
+
+O status nunca vem de `status_codes`: `>= 100` → Concluído, `> 0` → Em Andamento, senão Aguardando
+Início. Um projeto só conta como concluído quando **todas** as disciplinas ativas estão em 100.
+
+### Retrabalho por horas
+
+Desde `20260728_retrabalho_por_horas.sql`, retrabalho é medido em **horas**, não em dias nem em
+contagem de ocorrências:
+
+```
+percentual de retrabalho = SUM(horas_retrabalho) / SUM(horas_trabalhadas_total) × 100
+```
+
+Os dois números vêm do apontamento noturno do engenheiro no WhatsApp, gravados em
+`retrabalho_projetos` pela RPC `registrar_retrabalho_dia` — um **upsert por (atribuição, dia)**.
+
+Cuidado ao ler SQL antigo: arquivos como `supabase/CRIAR_VIEWS.sql` e
+`supabase/views_retrabalho_apenas.sql` ainda contêm a fórmula anterior
+(`AVG(CASE WHEN necessitou_retrabalho THEN 100 ELSE 0 END)`). A definição válida é a da migration de
+2026-07-28.
+
+### Outros indicadores
+
+- **Carga de trabalho**: `dias_restantes = SUM(tempo_trabalho_dias × (100 − percentual) / 100)` das
+  atribuições não concluídas.
+- **Atraso**: `data_prevista < hoje AND percentual < 100` → `hoje − data_prevista`.
+- **Paralisação**: dias em status `PARADO_CLIENTE`, `PARADO_TECPRED`, `AGUARDANDO_INF_CLIENTE` ou
+  `AGUARDANDO_INICIO`, contados de `status_historico`. Alimenta o relatório PDF.
+
+---
+
+## Fluxos no WhatsApp
+
+### Quem é quem
+
+O bot identifica o usuário pelo número (`autenticarUsuario` em `chatbot/handlers/messageHandler.ts`):
+busca em `engenheiros` por `telefone` com `ativo = true`, depois em `dono_empresa`. São quatro
+desfechos, deliberadamente distintos:
+
+- **Engenheiro** → menu do engenheiro
+- **Dono** → `ownerFlow` inicia direto
+- **Número não cadastrado** → mensagem de não cadastrado. A sessão guarda esse estado, mas **cada
+  mensagem seguinte tenta reautenticar**, para reconhecer um número cadastrado depois sem redeploy
+- **Banco indisponível** → "serviço temporariamente indisponível", **sem criar sessão** (gravar
+  `nao_cadastrado` aqui envenenaria o cache por 15 minutos)
+
+Sessões são um `Map` **em memória**, com TTL de 15 minutos. Reiniciar o processo derruba todas as
+conversas em andamento.
+
+### Menu do engenheiro
+
+```
+1️⃣ Notificação Matinal        previsão do dia
+2️⃣ Notificação Noturna        feito + horas + retrabalho + etapas
+3️⃣ Visualizar Meus Projetos   só leitura
+4️⃣ Marcar Etapa Concluída     progresso ponderado
+```
+
+**Notificação Matinal** — escolhe a atribuição, descreve a previsão do dia (mínimo 5 caracteres),
+grava em `projetos_previsao`.
+
+**Notificação Noturna** — é o fluxo mais longo e o que alimenta os indicadores:
+
+```
+escolhe a atribuição
+  → "O que foi feito hoje?"
+  → "Quantas horas foram trabalhadas hoje?"
+  → "Teve retrabalho/paralisação hoje?"
+       ├─ Sim → motivo (lista fechada de 6) → horas de retrabalho
+       └─ Não
+  → CONFIRMAÇÃO: resumo das horas → 1 confirma e grava | 2 corrige
+  → observações (opcional)
+  → "Alguma etapa foi concluída hoje?" (se houver etapa pendente)
+```
+
+A tela de confirmação é o **único ponto de gravação** das horas. Ela existe porque
+`registrar_retrabalho_dia` é upsert por (atribuição, dia): sem revisão, um `80` digitado no lugar de
+`8` sobrescreveria o valor certo e contaminaria o indicador de retrabalho.
+
+**Navegação** — comandos globais válidos em qualquer passo: `0` ou `voltar` (passo anterior, com
+restauração do estado por snapshot), `menu` (volta ao início), `cancelar`.
+
+### Fluxo do dono
+
+`chatbot/flows/ownerFlow.ts` — distribuição de tarefas para engenheiros, criação de projetos e
+consultas, via RPCs `dono_*`. Usa uma máquina de estados mais simples que a do engenheiro: só
+`menu`, sem `0`/voltar.
+
+### Notificações proativas
+
+Agendadas no próprio processo (`integrations/cron/cronJobs.ts`, timezone `America/Sao_Paulo`):
+
+| Quando | O quê |
+|---|---|
+| 11:20, seg–sex | Lembrete da notificação matinal |
+| 16:30, seg–sex | Lembrete da notificação noturna |
+| a cada minuto | Worker que envia a fila de `notificacoes_whatsapp` |
+| semestral | Limpeza de projetos finalizados — **só** com `ENABLE_PROJECT_CLEANUP_CRON=true` |
+
+---
+
+## Dashboard
+
+Next.js 14 em `dashboard/`. Quatro rotas:
+
+- **`/` e `/inicio`** — a tela principal (mesma página nos dois caminhos)
+- **`/login`** — email e senha via Supabase Auth
+- **`/admin`** — só owner ativo; senão redireciona
+- **`/test`** — devolve `OK`, health check
+
+### A tela principal
+
+| Bloco | Mostra | Vem de |
+|---|---|---|
+| Ações | Criar projeto, atribuir projeto | RPCs `criar_projeto`, `dashboard_atribuir_projeto_com_pavimentos` |
+| 5 KPIs | Total, concluídos, em execução, engenheiros em execução, atrasados | `vw_bloco1_visao_geral` |
+| Progresso geral | Percentual médio | `vw_bloco1_visao_geral` |
+| Gráficos | Pizza de status, barras de carga por engenheiro | `vw_grafico_projetos_status`, `vw_bloco3_carga_trabalho` |
+| Atrasos | Tabela por engenheiro | `vw_bloco2_atrasos_engenheiro` |
+| Produção no período | Horas apontadas por engenheiro (**só owner**) | `vw_dashboard_producao_apontamentos` |
+| Retrabalho | Percentual geral, por projeto, por disciplina, por motivo, por engenheiro | views `vw_retrabalho_*` |
+
+Cada KPI abre um modal com a tabela detalhada, e os modais têm modo tela cheia. A tabela de projetos
+permite busca, transferir responsável, excluir atribuição ou projeto, ver detalhes e **gerar
+relatório PDF** (`vw_relatorio_projeto_pdf` + jsPDF, via `/api/admin/projetos/[id]/relatorio`).
+
+O dashboard assina Realtime em `engenheiros_projetos`, `projetos` e `retrabalho_projetos`, e
+recarrega quando algo muda — então um apontamento feito no WhatsApp aparece sem refresh.
+
+### `/admin`
+
+Duas partes: gerenciar **logins da plataforma** (`user_profiles`) e cadastrar **engenheiros do
+chatbot** (tabela `engenheiros` — nome, telefone, exclusivo, ativo). É por aqui que um número passa
+a ser reconhecido no WhatsApp.
+
+### Acesso
+
+Supabase Auth (email e senha), em três camadas:
+
+1. `dashboard/middleware.ts` — sem sessão, redireciona para `/login`
+2. **RLS é permissiva**: a policy é `for all to authenticated using (true)` em todas as tabelas.
+   Qualquer usuário logado lê e escreve tudo. `anon` não lê nada. `user_profiles` é a exceção (cada
+   um lê só o próprio, e escrita só por `service_role`, o que impede auto-promoção a owner)
+3. **Papel owner** — `user_profiles.role = 'owner'` com `status = 'active'`. Verificado no servidor
+   em todas as rotas `/api/admin/*`; no cliente, serve apenas para esconder UI
+
+Ou seja: a separação real hoje é **logado vs não logado**, mais o papel de owner aplicado na
+aplicação. Não é uma separação no banco.
+
+---
+
+## Testes
+
+Não há framework nem runner único. Cada arquivo em `tests/` é um script auto-executável com
+`node:assert/strict`, rodado individualmente:
+
 ```bash
-npm start
+npx tsx tests/test-chatbot-horas-confirmacao.ts
 ```
 
-**WhatsApp:**
-1. Escaneie o QR Code que aparece no terminal
-2. Aguarde aparecer: `✅ WhatsApp conectado!`
-3. Pronto! O bot está funcionando
-
----
-
-### 📱 Comandos no WhatsApp
-
-#### Menu Principal
-
-Envie **"oi"**, **"menu"** ou **"ajuda"** para ver o menu:
-
-```
-🤖 Menu Principal
-
-📋 Gestão de Projetos
-1️⃣ Criar novo projeto
-2️⃣ Editar projeto existente
-3️⃣ Notificações diárias (Manhã/Noite)
-
-❓ Ajuda
-Digite "ajuda" para instruções
-
-Digite o número da opção desejada
-```
-
-### 1️⃣ Criar Novo Projeto
-
-```
-Usuário: 1
-Bot: [Fluxo guiado para criar projeto]
-  • Código do projeto (gerado automaticamente)
-  • Cliente, Contato, Obra, Área
-  • Tipo de projeto
-  • Datas (início, previsão interna, cliente)
-  • Prazos calculados automaticamente
-```
-
-### 2️⃣ Editar Projeto Existente
-
-```
-Usuário: 2
-Bot: "Qual projeto deseja editar?"
-Usuário: PRJ-001
-Bot: [Menu de categorias para editar]
-  • Dados do Cliente
-  • Datas e Prazos
-  • Status e Etapa
-  • Observações
-```
-
-### 3️⃣ Notificações Diárias
-
-**Manhã** (Status + Previsão):
-```
-Usuário: 3 → 1 (Manhã)
-Bot: "Qual projeto?"
-Usuário: PRJ-001
-Bot: "Qual o status do projeto?"
-Usuário: [Escolhe status]
-Bot: "Etapa definida automaticamente"
-Bot: "Previsão para o dia?"
-Usuário: "Finalizar dimensionamento"
-```
-
-**Noite** (Feito + Retrabalho):
-```
-Usuário: 3 → 2 (Noite)
-Bot: "Qual projeto?"
-Usuário: PRJ-001
-Bot: "Qual o status do projeto?"
-Usuário: [Escolhe status]
-Bot: "O que foi feito hoje?"
-Usuário: "Dimensionamento concluído"
-Bot: "Necessitou retrabalho?"
-Usuário: "não"
-Bot: "Observações?"
-```
-
-#### Comandos Úteis
-
-- **`sync`** ou **`sincronizar`**: Força sincronização manual Supabase → Sheets
-- **`cancelar`**: Cancela o fluxo atual
-- **`menu`**: Volta ao menu principal
-- **`ajuda`**: Mostra instruções completas
-
----
-
-### 💻 Comandos no Terminal
+**Não existe `npm test`.** O agrupamento que existe é:
 
 ```bash
-# Iniciar bot
-npm start
-
-# Sincronização manual
-npm run sync
-
-# Testes
-npm run test:bot-completo
-npm run test:3-modos
-
-# Verificar configuração
-npm run check:env-format
+npm run test:seguranca    # redação de segredos, autenticação, banco indisponível
+npm run test:redact
+npm run test:auth-erro
+npm run test:indisponivel
+npx tsc --noEmit          # typecheck (é o que `npm run build` faz)
 ```
 
----
+Os 64 arquivos `.ts` em `tests/` seguem quatro padrões:
 
-### 💻 Comandos no Terminal
+| Padrão | O que faz |
+|---|---|
+| `test-chatbot-*.ts` | Dirige o flow por várias mensagens, com duplo de Supabase. Ex.: `test-chatbot-voltar.ts`, `test-chatbot-horas-confirmacao.ts` |
+| `test-dashboard-*.ts` | Lê os arquivos do dashboard **como texto** e faz assert com regex (não importa os módulos) |
+| `test-*-migration.ts` | Valida o SQL de uma migration |
+| `test-marcar-etapa.ts`, `test-interactive.ts` | REPL interativo para percorrer o fluxo à mão — **gravam de verdade** no Supabase |
 
-```bash
-# Iniciar bot
-npm start
+Para escrever um teste de conversa novo, copie o harness de `tests/test-chatbot-voltar.ts`:
+instancia `EngineerProjectFlow`, troca `(flow as any).supabase` por um duplo e semeia
+`(flow as any).state` para começar no passo que interessa.
 
-# Sincronização manual
-npm run sync
-
-# Testes
-npm run test:bot-completo
-npm run test:3-modos
-
-# Verificar configuração
-npm run check:env-format
-```
+Roteiros manuais ficam em `tests/test-engineer-flow.md` — **atenção: os Testes 1 a 10 descrevem um
+fluxo que não existe mais** (ver [Limitações](#limitações-conhecidas)). O Teste 13 é fiel.
 
 ---
 
-## 📡 APIs (Edge Functions)
+## Deploy
 
-### POST /registrarExecucao
+**Railway, dois serviços**, deploy por push no GitHub. Nada é compilado no chatbot: TypeScript roda
+direto com `tsx` em produção.
 
-```json
-{
-  "projeto_id": "uuid",
-  "percentual_realizado": 8,
-  "percentual_previsto": 10,
-  "observacoes": "..."
-}
-```
-
-### POST /registrarRetrabalho
-
-```json
-{
-  "projeto_id": "uuid",
-  "motivo": "Erro de Projeto",
-  "descricao": "...",
-  "impacto_percentual": 5
-}
-```
-
-### GET /statusProjeto?codigo=PRJ-001
-
-Retorna progresso completo, execuções recentes e retrabalhos.
-
-📖 **Documentação completa**: `docs/api.md`
-
----
-
-## 🗄️ Banco de Dados
-
-### Tabelas Principais
-
-- **engenheiros**: Cadastro de engenheiros
-- **projetos**: Cadastro de projetos
-- **execucao_diaria**: Registros diários de execução
-- **retrabalhos**: Registros de retrabalhos
-
-### Views
-
-- **view_progresso_geral**: Dados consolidados
-- **view_dashboard_ceo**: View para planilha CEO
-- **view_retrabalhos_resumo**: Análise de retrabalhos
-
-📖 **Schema completo**: `supabase/db_schema.sql`
-
----
-
-## 🔄 Sincronização com Google Sheets
-
-### Arquitetura de Sincronização
-
-O sistema utiliza **Supabase como banco primário** e **Google Sheets para visualização**:
+Chatbot (raiz) — três fontes redundantes e idênticas de start command:
 
 ```
-WhatsApp Bot → Supabase (armazenamento) → Google Sheets (visualização)
-                    ↑                              ↓
-                    └──── Sincronização automática (a cada 5 min)
+Procfile         web: npx tsx src/server-twilio.ts
+railway.json     NIXPACKS, restart ON_FAILURE (10 tentativas)
+nixpacks.toml    nodejs_20, install: npm ci
 ```
 
-### Sincronização Automática
+Dashboard (`dashboard/railway.json`):
 
-A sincronização **Supabase → Google Sheets** acontece automaticamente:
-
-- ⏰ **A cada 5 minutos** (configurável via `SYNC_CRON_SCHEDULE`)
-- 🔄 **Inicia automaticamente** quando o bot é iniciado
-- ✅ **Prioriza Supabase**: Dados sempre salvos primeiro no Supabase
-- 📊 **Atualiza Sheets**: Planilha sincronizada automaticamente
-
-### Sincronização Manual
-
-Você pode forçar uma sincronização manual de duas formas:
-
-**1. Via WhatsApp:**
 ```
-Usuário: sync
-Bot: 🔄 Sincronização iniciada!
+build:  npm install && (rm -rf .next/cache/* || true) && npm run build
+deploy: npm run start
 ```
 
-**2. Via Terminal:**
-```bash
-npm run sync
+O `rm -rf .next/cache/*` e os ajustes de cache em `dashboard/next.config.js`
+(`config.cache = false`, `Cache-Control: no-store`) existem porque o volume persistente do Railway
+servia bundles antigos. Não remova sem testar.
+
+**Webhook Twilio** — aponte o número para:
+
+```
+https://<seu-app>.up.railway.app/webhook/whatsapp    (mensagens)
+https://<seu-app>.up.railway.app/webhook/status      (status de entrega)
 ```
 
-### Configuração de Filtros
+Não existe Dockerfile, CI, nem pipeline de testes. `dashboard/vercel.json` existe, mas a Vercel é
+caminho alternativo/legado — Railway é o que está em uso.
 
-Para sincronizar apenas projetos de um engenheiro específico:
+---
 
-```env
-GOOGLE_SHEETS_ENG1_WHATSAPP=+5511999999999
+## Convenções do projeto
+
+**Commits** — Conventional Commits com escopo, assunto em português **sem acentos**, corpo
+explicando o *porquê* (não o *o quê*) e fechando com uma frase de evidência dos testes:
+
+```
+fix(chatbot): rejeitar entrada invalida nas horas de retrabalho
+
+Sem isto, '2h' e 'abc' viravam null e passavam pela validacao, gravando
+retrabalho com horas nulas.
+
+Teste primeiro: os tres casos falharam antes da correcao. tsc limpo.
 ```
 
-Se não configurar, sincroniza **todos os projetos ativos**.
+Escopos em uso: `chatbot`, `dashboard`, `tests`, `security`. **Sem trailer de coautoria.**
+
+**Código** — comentários em português sem acentos, explicando por que aquilo existe, não o que a
+linha faz. Lógica pura vai para `logic/`, que não faz I/O e é testável direto. Nos fluxos de
+conversa, a convenção é um `render*()` por pergunta e uma guarda `if (!msg.trim())` no início do
+step, para que `0`/voltar re-renderize a pergunta em vez de cair na validação.
 
 ---
 
-## 🧪 Testes
+## Limitações conhecidas
 
-```bash
-# Teste completo do bot (terminal)
-npm run test:bot-completo
+Coisas em que você vai tropeçar. Estão aqui de propósito — um README que esconde isso vira ficção.
 
-# Teste dos 3 modos (criar, editar, notificações)
-npm run test:3-modos
+**Ferramental**
 
-# Sincronização manual
-npm run sync
+- **~22 scripts do `package.json` estão quebrados.** Todos os que usam `ts-node --esm` falham com
+  `ERR_UNKNOWN_FILE_EXTENSION` (ts-node 10 + ESM em Node 20). Inclui `test:supabase`,
+  `test:interactive`, `test:marcar-etapa`, `check:env`, `diagnostico`. Use `npx tsx <arquivo>` no
+  lugar. Alguns scripts apontam para arquivos ou módulos que não existem mais
+  (`test:planilha`, `test:query`, `test:update`, `test:bot`).
+- **Não há `npm test` nem CI.** Não existe `.github/`; nada roda automaticamente.
+- `npm run build` **não gera build** — o `tsconfig` tem `noEmit: true`, então é só typecheck.
+- `ioredis` e `xlsx` são importados por algum código mas **não estão declarados** no
+  `package.json` nem instalados. `SessionService` (Redis) existe e não é usado por ninguém.
 
-# Verificar variáveis de ambiente
-npm run check:env-format
-```
+**Chatbot**
 
----
+- **O webhook Twilio não valida assinatura.** Não há checagem de `X-Twilio-Signature`: qualquer POST
+  em `/webhook/whatsapp` é aceito e processado.
+- **Áudio não funciona em produção.** O Whisper só é chamado no caminho legado
+  (`npm run dev:whatsapp-web`). No servidor Twilio, um áudio chega sem `Body` e devolve
+  `400 Bad Request`.
+- **`0`/Voltar não sobe ao menu nas telas de lista.** Nas listas de projeto, o `0` re-renderiza a
+  mesma lista indefinidamente — o rodapé anuncia "Voltar" e nada acontece. Como consequência, o
+  trecho que renderiza o menu no voltar é código inalcançável.
+- **Seis passos mortos** no fluxo do engenheiro: `progresso_escolher_pavimento`,
+  `progresso_escolher_etapa`, `progresso_continuar`, `noite_etapa_pavimento`,
+  `noite_etapa_escolher`, `noite_etapa_mais`. Os três últimos formam um ciclo fechado cujos únicos
+  `goToStep` estão dentro dele mesmo — nada leva o engenheiro até lá.
+- Sessões em memória: reiniciar o processo perde as conversas em andamento.
+- `integrations/sheets/ceo_sync.ts` consulta uma view `view_dashboard_ceo` que **não é criada por
+  nenhum SQL do repo**, e o arquivo não é importado por ninguém. Caminho morto.
 
-## 📚 Documentação Completa
+**Banco**
 
-- [**Arquitetura**](docs/architecture.md) - Componentes e fluxos do sistema
-- [**APIs**](docs/api.md) - Documentação dos endpoints
-- [**Regras de Negócio**](docs/business_rules.md) - Lógica e cálculos
-- [**Fluxo de Dados**](docs/data_flow.md) - Transformações e integrações
+- Parte das RPCs em uso vive **fora de `migrations/`** (ver [seção 4](#banco-de-dados-como-montar)).
+- `supabase/sql-editor-patches/` pode deixar bancos com semânticas diferentes de progresso.
+- O owner inicial é um UUID hardcoded: banco novo nasce sem owner.
+- Várias funções e views foram **redefinidas múltiplas vezes** em migrations diferentes
+  (`dashboard_atribuir_projeto_com_pavimentos` 6×, `vw_projetos_detalhado` 5×,
+  `vw_projetos_completo` 3×). Só a mais recente vale.
+- `20260529_sync_ponderado_dashboard.sql` se autodeclara obsoleta.
+  `20260831_dashboard_producao_apontamentos.sql` é byte a byte idêntica à de `20260901`.
+- `20260319_progresso_ponderado.sql` cria triggers sem `IF NOT EXISTS`: reexecutar falha.
 
----
+**Dashboard**
 
-## 👥 Divisão de Responsabilidades
+- RLS é permissiva: qualquer usuário logado lê e escreve tudo (ver [Acesso](#acesso)).
+- Sem as variáveis `NEXT_PUBLIC_*`, sobe com dados falsos de `mockData.ts` — fácil confundir com
+  dados reais.
+- O card "Média por Horas" do retrabalho é média aritmética simples dos percentuais por engenheiro,
+  **não ponderada por horas** — então diverge do "% Geral TecPred", que é ponderado.
+- O "valor da hora" da produção por período é digitado na tela e **não é persistido**.
+- Componentes não referenciados: `MemoriaisDescritivosTab.tsx` (tela planejada, nunca ligada),
+  `RetrabalhoPorProjetoTable.tsx`.
 
-### Iza (Backend + Integrações)
-- ✅ Schema do banco de dados
-- ✅ Políticas de segurança (RLS)
-- ✅ Edge Functions (APIs)
-- ✅ Sincronização Google Sheets ↔ Supabase
-- ✅ Views agregadas
+**Documentação**
 
-### Colega (Frontend + Lógica)
-- ✅ Fluxos conversacionais do WhatsApp
-- ✅ Lógica de cálculos de progresso
-- ✅ Lógica de análise de retrabalho
-- ✅ Validações de input
-- ✅ Message Handler (orquestrador)
-
----
-
-## 📦 Dependências Principais
-
-```json
-{
-  "whatsapp-web.js": "^1.34.2",
-  "@supabase/supabase-js": "^2.x",
-  "googleapis": "^164.1.0",
-  "openai": "^4.20.0",
-  "axios": "^1.13.2"
-}
-```
-
----
-
-## 🔐 Segurança
-
-- **RLS (Row Level Security)**: Engenheiros veem apenas seus projetos
-- **API Keys**: Armazenadas em variáveis de ambiente
-- **Service Account**: Google Sheets com permissões restritas
-- **Validação em Camadas**: Chatbot → Lógica → API → Banco
-
----
-
-## 🚧 Roadmap
-
-- [ ] Notificações proativas (lembretes diários)
-- [ ] Relatórios automáticos por email
-- [ ] Dashboard web complementar
-- [ ] Analytics e BI (Metabase/Grafana)
-- [ ] Multi-idioma (EN, ES)
-- [ ] Integração com outras ferramentas (Trello, Jira)
-
----
-
-## 📝 Scripts Disponíveis
-
-| Comando | Descrição |
-|---------|-----------|
-| `npm start` | Inicia o bot em produção |
-| `npm run dev` | Desenvolvimento com hot reload |
-| `npm run build` | Build TypeScript |
-| `npm run sync` | Sincronização manual Supabase → Sheets |
-| `npm run test:bot-completo` | Teste completo do bot (terminal) |
-| `npm run test:3-modos` | Teste dos 3 modos (criar, editar, notificações) |
-| `npm run check:env-format` | Verifica formatação do `.env` |
-| `npm run debug:numero` | Diagnóstico de número específico |
-
----
-
-## 🐛 Troubleshooting
-
-### Erro ao conectar WhatsApp
-- ✅ Verificar se o QR Code foi escaneado
-- ✅ Tentar excluir pasta `.wwebjs_auth` e reconectar
-- ✅ Verificar se o WhatsApp Web não está bloqueado
-
-### Bot não responde para um número específico
-
-**Problema**: Mensagem chega mas bot não responde
-
-**Causa comum**: Formato `@lid` (Linked Device ID) não reconhecido
-
-**Solução**: ✅ **Já corrigido!** O bot agora aceita ambos os formatos:
-- `@c.us` (formato padrão)
-- `@lid` (Linked Device ID)
-
-Se ainda não funcionar:
-1. Verifique os logs no terminal
-2. Procure por `🔴 MENSAGEM DO NÚMERO PROBLEMÁTICO`
-3. Verifique se aparece `✅ Número real obtido`
-
-### Erro ao acessar Supabase
-- ✅ Verificar credenciais no `.env`
-- ✅ Verificar se `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` estão configurados
-- ✅ Se não configurar Supabase, o bot funciona apenas com Google Sheets
-
-### Erro ao acessar Google Sheets
-- ✅ Verificar se a planilha foi compartilhada com a service account
-- ✅ Verificar caminho do arquivo de credenciais (`GOOGLE_APPLICATION_CREDENTIALS`)
-- ✅ Verificar se `GOOGLE_SHEETS_ENGINEER_NAME` corresponde ao nome da aba
-
-### Projeto não aparece na planilha após sincronização
-
-**Possíveis causas**:
-1. **Filtro de WhatsApp configurado**: Verifique `GOOGLE_SHEETS_ENG1_WHATSAPP`
-2. **Projeto inativo**: Apenas projetos com `ativo = true` são sincronizados
-3. **Engenheiro não associado**: Projeto precisa ter um engenheiro associado
-
-**Solução**:
-```bash
-# Executar diagnóstico
-npm run debug:numero
-```
-
-### Sincronização não está funcionando
-- ✅ Verificar se Supabase está configurado
-- ✅ Verificar logs: deve aparecer `🔄 Sincronização iniciada`
-- ✅ Executar sincronização manual: `npm run sync` ou `sync` no WhatsApp
-
----
-
-## 📄 Licença
-
-Este projeto é propriedade de **Tril Consult**.
-
----
-
-## 🤝 Contribuindo
-
-Para contribuir:
-1. Crie uma branch: `git checkout -b feat/nova-feature`
-2. Commit suas mudanças: `git commit -m 'feat: Nova feature'`
-3. Push para a branch: `git push origin feat/nova-feature`
-4. Abra um Pull Request
-
----
-
-## 📧 Suporte
-
-Para dúvidas ou suporte, contate a equipe de desenvolvimento.
-
----
-
-**Desenvolvido com ❤️ usando TypeScript + Supabase + WhatsApp + Google Sheets**
-
-**Última atualização**: Janeiro 2026 | **Versão**: 3.0.0
-
-## 🆕 Changelog
-
-### Versão 3.0.0 (Janeiro 2026)
-
-#### ✨ Novas Funcionalidades
-- 🆕 **3 Modos de Operação**: Criar, Editar e Notificações Diárias
-- 🆕 **Sincronização Automática**: Supabase → Google Sheets a cada 5 minutos
-- 🆕 **Comando Sync**: Sincronização manual via WhatsApp
-- 🆕 **Criação de Projetos**: Fluxo completo com campos automáticos e manuais
-- 🆕 **Edição de Projetos**: Edição categorizada de qualquer campo
-- 🆕 **Notificações Diárias**: Fluxos separados para manhã e noite
-- 🆕 **Etapa Automática**: Determinação automática baseada no status
-
-#### 🔧 Melhorias
-- ✅ **Suporte a formato @lid**: Bot agora aceita mensagens com Linked Device ID
-- ✅ **Logs Detalhados**: Sistema completo de logs para diagnóstico
-- ✅ **Normalização Robusta**: Tratamento melhorado de números WhatsApp
-- ✅ **Consistência Terminal/WhatsApp**: Mesmo fluxo em ambos os ambientes
-- ✅ **Tratamento de Erros**: Logs detalhados e mensagens de erro claras
-
-#### 🐛 Correções
-- ✅ Corrigido problema de números com formato `@lid` não recebendo resposta
-- ✅ Corrigido sincronização de projetos com filtro de WhatsApp
-- ✅ Corrigido cálculo automático de prazos (interno e cliente)
-- ✅ Corrigido mapeamento automático de etapa baseado em status
-
-#### 📚 Documentação
-- ✅ README atualizado com novas funcionalidades
-- ✅ Guia de troubleshooting expandido
-- ✅ Documentação de sincronização automática
+Este README é a fonte de verdade. Os documentos abaixo estão **defasados** e descrevem status
+manual, criação de projeto pelo engenheiro e/ou gravação em planilha — coisas que não existem mais:
+`docs/architecture.md`, `docs/business_rules.md`, `docs/data_flow.md`,
+`docs/AUTENTICACAO_CHATBOT.md`, `dashboard/README.md`, `tests/README-TEST.md`,
+`tests/test-engineer-flow.md` (Testes 1 a 10), `deploy-docs/ENV_VARIABLES.md` e a maior parte de
+`supabase/docs-bd/`. Em particular, `supabase/docs-bd/new_db_schema.sql` declara `areas.area_id`
+como `SERIAL` quando o banco usa `UUID`.
