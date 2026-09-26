@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import {
   MOTIVOS_RETRABALHO,
   calcularPercentualRetrabalhoHoras,
+  formatarResumoHoras,
   parseHorasRetrabalho,
   validarHorasRetrabalho,
 } from '../chatbot/flows/engineerProjectFlow.ts'
@@ -65,5 +66,27 @@ assert.deepEqual(
   }),
   { valido: true }
 )
+
+// O resumo que o passo horas_confirmar mostra antes de gravar. Funcao pura para poder
+// conferir o texto sem instanciar o flow.
+const resumoComRetrabalho = formatarResumoHoras({
+  teveRetrabalho: true,
+  motivoRetrabalho: 'Erro de projeto (TecPred)',
+  horasTrabalhadasTotal: 8,
+  horasRetrabalho: 2,
+})
+assert.match(resumoComRetrabalho, /Horas trabalhadas: \*8h\*/)
+assert.match(resumoComRetrabalho, /Erro de projeto \(TecPred\)/)
+assert.match(resumoComRetrabalho, /Horas de retrabalho: \*2h\* \(25\.0%\)/)
+
+const resumoSemRetrabalho = formatarResumoHoras({
+  teveRetrabalho: false,
+  horasTrabalhadasTotal: 8,
+  horasRetrabalho: 0,
+})
+assert.match(resumoSemRetrabalho, /Horas trabalhadas: \*8h\*/)
+assert.match(resumoSemRetrabalho, /Sem retrabalho/)
+assert.doesNotMatch(resumoSemRetrabalho, /%/)
+assert.doesNotMatch(resumoSemRetrabalho, /Motivo/)
 
 console.log('test-retrabalho-chatbot-horas: OK')
