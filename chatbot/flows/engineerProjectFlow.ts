@@ -769,6 +769,10 @@ _Digite o número da opção desejada_`;
   }
 
   private async stepEscolherAreaManha(msg: string): Promise<FlowResult> {
+    // Chegou aqui por 0/voltar: a pergunta deste passo e a propria lista de projetos, que o step
+    // anterior monta e que ja avanca o step para receber a escolha.
+    if (!msg.trim()) return await this.stepEscolherProjetoManha('');
+
     const escolha = parseInt(msg.trim()) - 1;
 
     if (isNaN(escolha) || escolha < 0 || escolha >= (this.state.availableAtribuicoes?.length || 0)) {
@@ -879,6 +883,9 @@ _Digite o número da opção desejada_`;
   }
 
   private async stepEscolherAreaNoite(msg: string): Promise<FlowResult> {
+    // Chegou aqui por 0/voltar: ver o comentario em stepEscolherAreaManha.
+    if (!msg.trim()) return await this.stepEscolherProjetoNoite('');
+
     const escolha = parseInt(msg.trim()) - 1;
 
     if (isNaN(escolha) || escolha < 0 || escolha >= (this.state.availableAtribuicoes?.length || 0)) {
@@ -923,6 +930,9 @@ _Digite o número da opção desejada_`;
   private async stepFeitoDiaComHoras(msg: string): Promise<FlowResult> {
     const feito = msg.trim();
 
+    // Chegou aqui por 0/voltar: repetir a pergunta em vez de tratar a string vazia como texto curto.
+    if (!feito) return this.renderFeitoDia();
+
     if (feito.length < 5) {
       return {
         mensagem: '❌ Descrição muito curta. Digite pelo menos 5 caracteres.',
@@ -958,6 +968,9 @@ _Digite o número da opção desejada_`;
   private async stepRetrabalhoPerguntaComHoras(msg: string): Promise<FlowResult> {
     const resposta = msg.trim();
 
+    // Chegou aqui por 0/voltar: repetir a pergunta em vez de tratar a string vazia como opcao.
+    if (!resposta) return this.renderRetrabalhoPergunta();
+
     if (resposta === '1') {
       this.state.teveRetrabalho = true;
       this.goToStep('retrabalho_motivo');
@@ -980,6 +993,9 @@ _Digite o número da opção desejada_`;
   }
 
   private async stepRetrabalhoMotivoComHoras(msg: string): Promise<FlowResult> {
+    // Chegou aqui por 0/voltar: repetir a lista em vez de tratar a string vazia como opcao.
+    if (!msg.trim()) return this.renderRetrabalhoMotivo();
+
     const escolha = parseInt(msg.trim()) - 1;
 
     if (isNaN(escolha) || escolha < 0 || escolha >= MOTIVOS_RETRABALHO.length) {
@@ -1161,6 +1177,9 @@ _Digite o número da opção desejada_`;
   private async stepObservacoesPergunta(msg: string): Promise<FlowResult> {
     const resposta = msg.trim();
 
+    // Chegou aqui por 0/voltar: repetir a pergunta em vez de tratar a string vazia como opcao.
+    if (!resposta) return this.renderObservacoesPergunta();
+
     if (resposta === '1') {
       // Quer adicionar observações
       this.goToStep('observacoes_texto');
@@ -1183,6 +1202,9 @@ _Digite o número da opção desejada_`;
 
   private async stepObservacoesTexto(msg: string): Promise<FlowResult> {
     const obs = msg.trim();
+
+    // Chegou aqui por 0/voltar: repetir a pergunta em vez de tratar a string vazia como texto curto.
+    if (!obs) return this.renderObservacoesTexto();
 
     if (obs.length < 3) {
       return {
@@ -2118,6 +2140,9 @@ _Digite o número da opção desejada_`;
 
   private async stepNoiteEtapaPergunta(msg: string): Promise<FlowResult> {
     const resposta = msg.trim();
+
+    // Chegou aqui por 0/voltar: repetir a pergunta em vez de tratar a string vazia como opcao.
+    if (!resposta) return this.renderNoiteEtapaPergunta();
 
     if (resposta === '1') {
       // Sim, concluiu etapa — usar o fluxo unificado (pavimentos + etapas gerais)
