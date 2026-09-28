@@ -159,6 +159,19 @@ export interface Retrabalho {
   created_at: string;
 }
 
+/**
+ * Resultado de registrarRetrabalho. Discriminado de proposito: os quatro modos de falha sao
+ * problemas diferentes (configuracao, transporte, validacao do banco, excecao) e precisam ser
+ * distinguiveis no log. Mesmo formato de validarHorasRetrabalho, no fluxo do engenheiro.
+ */
+export type ResultadoRegistroRetrabalho =
+  | { ok: true }
+  | {
+      ok: false;
+      motivo: 'sem_conexao' | 'erro_rpc' | 'recusado' | 'excecao';
+      mensagem: string;
+    };
+
 // Interface de compatibilidade (para código antigo)
 export interface LimpezaProjetosResult {
   dry_run: boolean;
@@ -1093,6 +1106,16 @@ export class SupabaseService {
    * As horas sao obrigatorias de proposito: registrar_retrabalho_dia e upsert por
    * (atribuicao, dia) e o UPDATE sobrescreve as colunas, entao chamar sem elas apagaria
    * as horas ja informadas no dia. Deixa-las opcionais permitia exatamente isso.
+   *
+   * O sucesso vem do que a RPC respondeu, e nao de uma leitura posterior. Antes esta funcao
+   * terminava em buscarUltimoRetrabalho(), que filtra necessitou_retrabalho = true: quem
+   * apontava SEM retrabalho gravava uma linha com false, a busca nao achava nada, e a funcao
+   * devolvia null tendo gravado. O chamador lia esse null como falha e dizia ao engenheiro que
+   * nada tinha sido registrado, com as horas ja no banco.
+   *
+   * O motivo acompanha a falha porque os quatro caminhos abaixo sao problemas diferentes —
+   * configuracao, transporte, validacao do banco e excecao — e colapsa-los num unico null
+   * deixava quem investiga dependendo do log de producao.
    */
   async registrarRetrabalho(
     eng_projeto_id: string,
@@ -1102,8 +1125,11 @@ export class SupabaseService {
     descricao: string | undefined,
     horasTrabalhadasTotal: number,
     horasRetrabalho: number
-  ): Promise<Retrabalho | null> {
-    if (!this.connected) return null;
+  ): Promise<ResultadoRegistroRetrabalho> {
+    if (!this.connected) {
+      console.error(`❌ Erro ao registrar retrabalho (${eng_projeto_id}): sem conexão`);
+      return { ok: false, motivo: 'sem_conexao', mensagem: 'Sem conexão com o banco.' };
+    }
 
     try {
       const { data, error } = await this.supabase.rpc('registrar_retrabalho_dia', {
@@ -1117,23 +1143,23 @@ export class SupabaseService {
       });
 
       if (error) {
-        console.error('❌ Erro ao registrar retrabalho:', error);
-        return null;
+        console.error(`❌ Erro ao registrar retrabalho (${eng_projeto_id}):`, error);
+        return { ok: false, motivo: 'erro_rpc', mensagem: error.message ?? 'Erro na chamada do banco.' };
       }
 
       if (!data || !data.sucesso) {
-        console.error('❌ Erro ao registrar retrabalho:', data?.mensagem);
-        return null;
+        const mensagem = data?.mensagem ?? 'O banco recusou o registro.';
+        console.error(`❌ Retrabalho recusado (${eng_projeto_id}):`, mensagem);
+        return { ok: false, motivo: 'recusado', mensagem };
       }
 
       console.log(`✅ ${data.mensagem}`);
       console.log(`   Total de retrabalhos: ${data.quantidade_total_retrabalhos}`);
 
-      // Retornar último retrabalho
-      return await this.buscarUltimoRetrabalho(eng_projeto_id);
+      return { ok: true };
     } catch (error: any) {
-      console.error('❌ Erro ao registrar retrabalho:', error.message);
-      return null;
+      console.error(`❌ Erro ao registrar retrabalho (${eng_projeto_id}):`, error.message);
+      return { ok: false, motivo: 'excecao', mensagem: error.message ?? 'Falha inesperada.' };
     }
   }
 

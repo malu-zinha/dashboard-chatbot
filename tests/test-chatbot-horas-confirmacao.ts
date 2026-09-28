@@ -33,7 +33,7 @@ function criarFlow() {
       horasRetrabalho: number
     ) => {
       gravacoes.push({ necessitou, motivo, horasTotal, horasRetrabalho })
-      return {}
+      return { ok: true }
     },
   }
 
@@ -184,6 +184,11 @@ const enviar = async (flow: any, msg: string): Promise<string> =>
   assert.match(gravado, /Sem retrabalho!/)
   assert.match(gravado, /Quer adicionar observações/)
 
+  // O incidente de 28/09: registrarRetrabalho terminava buscando o ultimo retrabalho, que filtra
+  // necessitou_retrabalho = true. Sem retrabalho anterior a busca vinha vazia e a gravacao
+  // bem-sucedida era reportada como falha. Aqui isso aparece como o ❌ no lugar do ✅.
+  assert.doesNotMatch(gravado, /❌/, 'gravacao bem-sucedida nao pode virar erro')
+
   console.log('   ✅ confirmar sem retrabalho -> uma gravacao (false, 8, 0)')
 }
 
@@ -203,9 +208,9 @@ const enviar = async (flow: any, msg: string): Promise<string> =>
       _id: string, necessitou: boolean, motivo: string | undefined,
       _t: undefined, _d: undefined, horasTotal: number, horasRetrabalho: number
     ) => {
-      if (falhar) return null
+      if (falhar) return { ok: false, motivo: 'erro_rpc', mensagem: 'falha simulada' }
       gravacoes.push({ necessitou, motivo, horasTotal, horasRetrabalho })
-      return {}
+      return { ok: true }
     },
   }
 
