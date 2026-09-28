@@ -39,7 +39,7 @@ function criarFlow() {
   flow._isAtribuicaoConcluida = async () => false
 
   flow.supabase = {
-    registrarRetrabalho: async () => ({}),
+    registrarRetrabalho: async () => ({ ok: true }),
     atualizarFeitoDia: async () => true,
     registrarPrevisaoDia: async () => true,
     buscarPavimentosComEtapas: async () => PAVIMENTOS,
