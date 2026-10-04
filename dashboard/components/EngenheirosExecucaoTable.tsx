@@ -7,6 +7,7 @@ import {
 } from '@/lib/engenheirosExecucao'
 import { searchScore } from '@/lib/search'
 import ModalShell from '@/components/ModalShell'
+import { formatarDataBR } from '@/lib/datas'
 
 interface EngenheirosExecucaoTableProps {
   isOpen: boolean
@@ -16,10 +17,7 @@ interface EngenheirosExecucaoTableProps {
   onToggleFullscreen: () => void
 }
 
-function formatPrazo(dataPrevista?: string) {
-  if (!dataPrevista) return '-'
-  return new Date(dataPrevista).toLocaleDateString('pt-BR')
-}
+const formatPrazo = formatarDataBR
 
 function groupSearchScore(searchTerm: string, grupo: EngenheiroExecucaoGroup) {
   return searchScore(searchTerm, [

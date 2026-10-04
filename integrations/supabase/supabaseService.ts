@@ -11,6 +11,7 @@ console.log('🔍 [SUPABASE] Arquivo supabaseService.ts sendo importado...');
 import { createClient } from '@supabase/supabase-js';
 import { logSupabaseError, redactSecrets } from '../../logic/security/redactSecrets.ts';
 import { InvalidCredentialError, readCredential } from '../../logic/security/envSecret.ts';
+import { dataLocalBR } from '../../logic/datas/dataLocal';
 
 console.log('🔍 [SUPABASE] createClient importado do @supabase/supabase-js');
 
@@ -2070,7 +2071,7 @@ export class SupabaseService {
           eng_projeto_id,
           projeto_id: atrib.projeto_id,
           eng_id: atrib.eng_id,
-          data_registro: new Date().toISOString().split('T')[0],
+          data_registro: dataLocalBR(),
           previsao_texto,
           status_id: status_id ?? null,
           editavel: true,
@@ -2128,7 +2129,7 @@ export class SupabaseService {
           eng_projeto_id,
           projeto_id: atrib.projeto_id,
           eng_id: atrib.eng_id,
-          data_registro: new Date().toISOString().split('T')[0],
+          data_registro: dataLocalBR(),
           feito_texto,
           data_fim_dia: new Date().toISOString(),
           editavel: false,

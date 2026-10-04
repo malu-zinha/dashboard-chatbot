@@ -3,7 +3,7 @@
 import React, { useEffect, useCallback, useState } from 'react'
 import { X, Calendar, User, Layers, Clock, AlertTriangle, CheckCircle, MessageSquare } from 'lucide-react'
 import { formatarDataBR } from '@/lib/datas'
-import { fetchApontamentosAtribuicao, type ApontamentoAtribuicao } from '@/lib/supabase'
+import { fetchApontamentosAtribuicao, type ResultadoApontamentos } from '@/lib/supabase'
 
 interface Projeto {
   atribuicao_id?: string
@@ -53,26 +53,21 @@ export default function ProjetoDetalhesModal({
     }
   }, [isOpen, handleKeyDown])
 
-  const [apontamentos, setApontamentos] = useState<ApontamentoAtribuicao[] | null>(null)
-  const [carregandoApontamentos, setCarregandoApontamentos] = useState(false)
+  // O resultado carrega o id que o produziu. Sem isso, o intervalo entre trocar de projeto e
+  // o efeito rodar mostraria o relato do projeto anterior como se fosse do novo.
+  const [apontamentos, setApontamentos] = useState<
+    { atribuicaoId: string; resultado: ResultadoApontamentos } | null
+  >(null)
   const atribuicaoId = projeto?.atribuicao_id
 
   useEffect(() => {
-    if (!isOpen || !atribuicaoId) {
-      setApontamentos(null)
-      return
-    }
+    if (!isOpen || !atribuicaoId) return
 
     let cancelado = false
-    setCarregandoApontamentos(true)
 
-    fetchApontamentosAtribuicao(atribuicaoId)
-      .then((registros) => {
-        if (!cancelado) setApontamentos(registros)
-      })
-      .finally(() => {
-        if (!cancelado) setCarregandoApontamentos(false)
-      })
+    fetchApontamentosAtribuicao(atribuicaoId).then((resultado) => {
+      if (!cancelado) setApontamentos({ atribuicaoId, resultado })
+    })
 
     return () => {
       cancelado = true
@@ -81,7 +76,14 @@ export default function ProjetoDetalhesModal({
 
   if (!isOpen || !projeto) return null
 
-  const relatosDiarios = (apontamentos || []).filter((a) => a.feito_texto?.trim())
+  // Efeito roda depois da pintura: ate ele responder, o estado honesto e "carregando", nao
+  // "nao ha registro". Afirmar ausencia antes de olhar e o mesmo erro que esta branch corrige.
+  const resultado = apontamentos && apontamentos.atribuicaoId === atribuicaoId
+    ? apontamentos.resultado
+    : null
+  const relatosDiarios = resultado?.ok
+    ? resultado.registros.filter((a) => a.feito_texto?.trim())
+    : []
 
   const formatDate = formatarDataBR
 
@@ -255,8 +257,16 @@ export default function ProjetoDetalhesModal({
                   Relato diario no chatbot
                 </p>
 
-                {carregandoApontamentos ? (
+                {!atribuicaoId ? (
+                  <p className="text-sm text-gray-400 italic">
+                    Sem atribuicao ativa — nao ha relato diario para consultar.
+                  </p>
+                ) : resultado === null ? (
                   <p className="text-sm text-gray-400 italic">Carregando...</p>
+                ) : !resultado.ok ? (
+                  <p className="text-sm text-gray-400 italic">
+                    Nao foi possivel carregar o relato diario. Tente reabrir o projeto.
+                  </p>
                 ) : relatosDiarios.length > 0 ? (
                   <ul className="space-y-2">
                     {relatosDiarios.map((registro) => (
@@ -274,11 +284,18 @@ export default function ProjetoDetalhesModal({
                     ))}
                   </ul>
                 ) : (
-                  // Ate a correcao de 20261004 o relato noturno era descartado antes de
-                  // chegar ao banco. Ausencia aqui nao diz nada sobre o trabalho feito.
-                  <p className="text-sm text-gray-400 italic">
-                    Nenhum registro diario gravado para esta disciplina.
-                  </p>
+                  // Ate 04/10/2026 o relato noturno era descartado antes de chegar ao banco:
+                  // 203 registros, 1 unico com feito_texto. Ausencia aqui nao diz nada sobre o
+                  // trabalho feito, e a tela precisa dizer isso — nao so o comentario.
+                  <div>
+                    <p className="text-sm text-gray-400 italic">
+                      Nenhum registro diario gravado para esta disciplina.
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      O relato diario so passou a ser gravado em 04/10/2026. Antes disso ele era
+                      perdido na gravacao, entao a ausencia aqui nao indica falta de trabalho.
+                    </p>
+                  </div>
                 )}
               </div>
             </div>

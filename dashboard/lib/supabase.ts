@@ -510,11 +510,18 @@ export interface ApontamentoAtribuicao {
   feito_texto: string | null
 }
 
+// Resultado discriminado em vez do [] vazio que o resto do arquivo usa: a tela precisa
+// distinguir "a atribuicao nao tem registro" de "nao consegui ler". Colapsar as duas num
+// array vazio faria o modal afirmar que nada foi registrado quando so houve falha de rede.
+export type ResultadoApontamentos =
+  | { ok: true; registros: ApontamentoAtribuicao[] }
+  | { ok: false }
+
 // Relato diario que o engenheiro escreve no chatbot, por atribuicao. Vem de uma view
 // porque a chave anon do dashboard nao enxerga projetos_previsao direto.
 export async function fetchApontamentosAtribuicao(
   atribuicaoId: string
-): Promise<ApontamentoAtribuicao[]> {
+): Promise<ResultadoApontamentos> {
   const { data, error } = await supabase
     .from('vw_atribuicao_apontamentos')
     .select('atribuicao_id, data_registro, previsao_texto, feito_texto')
@@ -523,10 +530,10 @@ export async function fetchApontamentosAtribuicao(
 
   if (error) {
     console.error('Erro ao buscar apontamentos da atribuicao:', error)
-    return []
+    return { ok: false }
   }
 
-  return (data as ApontamentoAtribuicao[]) || []
+  return { ok: true, registros: (data as ApontamentoAtribuicao[]) || [] }
 }
 
 export async function fetchProducaoEngenheiroPeriodo(

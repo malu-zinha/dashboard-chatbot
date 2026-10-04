@@ -153,4 +153,30 @@ const enviar = async (flow: any, msg: string): Promise<string> =>
   )
 }
 
+// =====================================================
+// data_registro precisa ser a data de Brasilia, nao a UTC
+// =====================================================
+{
+  const { dataLocalBR } = await import('../logic/datas/dataLocal.ts')
+
+  // 2026-10-04 23:30 BRT = 2026-10-05 02:30 UTC. Em UTC o apontamento cairia no dia 05,
+  // num dia que o engenheiro ainda nao trabalhou, e deixaria de casar com o registro da
+  // manha do dia 04 no onConflict (eng_projeto_id, data_registro).
+  const noiteTardia = new Date('2026-10-05T02:30:00Z')
+  assert.equal(dataLocalBR(noiteTardia), '2026-10-04', 'resposta noturna pertence ao dia local')
+  assert.equal(noiteTardia.toISOString().split('T')[0], '2026-10-05', 'em UTC seria o dia seguinte')
+
+  // Meio-dia nao e ambiguo em nenhum dos dois.
+  assert.equal(dataLocalBR(new Date('2026-10-04T15:00:00Z')), '2026-10-04')
+
+  const { readFileSync } = await import('node:fs')
+  const { resolve } = await import('node:path')
+  const servico = readFileSync(resolve('integrations/supabase/supabaseService.ts'), 'utf8')
+  assert.doesNotMatch(
+    servico,
+    /data_registro: new Date\(\)\.toISOString\(\)/,
+    'data_registro nao pode voltar a usar a data UTC'
+  )
+}
+
 console.log('test-chatbot-feito-dia-nao-silencia-erro: OK')

@@ -163,18 +163,25 @@ WHERE p.ativo = true;
 
 -- O dashboard usa a chave anon, que nao enxerga tabelas-base. O relato diario so chega
 -- a tela atraves de uma view.
+-- eng_id e projeto_id vem de engenheiros_projetos, nao das colunas duplicadas em
+-- projetos_previsao: transferir_atribuicao troca ep.eng_id sem tocar nos apontamentos, entao
+-- pp.eng_id fica desatualizado apos qualquer transferencia. Mesma razao do
+-- 20260901_fix_dashboard_producao_apontamentos_assignment_join.sql.
 DROP VIEW IF EXISTS vw_atribuicao_apontamentos;
 CREATE VIEW vw_atribuicao_apontamentos AS
 SELECT
     pp.eng_projeto_id AS atribuicao_id,
-    pp.projeto_id,
-    pp.eng_id,
+    ep.projeto_id,
+    ep.eng_id,
     pp.data_registro,
     pp.previsao_texto,
     pp.feito_texto
 FROM projetos_previsao pp
 JOIN engenheiros_projetos ep ON ep.id = pp.eng_projeto_id
 WHERE pp.previsao_texto IS NOT NULL OR pp.feito_texto IS NOT NULL;
+
+COMMENT ON VIEW vw_atribuicao_apontamentos IS
+    'Relato diario do engenheiro por atribuicao. Unico caminho do dashboard ate projetos_previsao, que a chave anon nao le.';
 
 GRANT SELECT ON vw_projetos_detalhado TO anon, authenticated;
 GRANT SELECT ON vw_atribuicao_apontamentos TO anon, authenticated;

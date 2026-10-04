@@ -157,4 +157,29 @@ assert.doesNotMatch(
 assert.match(modal, /formatarDataBR/, 'o modal deve usar formatarDataBR')
 assert.match(modal, /vw_atribuicao_apontamentos|fetchApontamentosAtribuicao/, 'o modal busca o relato diario')
 
+// Nenhum outro ponto do dashboard pode continuar formatando DATE via new Date(), senao o
+// mesmo campo aparece com datas diferentes em telas diferentes.
+{
+  const { execSync } = await import('node:child_process')
+  const saida = execSync(
+    "grep -rn \"toLocaleDateString('pt-BR')\" dashboard/lib dashboard/components dashboard/app || true",
+    { encoding: 'utf8' }
+  )
+  const infratores = saida
+    .split('\n')
+    .filter((l) => l.includes('new Date('))
+    .filter((l) => !l.startsWith('dashboard/lib/datas.ts'))
+  assert.deepEqual(infratores, [], 'nenhum componente pode formatar DATE via new Date()')
+}
+
+// O estado vazio nao pode ser afirmado antes da busca responder, nem quando nao houve busca.
+assert.match(modal, /resultado === null \?/, 'deve existir estado de carregando distinto do vazio')
+assert.match(modal, /!atribuicaoId \?/, 'sem atribuicao o modal nao pode afirmar ausencia de registro')
+assert.match(modal, /Nao foi possivel carregar/, 'falha de leitura deve ser distinta de ausencia')
+assert.match(
+  modal,
+  /nao indica falta de trabalho/,
+  'o estado vazio deve explicar que o relato so passou a ser gravado em 04/10/2026'
+)
+
 console.log('test-dashboard-concluidos-periodo: OK')

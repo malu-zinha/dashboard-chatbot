@@ -171,6 +171,14 @@ cabeçalhos dos próprios arquivos — é **colar o SQL no SQL Editor do Supabas
    `chatbot_functions.sql`, `functions_dono.sql`, `seed_complemento_chatbot.sql`,
    `criar_tipos_projeto.sql`, `CRIAR_VIEWS.sql`, `triggers_e_views.sql`
 
+> **Onde essa ordem morde.** O passo 3 vem depois do 2, então um `CREATE OR REPLACE` num arquivo
+> solto sobrescreve a versão que veio das migrations. `triggers_e_views.sql`,
+> `CORRIGIR_TRIGGERS.sql` e `tabela_evandro_dono.sql` carregam cópias antigas de
+> `sincronizar_task_para_engenheiro()` — aplicá-las reverte tanto o carimbo em `atribuido_por`
+> quanto `instancia_label`/`complemento_area_ref_id`. As três estão marcadas com um aviso no
+> topo da função. Em caso de dúvida, `supabase/migrations/` é a fonte de verdade: reaplique a
+> migration mais recente que define a função.
+
 Três coisas que você precisa saber antes de confiar num banco novo:
 
 **Parte das RPCs vive fora de `migrations/`.** Funções que o código chama em produção —

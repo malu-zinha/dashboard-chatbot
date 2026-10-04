@@ -225,6 +225,12 @@ CREATE TRIGGER trg_preencher_vars_prazos
 -- Sincroniza distribuição de tarefas do dono
 -- =====================================================
 
+-- ATENCAO: esta definicao esta DESATUALIZADA e nao deve sobrescrever a de
+-- supabase/migrations/20261004_observacoes_e_feito_do_dia.sql, que e a vigente.
+-- Alem do carimbo de atribuicao (que agora vai para a coluna atribuido_por, nao
+-- para observacoes), a versao abaixo tambem nao conhece instancia_label nem
+-- complemento_area_ref_id. Aplicar este arquivo depois das migrations reverte
+-- as duas coisas. Mantido so como historico.
 CREATE OR REPLACE FUNCTION sincronizar_task_para_engenheiro()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -261,7 +267,7 @@ BEGIN
             data_inicio,
             data_prevista,
             status_id,
-            observacoes
+            atribuido_por
         ) VALUES (
             NEW.eng_id,
             v_projeto_id,
