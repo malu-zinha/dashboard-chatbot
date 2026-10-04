@@ -59,13 +59,15 @@ erDiagram
         int tempo_trabalho_dias
         text instancia_label "Compatibilizacao N / Complemento"
         uuid complemento_area_ref_id FK
+        text observacoes "so o que o engenheiro escreveu no chatbot"
+        text atribuido_por "carimbo do sistema; morava em observacoes ate 04/10/2026"
         bool ativo
     }
     PROJETOS_PREVISAO {
         uuid id PK
         uuid eng_projeto_id FK
-        date data_registro "UNIQUE com eng_projeto_id"
-        text previsao_texto "manha"
+        date data_registro "UNIQUE com eng_projeto_id; data local BRT, nao UTC"
+        text previsao_texto "manha — NULL quando so houve a noturna"
         text feito_texto "noite"
         timestamptz data_fim_dia
         bool editavel

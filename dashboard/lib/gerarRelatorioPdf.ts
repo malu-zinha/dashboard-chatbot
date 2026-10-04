@@ -19,7 +19,6 @@ const COLORS = {
   warning: [255, 140, 0] as [number, number, number],
 }
 
-const formatDate = formatarDataBR
 
 function formatDateTime(dateStr: string): string {
   return new Date(dateStr).toLocaleString('pt-BR', {
@@ -123,9 +122,9 @@ export function gerarRelatorioPdf({
   doc.setFont('helvetica', 'normal')
 
   const datasInfo = [
-    ['Data de inicio:', formatDate(relatorio.data_inicio_projeto)],
-    ['Data de conclusao:', formatDate(relatorio.data_conclusao_projeto)],
-    ['Projeto criado em:', formatDate(relatorio.projeto_criado_em)],
+    ['Data de inicio:', formatarDataBR(relatorio.data_inicio_projeto)],
+    ['Data de conclusao:', formatarDataBR(relatorio.data_conclusao_projeto)],
+    ['Projeto criado em:', formatarDataBR(relatorio.projeto_criado_em)],
   ]
 
   for (const [label, value] of datasInfo) {
@@ -182,9 +181,9 @@ export function gerarRelatorioPdf({
       xPos += colWidths[0]
       doc.text(truncate(disc.engenheiro_nome || '-', 18), xPos, y)
       xPos += colWidths[1]
-      doc.text(formatDate(disc.data_inicio), xPos, y)
+      doc.text(formatarDataBR(disc.data_inicio), xPos, y)
       xPos += colWidths[2]
-      doc.text(formatDate(disc.data_conclusao), xPos, y)
+      doc.text(formatarDataBR(disc.data_conclusao), xPos, y)
       xPos += colWidths[3]
       doc.text(String(disc.dias_execucao), xPos, y)
       xPos += colWidths[4]

@@ -1242,9 +1242,14 @@ _Digite o número da opção desejada_`;
     // Mandar "tente novamente" sem dizer isso faria o engenheiro refazer o apontamento inteiro
     // achando que nada entrou. A mensagem separa o que esta no banco do que se perdeu.
     if (!salvo.ok) {
+      // Quando o relato falha, a observacao nem chega a ser tentada: atualizarFeitoDia
+      // retorna antes do update em engenheiros_projetos. Nomear so o relato deixaria o
+      // engenheiro supor que a observacao entrou.
       const perdido = salvo.motivo === 'erro_observacoes'
         ? 'a observação'
-        : 'o relato do dia';
+        : this.state.observacoesTexto
+          ? 'o relato do dia nem a observação'
+          : 'o relato do dia';
 
       return {
         mensagem:

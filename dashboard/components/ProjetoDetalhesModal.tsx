@@ -85,7 +85,6 @@ export default function ProjetoDetalhesModal({
     ? resultado.registros.filter((a) => a.feito_texto?.trim())
     : []
 
-  const formatDate = formatarDataBR
 
   const getStatusColor = () => {
     if (projeto.data_conclusao || projeto.percentual_andamento >= 100) {
@@ -172,7 +171,7 @@ export default function ProjetoDetalhesModal({
             <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
               <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
               <span className="text-sm text-green-700">
-                Concluido em <span className="font-bold">{formatDate(projeto.data_conclusao)}</span>
+                Concluido em <span className="font-bold">{formatarDataBR(projeto.data_conclusao)}</span>
               </span>
             </div>
           )}
@@ -205,10 +204,10 @@ export default function ProjetoDetalhesModal({
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Datas</p>
                 <div className="text-sm text-gray-900 space-y-0.5">
-                  <p>Inicio: <span className="font-medium">{formatDate(projeto.data_inicio)}</span></p>
-                  <p>Prevista: <span className="font-medium">{formatDate(projeto.data_prevista)}</span></p>
+                  <p>Inicio: <span className="font-medium">{formatarDataBR(projeto.data_inicio)}</span></p>
+                  <p>Prevista: <span className="font-medium">{formatarDataBR(projeto.data_prevista)}</span></p>
                   {projeto.data_conclusao && (
-                    <p>Conclusao: <span className="font-medium">{formatDate(projeto.data_conclusao)}</span></p>
+                    <p>Conclusao: <span className="font-medium">{formatarDataBR(projeto.data_conclusao)}</span></p>
                   )}
                 </div>
               </div>
