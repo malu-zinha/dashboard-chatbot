@@ -172,6 +172,20 @@ export type ResultadoRegistroRetrabalho =
       mensagem: string;
     };
 
+/**
+ * Resultado de atualizarFeitoDia. Separa as duas gravacoes porque elas vao para tabelas
+ * diferentes e falham por motivos diferentes: o relato do dia em projetos_previsao e a
+ * observacao em engenheiros_projetos. Quem avisa o engenheiro precisa saber qual das duas
+ * se perdeu para nao mandar refazer o que ja esta gravado.
+ */
+export type ResultadoFeitoDia =
+  | { ok: true }
+  | {
+      ok: false;
+      motivo: 'sem_conexao' | 'atribuicao_nao_encontrada' | 'erro_feito' | 'erro_observacoes' | 'excecao';
+      mensagem: string;
+    };
+
 // Interface de compatibilidade (para código antigo)
 export interface LimpezaProjetosResult {
   dry_run: boolean;
@@ -2084,8 +2098,11 @@ export class SupabaseService {
     eng_projeto_id: string,
     feito_texto: string,
     observacoes?: string
-  ): Promise<boolean> {
-    if (!this.connected) return false;
+  ): Promise<ResultadoFeitoDia> {
+    if (!this.connected) {
+      console.error(`❌ Erro ao registrar feito do dia (${eng_projeto_id}): sem conexão`);
+      return { ok: false, motivo: 'sem_conexao', mensagem: 'Sem conexão com o banco.' };
+    }
 
     try {
       // Atualizar previsão com feito
@@ -2097,7 +2114,11 @@ export class SupabaseService {
 
       if (erroAtrib || !atrib) {
         console.error('❌ Erro ao buscar atribuição:', erroAtrib);
-        return false;
+        return {
+          ok: false,
+          motivo: 'atribuicao_nao_encontrada',
+          mensagem: erroAtrib?.message ?? 'Atribuição não encontrada.',
+        };
       }
 
       // Upsert previsão do dia com o feito (cria registro se manhã não foi preenchida)
@@ -2116,8 +2137,18 @@ export class SupabaseService {
           onConflict: 'eng_projeto_id,data_registro'
         });
 
+      // Este erro era um console.warn e a funcao seguia dizendo que gravou. Como o upsert nao
+      // passa previsao_texto, todo dia sem notificacao matinal caia no NOT NULL da coluna e o
+      // relato do engenheiro era descartado em silencio — 203 registros no banco, um unico com
+      // feito_texto, contra 393 apontamentos noturnos no mesmo periodo. A migration
+      // 20261004 tirou o NOT NULL; aqui a falha deixa de ser engolida.
       if (erroPrevisao) {
-        console.warn('⚠️ Aviso ao atualizar previsão:', erroPrevisao);
+        console.error('❌ Erro ao gravar o feito do dia:', erroPrevisao);
+        return {
+          ok: false,
+          motivo: 'erro_feito',
+          mensagem: erroPrevisao.message ?? 'Erro ao gravar o relato do dia.',
+        };
       }
 
       // Atualizar observações na atribuição se fornecidas
@@ -2132,15 +2163,19 @@ export class SupabaseService {
 
         if (erroObs) {
           console.error('❌ Erro ao atualizar observações:', erroObs);
-          return false;
+          return {
+            ok: false,
+            motivo: 'erro_observacoes',
+            mensagem: erroObs.message ?? 'Erro ao gravar a observação.',
+          };
         }
       }
 
       console.log('✅ Feito do dia registrado com sucesso');
-      return true;
+      return { ok: true };
     } catch (error: any) {
       console.error('❌ Erro ao atualizar feito do dia:', error.message);
-      return false;
+      return { ok: false, motivo: 'excecao', mensagem: error.message ?? 'Falha inesperada.' };
     }
   }
 

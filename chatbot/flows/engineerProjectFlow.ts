@@ -1232,15 +1232,24 @@ _Digite o número da opção desejada_`;
 
   private async salvarNotificacaoNoturna(): Promise<FlowResult> {
     // Salvar feito do dia (em projetos_previsao) e observações (em engenheiros_projetos)
-    const sucesso = await this.supabase.atualizarFeitoDia(
+    const salvo = await this.supabase.atualizarFeitoDia(
       this.state.selectedAtribuicaoId!,
       this.state.feitoTexto!,
       this.state.observacoesTexto || undefined  // Apenas as observações, sem repetir o feito
     );
 
-    if (!sucesso) {
+    // As horas e o retrabalho ja foram gravados pela RPC, antes da pergunta de observacoes.
+    // Mandar "tente novamente" sem dizer isso faria o engenheiro refazer o apontamento inteiro
+    // achando que nada entrou. A mensagem separa o que esta no banco do que se perdeu.
+    if (!salvo.ok) {
+      const perdido = salvo.motivo === 'erro_observacoes'
+        ? 'a observação'
+        : 'o relato do dia';
+
       return {
-        mensagem: '❌ Erro ao salvar notificação. Tente novamente.',
+        mensagem:
+          `❌ As horas e o retrabalho já foram registrados, mas não consegui gravar ${perdido}.\n\n` +
+          `Avise o suporte — não precisa refazer o apontamento de horas.`,
         finalizado: true
       };
     }
