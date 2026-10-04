@@ -115,6 +115,19 @@ const semPeriodo = particionarPorPeriodoConclusao(itens, {})
 assert.equal(semPeriodo.dentro.length, 4, 'sem periodo nada e particionado')
 assert.equal(semPeriodo.ocultadosSemData.length, 0, 'sem periodo nao ha ocultados')
 
+// Periodo aberto de um lado so tambem precisa reportar os sem data: meio periodo e periodo.
+const soFim = particionarPorPeriodoConclusao(itens, { dataFim: '2026-09-30' })
+assert.deepEqual(soFim.dentro.map((i) => i.codigo), ['A'], 'so com fim, B (outubro) fica fora')
+assert.deepEqual(
+  soFim.ocultadosSemData.map((i) => i.codigo),
+  ['C', 'D'],
+  'so com fim, os sem data continuam sendo reportados'
+)
+
+const soInicio = particionarPorPeriodoConclusao(itens, { dataInicio: '2026-10-01' })
+assert.deepEqual(soInicio.dentro.map((i) => i.codigo), ['B'], 'so com inicio, A (setembro) fica fora')
+assert.equal(soInicio.ocultadosSemData.length, 2, 'so com inicio, os sem data continuam reportados')
+
 // =====================================================
 // Asserts de fonte — a UI do periodo so existe na aba de concluidos
 // =====================================================
@@ -142,6 +155,21 @@ assert.match(
 )
 assert.match(projetosTable, /ocultadosSemData/, 'a tela deve listar os ocultados sem data')
 assert.match(projetosTable, /periodoInvalido/, 'datas invertidas devem ser avisadas')
+
+// Uma lista unica de campos buscaveis para a tabela e para o aviso de ocultados: com duas,
+// um campo novo entraria so numa e o aviso passaria a divergir do que a tabela mostra.
+assert.match(projetosTable, /const camposBusca = /, 'deve existir uma lista unica de campos de busca')
+assert.equal(
+  (projetosTable.match(/item\.codigo_projeto,\n\s+item\.cliente,/g) || []).length,
+  1,
+  'a lista de campos de busca nao pode estar duplicada'
+)
+assert.match(projetosTable, /searchMatches\(searchTerm, camposBusca\(item\)\)/, 'o aviso reusa searchMatches')
+assert.match(
+  projetosTable,
+  /searchScore\(searchTerm, camposBusca\(item, engenheirosExtras\)\)/,
+  'o ranking da tabela reusa a mesma lista'
+)
 
 // As duas formatacoes que criavam Date a partir de 'YYYY-MM-DD' sumiram.
 assert.doesNotMatch(

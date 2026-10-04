@@ -17,7 +17,6 @@ interface EngenheirosExecucaoTableProps {
   onToggleFullscreen: () => void
 }
 
-const formatPrazo = formatarDataBR
 
 function groupSearchScore(searchTerm: string, grupo: EngenheiroExecucaoGroup) {
   return searchScore(searchTerm, [
@@ -183,7 +182,7 @@ export default function EngenheirosExecucaoTable({
                       </div>
 
                       <div className={`mt-2 text-gray-500 ${layout.meta}`}>
-                        Prazo: {formatPrazo(tarefa.data_prevista)}
+                        Prazo: {formatarDataBR(tarefa.data_prevista)}
                       </div>
                     </article>
                   ))}

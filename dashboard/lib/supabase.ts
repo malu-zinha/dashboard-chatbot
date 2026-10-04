@@ -506,7 +506,6 @@ export async function fetchProducaoApontamentosPeriodo(
 export interface ApontamentoAtribuicao {
   atribuicao_id: string
   data_registro: string
-  previsao_texto: string | null
   feito_texto: string | null
 }
 
@@ -524,7 +523,7 @@ export async function fetchApontamentosAtribuicao(
 ): Promise<ResultadoApontamentos> {
   const { data, error } = await supabase
     .from('vw_atribuicao_apontamentos')
-    .select('atribuicao_id, data_registro, previsao_texto, feito_texto')
+    .select('atribuicao_id, data_registro, feito_texto')
     .eq('atribuicao_id', atribuicaoId)
     .order('data_registro', { ascending: false })
 

@@ -69,6 +69,27 @@ const enviar = async (flow: any, msg: string): Promise<string> =>
   // engenheiro a sobrescrever um apontamento que esta correto no banco.
   assert.match(resposta, /horas e o retrabalho já foram registrados/i, 'deve dizer o que ficou salvo')
   assert.match(resposta, /não precisa refazer o apontamento de horas/i, 'nao pode mandar refazer as horas')
+
+  // Sem observacao digitada, nao ha observacao a mencionar.
+  assert.doesNotMatch(resposta, /observação/i, 'sem observacao digitada, nao citar observacao')
+}
+
+// =====================================================
+// Relato falha DEPOIS de o engenheiro digitar observacao:
+// a observacao nem chega a ser tentada, entao some junto
+// =====================================================
+{
+  const { flow } = criarFlow({ ok: false, motivo: 'erro_feito', mensagem: 'erro' })
+
+  flow.state.step = 'observacoes_texto'
+  const resposta = await enviar(flow, 'Falta Dr. Evandro revisar')
+
+  assert.doesNotMatch(resposta, /Notificação Noturna Registrada/, 'nao pode anunciar registro')
+  assert.match(
+    resposta,
+    /não consegui gravar o relato do dia nem a observação/i,
+    'as duas se perdem, entao as duas precisam ser nomeadas'
+  )
 }
 
 // =====================================================

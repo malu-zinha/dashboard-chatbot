@@ -125,6 +125,8 @@ CREATE TABLE IF NOT EXISTS projetos_previsao (
     
     data_registro DATE NOT NULL DEFAULT CURRENT_DATE,
     
+    -- O NOT NULL cai na 20261004_observacoes_e_feito_do_dia.sql: a notificacao noturna
+    -- grava sem ter havido a matinal, e a constraint descartava o relato do dia.
     previsao_texto TEXT NOT NULL,
     feito_texto TEXT,
     nova_data_prevista DATE,

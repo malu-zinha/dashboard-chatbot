@@ -11,7 +11,7 @@ import {
   type PeriodoConclusao,
   type ProjetoStatusFilter,
 } from '@/lib/projetoFilters'
-import { searchScore } from '@/lib/search'
+import { searchMatches, searchScore } from '@/lib/search'
 import { verificarAtribuicaoInfo, fetchRelatorioProjetoPdf, type Engenheiro } from '@/lib/supabase'
 import { gerarRelatorioPdf } from '@/lib/gerarRelatorioPdf'
 import ProjetoDetalhesModal from './ProjetoDetalhesModal'
@@ -170,14 +170,19 @@ export default function ProjetosTable({
     ? { dataInicio: dataConclusaoInicio || undefined, dataFim: dataConclusaoFim || undefined }
     : {}
 
-  const buscaCasa = (item: Projeto) =>
-    searchScore(searchTerm, [
-      item.codigo_projeto,
-      item.cliente,
-      item.engenheiro_nome,
-      item.area_descricao,
-      getProjetoAreaDisplayName(item),
-    ]) > 0
+  // Lista unica de campos buscaveis. A tabela e o aviso de ocultados precisam concordar:
+  // com duas listas, um campo novo entraria so numa e o aviso passaria a divergir da tabela.
+  // engenheirosExtras entra so na aba em_execucao, que nao usa o aviso.
+  const camposBusca = (item: Projeto, engenheirosExtras: string[] = []) => [
+    item.codigo_projeto,
+    item.cliente,
+    item.engenheiro_nome,
+    ...engenheirosExtras,
+    item.area_descricao,
+    getProjetoAreaDisplayName(item),
+  ]
+
+  const buscaCasa = (item: Projeto) => searchMatches(searchTerm, camposBusca(item))
 
   // Concluidos sem data_conclusao nao cabem num recorte por data. Em vez de deixa-los
   // sumir calados, a tela lista quem ficou de fora.
@@ -218,14 +223,7 @@ export default function ProjetosTable({
 
       // Pontuação de relevância da busca (0 = não casa). Só pontua se passou no filtro.
       const score = matchesFilter
-        ? searchScore(searchTerm, [
-            item.codigo_projeto,
-            item.cliente,
-            item.engenheiro_nome,
-            ...engenheirosExtras,
-            item.area_descricao,
-            getProjetoAreaDisplayName(item),
-          ])
+        ? searchScore(searchTerm, camposBusca(item, engenheirosExtras))
         : 0
 
       return { item, score }
