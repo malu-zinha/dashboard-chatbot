@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf'
 import type { RelatorioProjetoData, DisciplinaRelatorio } from './supabase'
+import { formatarDataBR } from './datas'
 
 interface GerarRelatorioParams {
   relatorio: RelatorioProjetoData
@@ -18,10 +19,7 @@ const COLORS = {
   warning: [255, 140, 0] as [number, number, number],
 }
 
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('pt-BR')
-}
+const formatDate = formatarDataBR
 
 function formatDateTime(dateStr: string): string {
   return new Date(dateStr).toLocaleString('pt-BR', {

@@ -8,6 +8,7 @@ import {
   RetrabalhoMotivo,
 } from '@/lib/supabase'
 import RetrabalhoPizzaChart from '@/components/RetrabalhoPizzaChart'
+import { formatarDataBR } from '@/lib/datas'
 
 interface RetrabalhoDetalhesModalProps {
   isOpen: boolean
@@ -184,7 +185,7 @@ export default function RetrabalhoDetalhesModal({
                                   className="px-6 py-3 flex gap-4 items-start"
                                 >
                                   <div className="flex-shrink-0 text-xs text-gray-500 w-20 pt-0.5">
-                                    {new Date(item.data_retrabalho).toLocaleDateString('pt-BR')}
+                                    {formatarDataBR(item.data_retrabalho)}
                                   </div>
                                   <div className="flex-shrink-0 text-xs font-semibold text-tecpred-primary w-28 pt-0.5">
                                     {item.engenheiro_nome}
@@ -252,7 +253,7 @@ export default function RetrabalhoDetalhesModal({
                       <div className="flex justify-between items-center mb-1 flex-wrap gap-2">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-semibold text-gray-600">
-                            {new Date(item.data_retrabalho).toLocaleDateString('pt-BR')}
+                            {formatarDataBR(item.data_retrabalho)}
                           </span>
                           <span className="px-2 py-0.5 rounded-full text-xs bg-tecpred-light text-tecpred-primary font-medium">
                             {item.area_descricao}

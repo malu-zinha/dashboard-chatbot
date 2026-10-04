@@ -40,7 +40,7 @@ function criarFlow() {
 
   flow.supabase = {
     registrarRetrabalho: async () => ({ ok: true }),
-    atualizarFeitoDia: async () => true,
+    atualizarFeitoDia: async () => ({ ok: true }),
     registrarPrevisaoDia: async () => true,
     buscarPavimentosComEtapas: async () => PAVIMENTOS,
     buscarEtapasGlobais: async () => [],
