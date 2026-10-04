@@ -503,6 +503,32 @@ export async function fetchProducaoApontamentosPeriodo(
   return (data as ProducaoApontamentoPeriodo[]) || []
 }
 
+export interface ApontamentoAtribuicao {
+  atribuicao_id: string
+  data_registro: string
+  previsao_texto: string | null
+  feito_texto: string | null
+}
+
+// Relato diario que o engenheiro escreve no chatbot, por atribuicao. Vem de uma view
+// porque a chave anon do dashboard nao enxerga projetos_previsao direto.
+export async function fetchApontamentosAtribuicao(
+  atribuicaoId: string
+): Promise<ApontamentoAtribuicao[]> {
+  const { data, error } = await supabase
+    .from('vw_atribuicao_apontamentos')
+    .select('atribuicao_id, data_registro, previsao_texto, feito_texto')
+    .eq('atribuicao_id', atribuicaoId)
+    .order('data_registro', { ascending: false })
+
+  if (error) {
+    console.error('Erro ao buscar apontamentos da atribuicao:', error)
+    return []
+  }
+
+  return (data as ApontamentoAtribuicao[]) || []
+}
+
 export async function fetchProducaoEngenheiroPeriodo(
   dataInicio: string,
   dataFim: string

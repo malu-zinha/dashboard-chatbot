@@ -1,7 +1,16 @@
 import React from 'react'
 import { X, Search, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, Trash2, UserRoundCog, Eye, FileDown } from 'lucide-react'
 import { buildCompletedDisciplineKey, getProjetoAreaDisplayName } from '@/lib/compatibilizacao'
-import { isProjetoConcluido, projetoMatchesStatusFilter, type ProjetoStatusFilter } from '@/lib/projetoFilters'
+import { formatarDataBR } from '@/lib/datas'
+import {
+  isProjetoConcluido,
+  particionarPorPeriodoConclusao,
+  periodoConclusaoAtivo,
+  projetoConcluidoNoPeriodo,
+  projetoMatchesStatusFilter,
+  type PeriodoConclusao,
+  type ProjetoStatusFilter,
+} from '@/lib/projetoFilters'
 import { searchScore } from '@/lib/search'
 import { verificarAtribuicaoInfo, fetchRelatorioProjetoPdf, type Engenheiro } from '@/lib/supabase'
 import { gerarRelatorioPdf } from '@/lib/gerarRelatorioPdf'
@@ -74,7 +83,9 @@ export default function ProjetosTable({
   const [isUltimaDisciplina, setIsUltimaDisciplina] = React.useState(false)
   const [detalheProjeto, setDetalheProjeto] = React.useState<Projeto | null>(null)
   const [gerandoPdfProjetoId, setGerandoPdfProjetoId] = React.useState<string | null>(null)
-  
+  const [dataConclusaoInicio, setDataConclusaoInicio] = React.useState('')
+  const [dataConclusaoFim, setDataConclusaoFim] = React.useState('')
+
   // Atualiza o filtro e limpa busca quando o modal abre com um filtro inicial
   React.useEffect(() => {
     if (isOpen) {
@@ -84,6 +95,8 @@ export default function ProjetosTable({
       // Limpa busca quando abre o modal
       setSearchTerm('')
       setExpandedConcluidas(new Set())
+      setDataConclusaoInicio('')
+      setDataConclusaoFim('')
     }
   }, [isOpen, initialFilter])
 
@@ -131,6 +144,7 @@ export default function ProjetosTable({
   }, [data])
 
   const showConcluidas = filterStatus === 'em_execucao'
+  const showFiltroPeriodo = filterStatus === 'concluido'
   const showAcoes = true
   const totalColunas = 8 + (showConcluidas ? 1 : 0) + (onVerRetrabalho ? 1 : 0) + (showAcoes ? 1 : 0)
 
@@ -146,6 +160,37 @@ export default function ProjetosTable({
     })
   }
 
+  // O periodo so vale na aba de concluidos. Com as datas invertidas nao filtramos nada:
+  // o aviso abaixo dos inputs explica, em vez de esvaziar a tabela sem motivo aparente.
+  const periodoInvalido = Boolean(
+    dataConclusaoInicio && dataConclusaoFim && dataConclusaoInicio > dataConclusaoFim
+  )
+
+  const periodoConclusao: PeriodoConclusao = showFiltroPeriodo && !periodoInvalido
+    ? { dataInicio: dataConclusaoInicio || undefined, dataFim: dataConclusaoFim || undefined }
+    : {}
+
+  const buscaCasa = (item: Projeto) =>
+    searchScore(searchTerm, [
+      item.codigo_projeto,
+      item.cliente,
+      item.engenheiro_nome,
+      item.area_descricao,
+      getProjetoAreaDisplayName(item),
+    ]) > 0
+
+  // Concluidos sem data_conclusao nao cabem num recorte por data. Em vez de deixa-los
+  // sumir calados, a tela lista quem ficou de fora.
+  const ocultadosSemData = React.useMemo(() => {
+    if (!periodoConclusaoAtivo(periodoConclusao)) return [] as Projeto[]
+
+    const concluidos = data.filter(isProjetoConcluido)
+    return particionarPorPeriodoConclusao(concluidos, periodoConclusao)
+      .ocultadosSemData
+      .filter(buscaCasa)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, periodoConclusao.dataInicio, periodoConclusao.dataFim, searchTerm])
+
   const filteredData = data
     .map(item => {
       // Filtro mais preciso baseado no estado real do projeto
@@ -155,8 +200,8 @@ export default function ProjetosTable({
         matchesFilter = true
       } else if (filterStatus === 'concluido') {
         // Projeto concluído: tem data_conclusao OU percentual = 100%
-        matchesFilter = (item.data_conclusao !== null && item.data_conclusao !== undefined) ||
-                        item.percentual_andamento >= 100
+        matchesFilter = isProjetoConcluido(item) &&
+                        projetoConcluidoNoPeriodo(item, periodoConclusao)
       } else if (filterStatus === 'em_execucao') {
         // Em execução: não concluído, incluindo projetos atrasados.
         matchesFilter = projetoMatchesStatusFilter(item, filterStatus)
@@ -330,6 +375,90 @@ export default function ProjetosTable({
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-primary focus:border-transparent"
             />
           </div>
+
+          {showFiltroPeriodo && (
+            <div className="mt-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label htmlFor="concluidos-inicio" className="block text-xs font-medium text-gray-600 mb-1">
+                    Concluido de
+                  </label>
+                  <input
+                    id="concluidos-inicio"
+                    type="date"
+                    value={dataConclusaoInicio}
+                    onChange={(e) => setDataConclusaoInicio(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-tecpred-primary focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="concluidos-fim" className="block text-xs font-medium text-gray-600 mb-1">
+                    Concluido ate
+                  </label>
+                  <input
+                    id="concluidos-fim"
+                    type="date"
+                    value={dataConclusaoFim}
+                    onChange={(e) => setDataConclusaoFim(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-tecpred-primary focus:border-transparent"
+                  />
+                </div>
+                {(dataConclusaoInicio || dataConclusaoFim) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDataConclusaoInicio('')
+                      setDataConclusaoFim('')
+                    }}
+                    className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Limpar período
+                  </button>
+                )}
+              </div>
+
+              {periodoInvalido && (
+                <p className="mt-2 text-sm text-danger">
+                  A data inicial deve ser anterior ou igual a data final. O período não foi aplicado.
+                </p>
+              )}
+
+              {ocultadosSemData.length > 0 && (
+                <div className="mt-2 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+                  {ocultadosSemData.length <= 5 ? (
+                    <p>
+                      <span className="font-semibold">
+                        {ocultadosSemData.length} disciplina(s) concluída(s) sem data de conclusão
+                      </span>{' '}
+                      {ocultadosSemData.length === 1 ? 'foi ocultada' : 'foram ocultadas'} pelo período:{' '}
+                      {ocultadosSemData.map((item, i) => (
+                        <span key={item.atribuicao_id || `${item.projeto_id}-${i}`}>
+                          {i > 0 && ', '}
+                          <span className="font-semibold">{item.codigo_projeto}</span>
+                          {' '}({item.engenheiro_nome} — {getProjetoAreaDisplayName(item)})
+                        </span>
+                      ))}
+                    </p>
+                  ) : (
+                    <details>
+                      <summary className="cursor-pointer font-semibold">
+                        {ocultadosSemData.length} disciplinas concluídas sem data de conclusão foram
+                        ocultadas pelo período (ver quais)
+                      </summary>
+                      <ul className="mt-2 ml-4 list-disc space-y-0.5">
+                        {ocultadosSemData.map((item, i) => (
+                          <li key={item.atribuicao_id || `${item.projeto_id}-${i}`}>
+                            <span className="font-semibold">{item.codigo_projeto}</span>
+                            {' '}({item.engenheiro_nome} — {getProjetoAreaDisplayName(item)})
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Tabela */}
@@ -504,10 +633,7 @@ export default function ProjetosTable({
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       <div className="text-sm text-gray-900">
-                        {item.data_prevista 
-                          ? new Date(item.data_prevista).toLocaleDateString('pt-BR')
-                          : '-'
-                        }
+                        {formatarDataBR(item.data_prevista)}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">

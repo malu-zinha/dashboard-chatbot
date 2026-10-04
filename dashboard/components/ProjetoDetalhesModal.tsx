@@ -1,7 +1,9 @@
 'use client'
 
-import React, { useEffect, useCallback } from 'react'
+import React, { useEffect, useCallback, useState } from 'react'
 import { X, Calendar, User, Layers, Clock, AlertTriangle, CheckCircle, MessageSquare } from 'lucide-react'
+import { formatarDataBR } from '@/lib/datas'
+import { fetchApontamentosAtribuicao, type ApontamentoAtribuicao } from '@/lib/supabase'
 
 interface Projeto {
   atribuicao_id?: string
@@ -51,12 +53,37 @@ export default function ProjetoDetalhesModal({
     }
   }, [isOpen, handleKeyDown])
 
+  const [apontamentos, setApontamentos] = useState<ApontamentoAtribuicao[] | null>(null)
+  const [carregandoApontamentos, setCarregandoApontamentos] = useState(false)
+  const atribuicaoId = projeto?.atribuicao_id
+
+  useEffect(() => {
+    if (!isOpen || !atribuicaoId) {
+      setApontamentos(null)
+      return
+    }
+
+    let cancelado = false
+    setCarregandoApontamentos(true)
+
+    fetchApontamentosAtribuicao(atribuicaoId)
+      .then((registros) => {
+        if (!cancelado) setApontamentos(registros)
+      })
+      .finally(() => {
+        if (!cancelado) setCarregandoApontamentos(false)
+      })
+
+    return () => {
+      cancelado = true
+    }
+  }, [isOpen, atribuicaoId])
+
   if (!isOpen || !projeto) return null
 
-  const formatDate = (dateStr?: string | null) => {
-    if (!dateStr) return '-'
-    return new Date(dateStr).toLocaleDateString('pt-BR')
-  }
+  const relatosDiarios = (apontamentos || []).filter((a) => a.feito_texto?.trim())
+
+  const formatDate = formatarDataBR
 
   const getStatusColor = () => {
     if (projeto.data_conclusao || projeto.percentual_andamento >= 100) {
@@ -213,6 +240,44 @@ export default function ProjetoDetalhesModal({
                 ) : (
                   <p className="text-sm text-gray-400 italic">
                     Nenhuma observacao registrada.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Relato diario do chatbot */}
+          <div className="border-t pt-4">
+            <div className="flex items-start gap-3">
+              <Clock className="h-4 w-4 text-tecpred-primary mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">
+                  Relato diario no chatbot
+                </p>
+
+                {carregandoApontamentos ? (
+                  <p className="text-sm text-gray-400 italic">Carregando...</p>
+                ) : relatosDiarios.length > 0 ? (
+                  <ul className="space-y-2">
+                    {relatosDiarios.map((registro) => (
+                      <li
+                        key={registro.data_registro}
+                        className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2"
+                      >
+                        <p className="text-xs font-semibold text-tecpred-primary">
+                          {formatarDataBR(registro.data_registro)}
+                        </p>
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                          {registro.feito_texto}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  // Ate a correcao de 20261004 o relato noturno era descartado antes de
+                  // chegar ao banco. Ausencia aqui nao diz nada sobre o trabalho feito.
+                  <p className="text-sm text-gray-400 italic">
+                    Nenhum registro diario gravado para esta disciplina.
                   </p>
                 )}
               </div>
