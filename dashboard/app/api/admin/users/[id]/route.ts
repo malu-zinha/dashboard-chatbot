@@ -19,8 +19,10 @@ const FALHA_ATUALIZAR = 'Não foi possível atualizar o login. Tente novamente.'
  */
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  // Next 15: params chega como Promise.
+  const params = await context.params
   const guard = await guardOwnerRoute()
   if (!guard.ok) return guard.response
 

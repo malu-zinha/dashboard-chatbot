@@ -1,8 +1,15 @@
+const path = require('path')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // O repo tem dois lockfiles (chatbot na raiz, dashboard aqui); sem isto o
+  // Next 15 tenta adivinhar a raiz do workspace e avisa no build.
+  outputFileTracingRoot: path.join(__dirname),
+  // A unica imagem e o logo local. Sem otimizador, a rota /_next/image nao
+  // processa nada — foi nela que caiu um RCE corrigido so na 15.5.24.
   images: {
-    domains: [],
+    unoptimized: true,
   },
   // Railway monta `.next/cache` como volume persistente. O cache de build do
   // webpack nesse volume vinha servindo módulos compilados ANTIGOS (ex.:
