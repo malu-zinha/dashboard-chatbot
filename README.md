@@ -91,6 +91,9 @@ npm run build        # NÃO gera dist/ — o tsconfig usa noEmit, então isto é
 
 O servidor expõe `GET /` e `GET /health` (health check com status do banco),
 `POST /webhook/whatsapp` (mensagens) e `POST /webhook/status` (callbacks de entrega do Twilio).
+Os dois webhooks exigem `X-Twilio-Signature` válida (403 sem ela) sempre que
+`WHATSAPP_PROVIDER=twilio` ou `TWILIO_AUTH_TOKEN` estiver definido; só o desenvolvimento local puro
+dispensa, para testar com `curl`.
 
 Para desenvolvimento sem Twilio, deixe `WHATSAPP_PROVIDER=development`: as respostas vão para o
 console em vez de serem enviadas.
@@ -134,6 +137,7 @@ Copie `.env.example` para `.env` na raiz. O dashboard usa um `.env.local` própr
 | `GOOGLE_SHEETS_ENGINEER_RANGE` | Intervalo lido | Não | `A1:AE1000` |
 | `WHATSAPP_PROVIDER` | `development` \| `twilio` \| `meta` | Não | `development` |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` | Credenciais Twilio | Se `WHATSAPP_PROVIDER=twilio` (a falta só gera warning no boot) | `''` |
+| `TWILIO_WEBHOOK_BASE_URL` | URL pública exatamente como no console do Twilio, usada para conferir `X-Twilio-Signature` quando o host encaminhado pelo proxy não bate (domínio próprio) | Não | host do request |
 | `META_ACCESS_TOKEN` / `META_PHONE_NUMBER_ID` / `META_API_VERSION` | Credenciais Meta | Se `WHATSAPP_PROVIDER=meta` | `''` / `''` / `v18.0` |
 | `PORT` | Porta do Express | Não | `3000` |
 | `OPENAI_API_KEY` | Whisper (áudio, caminho legado) | Não | — |
@@ -442,17 +446,26 @@ a ser reconhecido no WhatsApp.
 
 ### Acesso
 
-Supabase Auth (email e senha), em três camadas:
+Supabase Auth (email e senha), em quatro camadas:
 
-1. `dashboard/middleware.ts` — sem sessão, redireciona para `/login`
-2. **RLS é permissiva**: a policy é `for all to authenticated using (true)` em todas as tabelas.
-   Qualquer usuário logado lê e escreve tudo. `anon` não lê nada. `user_profiles` é a exceção (cada
-   um lê só o próprio, e escrita só por `service_role`, o que impede auto-promoção a owner)
-3. **Papel owner** — `user_profiles.role = 'owner'` com `status = 'active'`. Verificado no servidor
-   em todas as rotas `/api/admin/*`; no cliente, serve apenas para esconder UI
+1. `dashboard/middleware.ts` — sem sessão, redireciona para `/login`; login com `status` inativo
+   (ou sem perfil) é desconectado; em produção sem as variáveis `NEXT_PUBLIC_*` responde 503. A
+   decisão fica em `dashboard/lib/acessoMiddleware.ts`.
+2. **`anon` não acessa nada** — nem tabela, nem view, nem função
+   (`supabase/migrations/20261021_fechar_acesso_anon.sql`). Os privilégios padrão também foram
+   alterados, para que objetos novos já nasçam fechados. `npm run sondar:anon` prova isso ao vivo,
+   só com leitura.
+3. **`authenticated` só lê** (`20261022_authenticated_somente_leitura.sql`): SELECT em tabelas e
+   views, EXECUTE só nas funções de leitura. A policy de RLS continua `using (true)`, então
+   qualquer logado **lê** tudo.
+4. **Toda escrita do dashboard passa por `/api/admin/*`**, que exige owner ativo
+   (`user_profiles.role = 'owner'`, `status = 'active'`) e usa a service role. No cliente, o papel
+   de owner só esconde botões. O chatbot também escreve com a service role.
 
-Ou seja: a separação real hoje é **logado vs não logado**, mais o papel de owner aplicado na
-aplicação. Não é uma separação no banco.
+Ao criar uma view ou função nova: `authenticated` recebe leitura (e EXECUTE) automaticamente pelos
+privilégios padrão; funções que **escrevem** precisam de `REVOKE EXECUTE ... FROM authenticated` e
+`GRANT ... TO service_role`, como em `20261022`. Nunca conceda nada a `anon`: o teste
+`tests/test-fechar-acesso-anon-migration.ts` falha se alguma migration der `GRANT ... TO anon`.
 
 ---
 
@@ -570,8 +583,6 @@ Coisas em que você vai tropeçar. Estão aqui de propósito — um README que e
 
 **Chatbot**
 
-- **O webhook Twilio não valida assinatura.** Não há checagem de `X-Twilio-Signature`: qualquer POST
-  em `/webhook/whatsapp` é aceito e processado.
 - **Áudio não funciona em produção.** O Whisper só é chamado no caminho legado
   (`npm run dev:whatsapp-web`). No servidor Twilio, um áudio chega sem `Body` e devolve
   `400 Bad Request`.
