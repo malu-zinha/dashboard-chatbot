@@ -9,11 +9,12 @@ import { readCredential } from '@/lib/secrets'
  * logado). Usa a ANON key + token do usuário -> respeita a RLS. Serve para
  * Server Components e Route Handlers identificarem QUEM está chamando.
  */
-export function createServerSupabase(): SupabaseClient {
+export async function createServerSupabase(): Promise<SupabaseClient> {
   // readCredential faz trim e rejeita \r\n antes de o valor virar header.
   const url = readCredential('NEXT_PUBLIC_SUPABASE_URL')
   const key = readCredential('NEXT_PUBLIC_SUPABASE_ANON_KEY')
-  const cookieStore = cookies()
+  // Next 15: cookies() e assincrono.
+  const cookieStore = await cookies()
 
   return createServerClient(url, key, {
     cookies: {
@@ -54,7 +55,7 @@ export async function getOwnerOrError(): Promise<OwnerCheck> {
   try {
     // Pode lançar InvalidCredentialError se a env estiver malformada — cai no
     // catch abaixo como 'unavailable', que é exatamente o que é.
-    const supabase = createServerSupabase()
+    const supabase = await createServerSupabase()
 
     const {
       data: { user },

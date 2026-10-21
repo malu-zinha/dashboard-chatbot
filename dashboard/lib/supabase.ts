@@ -1,6 +1,5 @@
 import { createBrowserClient } from '@supabase/ssr'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { redactSecrets } from '@/lib/secrets'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || ''
@@ -796,38 +795,23 @@ export interface AtribuirProjetoComPavimentosParams {
 export async function atribuirProjetoComPavimentos(
   params: AtribuirProjetoComPavimentosParams
 ): Promise<{ success: boolean; data?: any; error?: string }> {
-  const complexidadeMap = {
-    baixa: 'SIMPLES',
-    media: 'MEDIA',
-    alta: 'COMPLEXA',
-  } as const
-
-  const { data, error } = await supabase.rpc('dashboard_atribuir_projeto_com_pavimentos', {
-    p_codigo_projeto: params.codigo_projeto,
-    p_cliente: params.cliente,
-    p_descricao: params.descricao || null,
-    p_area_id: String(params.area_id),
-    p_eng_id: params.eng_id,
-    p_complexidade_codigo: complexidadeMap[params.complexidade] || 'MEDIA',
-    p_data_conclusao_prevista: params.data_prevista || null,
-    p_pavimentos: params.pavimentos || [],
-    p_instancia_label: params.instancia_label || null,
-    p_complemento_area_ref_id: params.complemento_area_ref_id ? String(params.complemento_area_ref_id) : null,
+  // Vai pelo servidor (/api/admin/atribuicoes), que exige owner.
+  const response = await fetch('/api/admin/atribuicoes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
   })
 
-  if (error) {
-    // O texto cru do PostgREST ia parar num alert() na tela. A mensagem de
-    // negócio da própria RPC (data.mensagem, logo abaixo) continua sendo usada
-    // — essa sim é escrita para o usuário.
-    console.error('Erro ao atribuir projeto com pavimentos:', redactSecrets(error))
-    return { success: false, error: 'Nao foi possivel atribuir o projeto. Tente novamente.' }
+  const json = await response.json().catch(() => null)
+  if (!response.ok) {
+    return {
+      success: false,
+      data: json?.data,
+      error: json?.error || 'Nao foi possivel atribuir o projeto. Tente novamente.',
+    }
   }
 
-  if (data && typeof data === 'object' && data.sucesso === false) {
-    return { success: false, data, error: data.mensagem || 'Falha ao atribuir projeto' }
-  }
-
-  return { success: true, data }
+  return { success: true, data: json?.data }
 }
 
 export async function transferirResponsavelAtribuicao(
@@ -983,18 +967,23 @@ export async function criarProjeto(params: {
   cliente: string
   descricao: string
 }): Promise<{ success: boolean; data?: any; error?: string }> {
-  const { data, error } = await supabase.rpc('criar_projeto', {
-    p_codigo: params.codigo,
-    p_cliente: params.cliente,
-    p_descricao: params.descricao,
+  // Vai pelo servidor (/api/admin/projetos), que exige owner.
+  const response = await fetch('/api/admin/projetos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
   })
 
-  if (error) {
-    console.error('Erro ao criar projeto:', redactSecrets(error))
-    return { success: false, error: 'Nao foi possivel criar o projeto. Tente novamente.' }
+  const json = await response.json().catch(() => null)
+  if (!response.ok) {
+    return {
+      success: false,
+      data: json?.data,
+      error: json?.error || 'Nao foi possivel criar o projeto. Tente novamente.',
+    }
   }
 
-  return { success: true, data }
+  return { success: true, data: json?.data }
 }
 
 // Setup realtime subscriptions

@@ -1,0 +1,92 @@
+// Validação e montagem dos argumentos das RPCs de criar e atribuir projeto,
+// usadas pelas rotas /api/admin/projetos e /api/admin/atribuicoes (só owner,
+// service role). Sem Next aqui, para ser testável direto.
+//
+// Import relativo (não '@/'): os testes da raiz carregam este arquivo via tsx.
+import { isUuid } from './adminAtribuicoes'
+
+type Resultado<T> = { ok: true; args: T } | { ok: false; error: string }
+
+function texto(valor: unknown): string {
+  return typeof valor === 'string' ? valor.trim() : ''
+}
+
+function objeto(body: unknown): Record<string, unknown> | null {
+  return body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : null
+}
+
+export interface ArgsCriarProjeto {
+  p_codigo: string
+  p_cliente: string
+  p_descricao: string
+}
+
+export function validarCriarProjeto(body: unknown): Resultado<ArgsCriarProjeto> {
+  const b = objeto(body)
+  if (!b) return { ok: false, error: 'Dados invalidos.' }
+
+  const codigo = texto(b.codigo)
+  const cliente = texto(b.cliente)
+  if (!codigo) return { ok: false, error: 'Informe o codigo do projeto.' }
+  if (!cliente) return { ok: false, error: 'Informe o cliente.' }
+
+  return { ok: true, args: { p_codigo: codigo, p_cliente: cliente, p_descricao: texto(b.descricao) } }
+}
+
+const COMPLEXIDADE = { baixa: 'SIMPLES', media: 'MEDIA', alta: 'COMPLEXA' } as const
+
+export interface ArgsAtribuirProjeto {
+  p_codigo_projeto: string
+  p_cliente: string
+  p_descricao: string | null
+  p_area_id: string
+  p_eng_id: string
+  p_complexidade_codigo: string
+  p_data_conclusao_prevista: string | null
+  p_pavimentos: string[]
+  p_instancia_label: string | null
+  p_complemento_area_ref_id: string | null
+}
+
+// Mesmo mapeamento que lib/supabase.ts fazia no navegador.
+export function montarArgsAtribuirProjeto(body: unknown): Resultado<ArgsAtribuirProjeto> {
+  const b = objeto(body)
+  if (!b) return { ok: false, error: 'Dados invalidos.' }
+
+  const codigo = texto(b.codigo_projeto)
+  const cliente = texto(b.cliente)
+  const areaId = b.area_id === undefined || b.area_id === null ? '' : String(b.area_id).trim()
+  const engId = texto(b.eng_id)
+
+  if (!codigo) return { ok: false, error: 'Informe o codigo do projeto.' }
+  if (!cliente) return { ok: false, error: 'Informe o cliente.' }
+  if (!areaId) return { ok: false, error: 'Informe a disciplina.' }
+  if (!isUuid(engId)) return { ok: false, error: 'Engenheiro invalido.' }
+
+  let pavimentos: string[] = []
+  if (b.pavimentos !== undefined && b.pavimentos !== null) {
+    if (!Array.isArray(b.pavimentos) || !b.pavimentos.every((p) => typeof p === 'string')) {
+      return { ok: false, error: 'Pavimentos invalidos.' }
+    }
+    pavimentos = b.pavimentos as string[]
+  }
+
+  const complexidade = COMPLEXIDADE[texto(b.complexidade) as keyof typeof COMPLEXIDADE] ?? 'MEDIA'
+  const ref = b.complemento_area_ref_id
+
+  return {
+    ok: true,
+    args: {
+      p_codigo_projeto: codigo,
+      p_cliente: cliente,
+      p_descricao: texto(b.descricao) || null,
+      p_area_id: areaId,
+      p_eng_id: engId,
+      p_complexidade_codigo: complexidade,
+      p_data_conclusao_prevista: texto(b.data_prevista) || null,
+      p_pavimentos: pavimentos,
+      p_instancia_label: texto(b.instancia_label) || null,
+      p_complemento_area_ref_id: ref ? String(ref) : null,
+    },
+  }
+}

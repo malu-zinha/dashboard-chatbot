@@ -20,8 +20,10 @@ export const runtime = 'nodejs'
  */
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  // Next 15: params chega como Promise.
+  const params = await context.params
   const guard = await guardOwnerRoute()
   if (!guard.ok) return guard.response
 

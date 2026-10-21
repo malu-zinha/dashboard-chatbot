@@ -14,6 +14,11 @@ import { getWhatsAppService } from '../integrations/whatsapp/whatsappService.ts'
 import { getNotificationService } from '../integrations/notifications/notificationService.ts';
 import { getNotificationWorker } from '../integrations/notifications/notificationWorker.ts';
 import { redactSecrets } from '../logic/security/redactSecrets.ts';
+import {
+  assinaturaTwilioValida,
+  exigeAssinaturaTwilio,
+  montarUrlWebhook,
+} from '../logic/security/twilioSignature.ts';
 
 // Carregar variáveis de ambiente
 dotenv.config();
@@ -21,9 +26,37 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Atras do proxy do Railway: sem isto req.protocol e "http" e a URL usada na
+// assinatura nao bate com a que o Twilio assinou (https).
+app.set('trust proxy', true);
+
 // Middleware para parsing de form data do Twilio
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
+
+// So aceita requisicoes assinadas pelo Twilio.
+const validarAssinaturaTwilio: express.RequestHandler = (req, res, next) => {
+  if (!exigeAssinaturaTwilio(process.env)) return next();
+
+  const url = montarUrlWebhook(
+    {
+      protocol: req.protocol,
+      host: req.get('x-forwarded-host') ?? req.get('host'),
+      originalUrl: req.originalUrl,
+    },
+    process.env.TWILIO_WEBHOOK_BASE_URL
+  );
+  const valida = assinaturaTwilioValida({
+    authToken: process.env.TWILIO_AUTH_TOKEN,
+    assinatura: req.get('x-twilio-signature'),
+    url,
+    params: req.body ?? {},
+  });
+  if (valida) return next();
+
+  console.warn(`⛔ Assinatura Twilio invalida em ${req.originalUrl} (url conferida: ${url})`);
+  res.status(403).send('Forbidden');
+};
 
 console.log('🚀 Iniciando Twilio WhatsApp Bot Server...\n');
 
@@ -100,7 +133,7 @@ app.get('/health', (req, res) => {
 });
 
 // Webhook Twilio - Recebe mensagens do WhatsApp
-app.post('/webhook/whatsapp', async (req, res) => {
+app.post('/webhook/whatsapp', validarAssinaturaTwilio, async (req, res) => {
   try {
     const { From, Body, MessageSid } = req.body;
 
@@ -147,7 +180,7 @@ app.post('/webhook/whatsapp', async (req, res) => {
 });
 
 // Webhook Twilio - Status de mensagens enviadas
-app.post('/webhook/status', (req, res) => {
+app.post('/webhook/status', validarAssinaturaTwilio, (req, res) => {
   const { MessageSid, MessageStatus, To } = req.body;
 
   console.log(`📬 Status da mensagem ${MessageSid} para ${To}: ${MessageStatus}`);

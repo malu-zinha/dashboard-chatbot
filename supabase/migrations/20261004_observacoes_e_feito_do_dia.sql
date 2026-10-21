@@ -161,8 +161,9 @@ LEFT JOIN engenheiros e ON e.eng_id = ep.eng_id
 LEFT JOIN areas a ON a.area_id = ep.area_id
 WHERE p.ativo = true;
 
--- O dashboard usa a chave anon, que nao enxerga tabelas-base. O relato diario so chega
--- a tela atraves de uma view.
+-- O relato diario chega a tela atraves desta view. (Corrigido em 20261021: o comentario
+-- original dizia que o dashboard le como anon; nao le — o cliente manda a sessao do
+-- usuario e entra como authenticated. O GRANT ao anon foi removido.)
 -- eng_id e projeto_id vem de engenheiros_projetos, nao das colunas duplicadas em
 -- projetos_previsao: transferir_atribuicao troca ep.eng_id sem tocar nos apontamentos, entao
 -- pp.eng_id fica desatualizado apos qualquer transferencia. Mesma razao do
@@ -181,7 +182,8 @@ JOIN engenheiros_projetos ep ON ep.id = pp.eng_projeto_id
 WHERE pp.previsao_texto IS NOT NULL OR pp.feito_texto IS NOT NULL;
 
 COMMENT ON VIEW vw_atribuicao_apontamentos IS
-    'Relato diario do engenheiro por atribuicao. Unico caminho do dashboard ate projetos_previsao, que a chave anon nao le.';
+    'Relato diario do engenheiro por atribuicao, para o dashboard (somente authenticated).';
 
-GRANT SELECT ON vw_projetos_detalhado TO anon, authenticated;
-GRANT SELECT ON vw_atribuicao_apontamentos TO anon, authenticated;
+-- Sem anon: ver 20261021_fechar_acesso_anon.sql.
+GRANT SELECT ON vw_projetos_detalhado TO authenticated;
+GRANT SELECT ON vw_atribuicao_apontamentos TO authenticated;
