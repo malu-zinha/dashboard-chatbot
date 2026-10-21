@@ -363,6 +363,8 @@ export default function DashboardClient() {
         {(!isLoading || lastUpdate) && (
         <>
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
+        {/* Criar e atribuir exigem owner no servidor; para os demais o botao so falharia. */}
+        {isOwner && (
         <div className="mb-6 flex flex-wrap gap-3">
           <button
             onClick={() => setShowCriarProjetoModal(true)}
@@ -388,6 +390,7 @@ export default function DashboardClient() {
             Atribuir Novo Projeto
           </button>
         </div>
+        )}
 
         <section className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
