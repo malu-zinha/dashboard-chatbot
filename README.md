@@ -322,7 +322,18 @@ percentual de retrabalho = SUM(horas_retrabalho) / SUM(horas_trabalhadas_total) 
 ```
 
 Os dois números vêm do apontamento noturno do engenheiro no WhatsApp, gravados em
-`retrabalho_projetos` pela RPC `registrar_retrabalho_dia` — um **upsert por (atribuição, dia)**.
+`retrabalho_projetos` pela RPC `registrar_retrabalho_dia` — um **upsert por (atribuição, dia)**
+(`INSERT ... ON CONFLICT`).
+
+**O dia é o de Brasília**, nunca o UTC do Supabase: a RPC recebe `p_data` (o bot manda a data BRT)
+e, sem ele, usa `hoje_brt()` (`20261023_retrabalho_dia_brt_e_limite_horas.sql`). Antes, quem
+apontava depois das 21h BRT tinha as horas gravadas no dia seguinte. Use `hoje_brt()` no lugar de
+`CURRENT_DATE` em SQL novo. Ela também serve para lançamento retroativo (`p_data` no passado);
+data futura e mais de 24h num dia são recusadas, e a tabela tem `CHECK` de 24h (`NOT VALID`: os
+registros antigos não são verificados).
+
+"Total de retrabalhos" (por engenheiro) conta só os dias com `necessitou_retrabalho = true`: a
+tabela guarda todo apontamento diário desde 2026-07-28.
 
 Cuidado ao ler SQL antigo: arquivos como `supabase/CRIAR_VIEWS.sql` e
 `supabase/views_retrabalho_apenas.sql` ainda contêm a fórmula anterior
@@ -384,9 +395,15 @@ escolhe a atribuição
   → "Alguma etapa foi concluída hoje?" (se houver etapa pendente)
 ```
 
-A tela de confirmação é o **único ponto de gravação** das horas. Ela existe porque
-`registrar_retrabalho_dia` é upsert por (atribuição, dia): sem revisão, um `80` digitado no lugar de
-`8` sobrescreveria o valor certo e contaminaria o indicador de retrabalho.
+A tela de confirmação é o **único ponto de gravação** das horas e do relato do dia. Ela existe
+porque `registrar_retrabalho_dia` é upsert por (atribuição, dia): sem revisão, um `80` digitado no
+lugar de `8` sobrescreveria o valor certo e contaminaria o indicador de retrabalho. Acima de 16h o
+bot recusa; acima de 12h o resumo avisa antes do "1". O relato vai junto com as horas para não se
+perder se a sessão (15 min) expirar na pergunta de observações; o fim só grava a observação.
+
+Mensagens do mesmo telefone são processadas em fila (uma de cada vez). O telefone é reconhecido
+com ou sem o 9 depois do DDD (`logic/validation/telefoneBR.ts`). Com o banco fora, o bot responde
+"Não consegui acessar os dados agora" — não cai mais na planilha legada nem mostra 0%.
 
 **Navegação** — comandos globais válidos em qualquer passo: `0` ou `voltar` (passo anterior, com
 restauração do estado por snapshot), `menu` (volta ao início), `cancelar`.
