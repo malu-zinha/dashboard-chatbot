@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { 
   Briefcase, 
@@ -47,6 +47,7 @@ import {
   fetchProjetos,
   fetchEngenheiros,
   fetchAreas,
+  consumirFalhasDeCarga,
   atribuirProjetoComPavimentos,
   transferirResponsavelAtribuicao,
   excluirAtribuicao,
@@ -101,6 +102,11 @@ export default function DashboardClient() {
   const [engenheiros, setEngenheiros] = useState<Engenheiro[]>([])
   const [areas, setAreas] = useState<Area[]>([])
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  // Consultas que falharam na ultima carga: sem isto a tela mostrava zeros como se fossem dados.
+  const [falhasCarga, setFalhasCarga] = useState<string[]>([])
+  // Recargas do Realtime se sobrepoem; so a mais recente pode gravar na tela, senao uma
+  // resposta atrasada sobrescreve dados mais novos.
+  const cargaAtual = useRef(0)
   const [isLoading, setIsLoading] = useState(true)
   const isOwner = useIsOwnerActive()
   
@@ -129,6 +135,7 @@ export default function DashboardClient() {
   )
 
   const loadData = async () => {
+    const minhaCarga = ++cargaAtual.current
     setIsLoading(true)
     try {
       if (!isSupabaseConfigured) {
@@ -176,6 +183,8 @@ export default function DashboardClient() {
         fetchAreas(),
       ])
 
+      if (minhaCarga !== cargaAtual.current) return
+      setFalhasCarga(consumirFalhasDeCarga())
       setVisaoGeral(visaoGeralData)
       setAtrasosEngenheiro(atrasosData)
       setCargaTrabalho(cargaData)
@@ -191,8 +200,9 @@ export default function DashboardClient() {
       setLastUpdate(new Date())
     } catch (error) {
       console.error('Erro ao carregar dados:', error)
+      if (minhaCarga === cargaAtual.current) setFalhasCarga(['dados do painel'])
     } finally {
-      setIsLoading(false)
+      if (minhaCarga === cargaAtual.current) setIsLoading(false)
     }
   }
 
@@ -363,6 +373,23 @@ export default function DashboardClient() {
         {(!isLoading || lastUpdate) && (
         <>
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
+        {falhasCarga.length > 0 && (
+          <div
+            role="alert"
+            className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex flex-wrap items-center justify-between gap-3"
+          >
+            <span>
+              ⚠️ Parte dos dados não carregou ({falhasCarga.join(', ')}). Os números abaixo
+              podem estar incompletos.
+            </span>
+            <button
+              onClick={() => loadData()}
+              className="rounded-md border border-amber-400 bg-white px-3 py-1 font-semibold hover:bg-amber-100"
+            >
+              Tentar de novo
+            </button>
+          </div>
+        )}
         {/* Criar e atribuir exigem owner no servidor; para os demais o botao so falharia. */}
         {isOwner && (
         <div className="mb-6 flex flex-wrap gap-3">

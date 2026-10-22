@@ -66,6 +66,11 @@ export interface MessageResponse {
 
 export class MessageHandler {
   private sessoes: Map<string, UserSession>;
+  // Uma fila por telefone: o webhook chama processarMensagem a cada POST sem esperar o
+  // anterior, e duas mensagens rapidas do mesmo numero mexiam no mesmo state ao mesmo tempo
+  // (um "1" repetido na confirmacao batia no UNIQUE do apontamento). Guarda so a ultima
+  // promessa de cada telefone; a entrada sai quando a fila esvazia.
+  private filas: Map<string, Promise<unknown>> = new Map();
   private readonly MAX_STACK_DEPTH = 10;
   private timeout_sessao: number = 15 * 60 * 1000; // 15 minutos
 
@@ -85,6 +90,19 @@ export class MessageHandler {
   // =====================================================
 
   async processarMensagem(whatsapp: string, mensagem: string): Promise<MessageResponse> {
+    const chave = this.normalizarWhatsapp(whatsapp);
+    const anterior = this.filas.get(chave) ?? Promise.resolve();
+    // Falha da mensagem anterior nao pode travar as seguintes do mesmo telefone.
+    const atual = anterior.catch(() => undefined).then(() => this.processarMensagemInterno(whatsapp, mensagem));
+    const marcador = atual.catch(() => undefined);
+    this.filas.set(chave, marcador);
+    marcador.then(() => {
+      if (this.filas.get(chave) === marcador) this.filas.delete(chave);
+    });
+    return atual;
+  }
+
+  private async processarMensagemInterno(whatsapp: string, mensagem: string): Promise<MessageResponse> {
     try {
       console.log(`\n🔵 MessageHandler.processarMensagem()`);
       console.log(`   WhatsApp: ${whatsapp}`);

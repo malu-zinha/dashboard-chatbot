@@ -58,19 +58,21 @@ assert.match(
 
 assert.match(
   engineerFlow,
-  /this\.supabase\.buscarProgressoArea\(atrib\.projeto_id, String\(atrib\.area_id\), atrib\.id\)/,
+  /this\.supabase\.buscarProgressoArea(?:OuFalha)?\(atrib\.projeto_id, String\(atrib\.area_id\), atrib\.id\)/,
   'fluxo deve calcular percentual da atribuicao usando eng_projeto_id'
 );
 
+// O filtro por pavimentos (filtrarAtribuicoesPendentes) era codigo morto e saiu; o filtro de
+// pendentes usa o percentual ponderado da propria instancia (atrib.id).
 assert.match(
   engineerFlow,
-  /this\.supabase\.buscarPavimentosComEtapas\(atrib\.projeto_id, String\(atrib\.area_id\), atrib\.id\)/,
-  'filtro de pendentes deve carregar pavimentos da instancia'
+  /isPercentualPendente\(await this\.supabase\.buscarProgressoAreaOuFalha\(atrib\.projeto_id, String\(atrib\.area_id\), atrib\.id\)\)/,
+  'filtro de pendentes deve usar o percentual da instancia'
 );
 
 assert.match(
   engineerFlow,
-  /this\.supabase\.buscarProgressoArea\(atrib\.projeto_id, String\(atrib\.area_id\), atrib\.id\)/,
+  /this\.supabase\.buscarProgressoArea(?:OuFalha)?\(atrib\.projeto_id, String\(atrib\.area_id\), atrib\.id\)/,
   'checagem de conclusao deve usar a instancia selecionada'
 );
 

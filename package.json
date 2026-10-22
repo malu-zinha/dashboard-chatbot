@@ -18,7 +18,7 @@
     "test:notifications": "ts-node --esm tests/test-notifications.ts",
     "test:planilha": "ts-node --esm tests/test-planilha-real.ts",
     "test:supabase": "ts-node --esm tests/test-supabase-connection.ts",
-    "test:seguranca": "npx tsx tests/test-redact-secrets.ts && npx tsx tests/test-auth-erro-vs-nao-cadastrado.ts && npx tsx tests/test-mensagem-indisponivel.ts && npx tsx tests/test-cliente-supabase-indisponivel.ts && npx tsx tests/test-twilio-assinatura.ts && npx tsx tests/test-fechar-acesso-anon-migration.ts && npx tsx tests/test-dashboard-middleware-acesso.ts && npx tsx tests/test-dashboard-admin-projetos.ts && npx tsx tests/test-authenticated-somente-leitura-migration.ts",
+    "test:seguranca": "npx tsx tests/test-redact-secrets.ts && npx tsx tests/test-auth-erro-vs-nao-cadastrado.ts && npx tsx tests/test-mensagem-indisponivel.ts && npx tsx tests/test-cliente-supabase-indisponivel.ts && npx tsx tests/test-telefone-nono-digito.ts && npx tsx tests/test-twilio-assinatura.ts && npx tsx tests/test-fechar-acesso-anon-migration.ts && npx tsx tests/test-dashboard-middleware-acesso.ts && npx tsx tests/test-dashboard-admin-projetos.ts && npx tsx tests/test-authenticated-somente-leitura-migration.ts",
     "sondar:anon": "npx tsx scripts/sondar-acesso-anon.ts",
     "test:redact": "npx tsx tests/test-redact-secrets.ts",
     "test:auth-erro": "npx tsx tests/test-auth-erro-vs-nao-cadastrado.ts",

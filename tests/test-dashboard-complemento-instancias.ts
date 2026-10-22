@@ -68,11 +68,15 @@ assert.match(
   /complemento_area_ref_id\?: string \| number/,
   'TaskData/RPC params devem expor complemento_area_ref_id'
 )
+// Os argumentos da RPC sao montados no servidor (rota /api/admin/atribuicoes)
+// desde que atribuir saiu do navegador.
+const adminProjetosContent = readFileSync('dashboard/lib/adminProjetos.ts', 'utf8')
 assert.match(
-  supabaseLibContent,
-  /p_complemento_area_ref_id: params\.complemento_area_ref_id/,
+  adminProjetosContent,
+  /p_complemento_area_ref_id: ref \? String\(ref\) : null/,
   'RPC deve enviar p_complemento_area_ref_id'
 )
+assert.match(adminProjetosContent, /const ref = b\.complemento_area_ref_id/)
 
 const migrationSql = readFileSync(migrationPath, 'utf8')
 assert.match(

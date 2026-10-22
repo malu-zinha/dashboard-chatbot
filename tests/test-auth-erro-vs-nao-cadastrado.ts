@@ -18,16 +18,23 @@ let passou = 0;
 
 /**
  * Cliente Supabase falso: reproduz a cadeia
- * .from().select().eq().eq().maybeSingle()
- * e devolve o resultado combinado passado aqui.
+ * .from().select().in().eq() (aguardada direto, devolve lista — a busca por
+ * telefone tenta com e sem o nono digito) e devolve o resultado combinado
+ * passado aqui, com `data` de uma linha virando lista.
  */
 function clienteFake(resultado: { data: unknown; error: unknown } | (() => never)) {
   const query: any = {
     select: () => query,
+    in: () => query,
     eq: () => query,
-    maybeSingle: async () => {
-      if (typeof resultado === 'function') resultado();
-      return resultado;
+    then: (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) => {
+      try {
+        if (typeof resultado === 'function') resultado();
+        const { data, error } = resultado as { data: unknown; error: unknown };
+        return resolve({ data: data == null ? (error ? null : []) : [data], error });
+      } catch (e) {
+        return reject(e);
+      }
     },
   };
   return { from: () => query };

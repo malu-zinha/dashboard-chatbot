@@ -9,14 +9,16 @@ import type { ProjectData } from '../../integrations/sheets/engineerSheetService
 import {
   getEngineerSheetService,
 } from '../../integrations/sheets/engineerSheetService.ts';
-import { getSupabaseService } from '../../integrations/supabase/supabaseService.ts';
+import { getSupabaseService, SupabaseUnavailableError } from '../../integrations/supabase/supabaseService.ts';
 import { redactSecrets } from '../../logic/security/redactSecrets.ts';
+import { dataLocalBR } from '../../logic/datas/dataLocal.ts';
 import {
   filterEtapasPendentes,
   filterPavimentosPendentes,
   filterGlobaisPendentes,
   statusPorPercentual,
   filterPendentesPorPercentual,
+  isPercentualPendente,
   montarOpcoesEscopo,
   formatAreaLinha,
   type EscopoAcao,
@@ -124,6 +126,13 @@ interface FlowState {
   motivoRetrabalho?: string;
   horasTrabalhadasTotal?: number;
   horasRetrabalho?: number;
+  // Dia (BRT) do apontamento noturno, fixado na confirmacao das horas e reusado no relato:
+  // calcular de novo no fim deixaria horas e relato em dias diferentes se a meia-noite
+  // passasse entre os dois passos.
+  dataApontamento?: string;
+  // O relato vai junto com as horas na confirmacao; o fim so regrava se houver observacao
+  // ou se esta primeira gravacao tiver falhado.
+  relatoGravado?: boolean;
   observacoesTexto?: string;
   // Multi-seleção (Fase 3)
   modoMultiSelecao?: 1 | 2;
@@ -155,6 +164,12 @@ export function parseHorasRetrabalho(valor: string): number | null {
   return Number.isFinite(horas) ? horas : null;
 }
 
+// Em producao havia apontamentos de 20, 32, 40 e 80h num dia, alguns depois da tela de
+// confirmacao. Acima de 16h e quase certamente digito errado ou varios dias somados; entre
+// 12h e 16h pode ser real, entao so avisa. O banco tem um CHECK de 24h como ultima barreira.
+export const HORAS_ALERTA_DIA = 12;
+export const HORAS_MAXIMAS_DIA = 16;
+
 export function calcularPercentualRetrabalhoHoras(
   horasRetrabalho: number,
   horasTrabalhadasTotal: number
@@ -180,6 +195,13 @@ export function validarHorasRetrabalho(input: {
     return {
       valido: false,
       mensagem: 'Informe um número maior que zero para as horas trabalhadas.',
+    };
+  }
+
+  if (horasTrabalhadasTotal > HORAS_MAXIMAS_DIA) {
+    return {
+      valido: false,
+      mensagem: `Mais de ${HORAS_MAXIMAS_DIA}h num dia? Confira o número. Se for de vários dias, aponte cada dia separado.`,
     };
   }
 
@@ -222,6 +244,9 @@ export function formatarResumoHoras(input: {
   const horasRetrabalho = input.horasRetrabalho ?? 0;
 
   let resumo = `⏱️ Horas trabalhadas: *${horasTrabalhadasTotal}h*\n`;
+  if (horasTrabalhadasTotal > HORAS_ALERTA_DIA) {
+    resumo += `❗ Mais de ${HORAS_ALERTA_DIA}h num dia — confira antes de confirmar.\n`;
+  }
 
   if (!input.teveRetrabalho) {
     return resumo + `🔄 Sem retrabalho hoje\n`;
@@ -280,75 +305,58 @@ export class EngineerProjectFlow {
     console.log('🔍 [DEBUG] WhatsApp:', this.whatsapp);
     console.log('🔍 [DEBUG] Supabase conectado?', this.supabase.isConnected());
 
-    // Tentar buscar do Supabase primeiro
-    if (this.supabase.isConnected()) {
-      try {
-        console.log('🔍 [DEBUG] Buscando engenheiro no Supabase...');
-        const engenheiro = await this.supabase.buscarEngenheiroPorWhatsapp(this.whatsapp);
-        console.log('🔍 [DEBUG] Engenheiro encontrado?', engenheiro ? 'SIM' : 'NÃO');
-
-        if (engenheiro) {
-          console.log('🔍 [DEBUG] eng_id:', engenheiro.eng_id);
-          console.log('🔍 [DEBUG] Buscando atribuições...');
-          const atribuicoes = await this.supabase.listarAtribuicoesEngenheiro(engenheiro.eng_id);
-          console.log('🔍 [DEBUG] Atribuições encontradas:', atribuicoes.length);
-          console.log('🔍 [DEBUG] Atribuições:', JSON.stringify(atribuicoes, null, 2));
-
-          // Enriquecer com dados de projeto, área e status
-          const atribuicoesEnriquecidas = [];
-          for (const atrib of atribuicoes) {
-            console.log('🔍 [DEBUG] Processando atribuição:', atrib.id);
-            const projeto = await this.supabase.buscarProjetoPorId(atrib.projeto_id);
-            console.log('🔍 [DEBUG] Projeto:', projeto?.codigo_projeto);
-            const area = await this.supabase.buscarAreaPorId(atrib.area_id);
-            console.log('🔍 [DEBUG] Área:', area?.descricao);
-
-            // Percentual da disciplina (projeto+área): pavimentos + globais.
-            // O status (texto) deriva do percentual — fonte única, igual ao ✅ e ao dashboard.
-            // (status_id é coluna morta: marcação manual de status foi removida.)
-            const percentualFinal = await this.supabase.buscarProgressoArea(atrib.projeto_id, String(atrib.area_id), atrib.id);
-
-            atribuicoesEnriquecidas.push({
-              id: atrib.id,  // eng_projeto_id
-              codigo: projeto?.codigo_projeto || '',
-              cliente: projeto?.cliente || '',
-              area: atrib.instancia_label || area?.descricao || '',
-              area_id: atrib.area_id,
-              status: statusPorPercentual(percentualFinal),
-              projeto_id: atrib.projeto_id,
-              percentual: percentualFinal,
-              data_prevista: atrib.data_prevista,
-            });
-          }
-
-          const atribuicoesPendentes = filterPendentesPorPercentual(
-            atribuicoesEnriquecidas,
-            atrib => atrib.percentual
-          );
-          console.log('🔍 [DEBUG] Atribuições enriquecidas:', atribuicoesEnriquecidas.length);
-          console.log('🔍 [DEBUG] Atribuições pendentes:', atribuicoesPendentes.length);
-          return atribuicoesPendentes;
-        } else {
-          console.log('❌ [DEBUG] Engenheiro não encontrado no Supabase');
-        }
-      } catch (error: any) {
-        console.error('❌ Erro ao buscar atribuições do Supabase:', redactSecrets(error));
-        console.error('❌ Stack:', redactSecrets(error?.stack));
-        // Fallback para planilha
-      }
+    // Sem banco, falha: o fluxo responde "nao consegui acessar". Antes caia numa planilha legada
+    // com id '' (qualquer gravacao depois falhava) ou devolvia lista vazia ("nenhum projeto").
+    if (!this.supabase.isConnected()) {
+      throw new SupabaseUnavailableError('buscarAtribuicoesEngenheiro');
     }
 
-    // Fallback: buscar da planilha
-    const projects = await this.sheetService.listAllProjects();
-    return projects.map(proj => ({
-      id: '',  // Não temos eng_projeto_id da planilha
-      codigo: proj.codigo,
-      cliente: proj.cliente,
-      area: proj.area || '',
-      area_id: '',  // Não temos area_id da planilha
-      status: proj.status || '',
-      projeto_id: ''  // Não temos projeto_id da planilha
-    }));
+    // buscarEngenheiroPorTelefone distingue "nao cadastrado" (null) de "indisponivel" (lanca);
+    // o wrapper por WhatsApp trocava o segundo pelo primeiro.
+    const engenheiro = await this.supabase.buscarEngenheiroPorTelefone(this.whatsapp);
+    if (!engenheiro) {
+      console.log('❌ [DEBUG] Engenheiro não encontrado no Supabase');
+      return [];
+    }
+
+    console.log('🔍 [DEBUG] eng_id:', engenheiro.eng_id);
+    const atribuicoes = await this.supabase.listarAtribuicoesEngenheiroOuFalha(engenheiro.eng_id);
+    console.log('🔍 [DEBUG] Atribuições encontradas:', atribuicoes.length);
+
+    // Enriquecer com dados de projeto, área e status
+    const atribuicoesEnriquecidas = [];
+    for (const atrib of atribuicoes) {
+      console.log('🔍 [DEBUG] Processando atribuição:', atrib.id);
+      const projeto = await this.supabase.buscarProjetoPorId(atrib.projeto_id);
+      console.log('🔍 [DEBUG] Projeto:', projeto?.codigo_projeto);
+      const area = await this.supabase.buscarAreaPorId(atrib.area_id);
+      console.log('🔍 [DEBUG] Área:', area?.descricao);
+
+      // Percentual da disciplina (projeto+área): pavimentos + globais.
+      // O status (texto) deriva do percentual — fonte única, igual ao ✅ e ao dashboard.
+      // (status_id é coluna morta: marcação manual de status foi removida.)
+      const percentualFinal = await this.supabase.buscarProgressoAreaOuFalha(atrib.projeto_id, String(atrib.area_id), atrib.id);
+
+      atribuicoesEnriquecidas.push({
+        id: atrib.id,  // eng_projeto_id
+        codigo: projeto?.codigo_projeto || '',
+        cliente: projeto?.cliente || '',
+        area: atrib.instancia_label || area?.descricao || '',
+        area_id: atrib.area_id,
+        status: statusPorPercentual(percentualFinal),
+        projeto_id: atrib.projeto_id,
+        percentual: percentualFinal,
+        data_prevista: atrib.data_prevista,
+      });
+    }
+
+    const atribuicoesPendentes = filterPendentesPorPercentual(
+      atribuicoesEnriquecidas,
+      atrib => atrib.percentual
+    );
+    console.log('🔍 [DEBUG] Atribuições enriquecidas:', atribuicoesEnriquecidas.length);
+    console.log('🔍 [DEBUG] Atribuições pendentes:', atribuicoesPendentes.length);
+    return atribuicoesPendentes;
   }
 
   /**
@@ -526,6 +534,13 @@ export class EngineerProjectFlow {
       }
     } catch (error: any) {
       console.error('Erro no fluxo:', redactSecrets(error));
+      if (error instanceof SupabaseUnavailableError) {
+        return {
+          mensagem: '⚠️ Não consegui acessar os dados agora. Tente de novo em alguns minutos.',
+          finalizado: false,
+          erro: 'indisponivel'
+        };
+      }
       return {
         mensagem: '❌ Erro ao processar. Tente novamente ou digite "cancelar".',
         finalizado: false,
@@ -688,33 +703,6 @@ export class EngineerProjectFlow {
 _Digite o número da opção desejada_`;
   }
 
-  /**
-   * Remove atribuições onde a (projeto, área) já está 100% concluída.
-   * Usado nas listagens onde o engenheiro escolhe um projeto para AGIR.
-   */
-  private async filtrarAtribuicoesPendentes<T extends { id: string; projeto_id: string; area_id: string | number }>(
-    atribuicoes: T[]
-  ): Promise<T[]> {
-    const result: T[] = [];
-    for (const atrib of atribuicoes) {
-      const pavs = await this.supabase.buscarPavimentosComEtapas(atrib.projeto_id, String(atrib.area_id), atrib.id);
-      // sem pavimentos configurados → manter (engenheiro precisa ver a mensagem)
-      if (pavs.length === 0) {
-        result.push(atrib);
-        continue;
-      }
-      // pavimento sem etapas configuradas conta como pendente (não-configurado ≠ concluído)
-      const temPavimentoSemEtapas = pavs.some((p: any) =>
-        p.ativo !== false && (p.etapas ?? []).filter((e: any) => e.ativo !== false).length === 0
-      );
-      const temEtapaPendente = pavs.some((p: any) =>
-        p.ativo !== false && (p.etapas ?? []).some((e: any) => !e.concluida && e.ativo !== false)
-      );
-      if (temPavimentoSemEtapas || temEtapaPendente) result.push(atrib);
-    }
-    return result;
-  }
-
   private cancelar(): FlowResult {
     return {
       mensagem: '❌ *Fluxo cancelado*\n\nDigite "menu" para voltar ao início.',
@@ -730,7 +718,7 @@ _Digite o número da opção desejada_`;
     atrib: { id: string; projeto_id: string; area_id: string | number }
   ): Promise<boolean> {
     // Fonte única: percentual ponderado da disciplina (pavimentos + globais)
-    return (await this.supabase.buscarProgressoArea(atrib.projeto_id, String(atrib.area_id), atrib.id)) >= 100;
+    return !isPercentualPendente(await this.supabase.buscarProgressoAreaOuFalha(atrib.projeto_id, String(atrib.area_id), atrib.id));
   }
 
   // =====================================================
@@ -1118,6 +1106,7 @@ _Digite o número da opção desejada_`;
         };
       }
 
+      this.state.dataApontamento = dataLocalBR();
       const gravado = await this.supabase.registrarRetrabalho(
         this.state.selectedAtribuicaoId!,
         teveRetrabalho,
@@ -1126,7 +1115,8 @@ _Digite o número da opção desejada_`;
         undefined,
         // validarHorasRetrabalho acima ja rejeitou null e <= 0
         this.state.horasTrabalhadasTotal!,
-        this.state.horasRetrabalho ?? 0
+        this.state.horasRetrabalho ?? 0,
+        this.state.dataApontamento
       );
 
       // Avancar sem conferir diria "horas registradas" com nada gravado, e as horas do dia se
@@ -1139,6 +1129,17 @@ _Digite o número da opção desejada_`;
           finalizado: false
         };
       }
+
+      // O relato ia so no fim, depois da pergunta de observacoes: a sessao expira em 15 min e
+      // quem parava ali perdia o relato sem aviso. Gravando aqui, so a observacao (opcional)
+      // fica para depois. Falha aqui nao trava o fluxo: o fim tenta de novo e avisa.
+      const relato = await this.supabase.atualizarFeitoDia(
+        this.state.selectedAtribuicaoId!,
+        this.state.feitoTexto!,
+        undefined,
+        this.state.dataApontamento
+      );
+      this.state.relatoGravado = relato.ok;
 
       this.goToStep('observacoes_pergunta');
 
@@ -1231,12 +1232,17 @@ _Digite o número da opção desejada_`;
   }
 
   private async salvarNotificacaoNoturna(): Promise<FlowResult> {
-    // Salvar feito do dia (em projetos_previsao) e observações (em engenheiros_projetos)
-    const salvo = await this.supabase.atualizarFeitoDia(
-      this.state.selectedAtribuicaoId!,
-      this.state.feitoTexto!,
-      this.state.observacoesTexto || undefined  // Apenas as observações, sem repetir o feito
-    );
+    // O relato ja foi gravado na confirmacao das horas. Volta ao banco so para a observacao,
+    // ou para tentar de novo o relato que falhou ali.
+    const precisaGravar = Boolean(this.state.observacoesTexto) || !this.state.relatoGravado;
+    const salvo = precisaGravar
+      ? await this.supabase.atualizarFeitoDia(
+          this.state.selectedAtribuicaoId!,
+          this.state.feitoTexto!,
+          this.state.observacoesTexto || undefined,  // Apenas as observações, sem repetir o feito
+          this.state.dataApontamento
+        )
+      : { ok: true as const };
 
     // As horas e o retrabalho ja foram gravados pela RPC, antes da pergunta de observacoes.
     // Mandar "tente novamente" sem dizer isso faria o engenheiro refazer o apontamento inteiro
@@ -1245,7 +1251,8 @@ _Digite o número da opção desejada_`;
       // Quando o relato falha, a observacao nem chega a ser tentada: atualizarFeitoDia
       // retorna antes do update em engenheiros_projetos. Nomear so o relato deixaria o
       // engenheiro supor que a observacao entrou.
-      const perdido = salvo.motivo === 'erro_observacoes'
+      // Se o relato ja entrou na confirmacao, a unica coisa em jogo aqui era a observacao.
+      const perdido = salvo.motivo === 'erro_observacoes' || this.state.relatoGravado
         ? 'a observação'
         : this.state.observacoesTexto
           ? 'o relato do dia nem a observação'
@@ -1482,7 +1489,7 @@ _Digite o número da opção desejada_`;
     // Concluídas (100%) aparecem com ✅, mas não são selecionáveis para marcar.
     const areasComPct: Array<{ id: string; area_id: string | number; area: string; pct: number }> = [];
     for (const a of areasDoProjeto) {
-      const pct = await this.supabase.buscarProgressoArea(projeto.projeto_id, String(a.area_id), a.id);
+      const pct = await this.supabase.buscarProgressoAreaOuFalha(projeto.projeto_id, String(a.area_id), a.id);
       areasComPct.push({ id: a.id, area_id: a.area_id, area: a.area, pct });
     }
 

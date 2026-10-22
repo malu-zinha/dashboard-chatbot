@@ -12,6 +12,7 @@ import { createClient } from '@supabase/supabase-js';
 import { logSupabaseError, redactSecrets } from '../../logic/security/redactSecrets.ts';
 import { InvalidCredentialError, readCredential } from '../../logic/security/envSecret.ts';
 import { dataLocalBR } from '../../logic/datas/dataLocal';
+import { variantesTelefoneBR } from '../../logic/validation/telefoneBR';
 
 console.log('🔍 [SUPABASE] createClient importado do @supabase/supabase-js');
 
@@ -419,8 +420,10 @@ export class SupabaseService {
   /**
    * Checa se o engenheiro tem atribuições (projetos) ativas
    */
+  // Lanca quando nao consegue checar: devolver false liberava a desativacao de quem tem
+  // projetos ativos sempre que o banco falhava.
   async checarEngenheiroTemAtribuicoesAtivas(eng_id: string): Promise<boolean> {
-    if (!this.connected) return false;
+    if (!this.connected) throw new SupabaseUnavailableError('checarEngenheiroTemAtribuicoesAtivas');
 
     try {
       const { count, error } = await this.supabase
@@ -431,13 +434,14 @@ export class SupabaseService {
 
       if (error) {
         console.error('❌ Erro ao checar atribuições do engenheiro:', error);
-        return false;
+        throw new SupabaseUnavailableError('checarEngenheiroTemAtribuicoesAtivas');
       }
 
       return (count ?? 0) > 0;
     } catch (error: any) {
+      if (error instanceof SupabaseUnavailableError) throw error;
       console.error('❌ Erro ao checar atribuições:', error.message);
-      return false;
+      throw new SupabaseUnavailableError('checarEngenheiroTemAtribuicoesAtivas');
     }
   }
 
@@ -467,6 +471,9 @@ export class SupabaseService {
 
       return { success: true };
     } catch (error: any) {
+      if (error instanceof SupabaseUnavailableError) {
+        return { success: false, error: 'nao_foi_possivel_verificar' };
+      }
       console.error('❌ Erro ao desativar engenheiro:', error.message);
       return { success: false, error: error.message };
     }
@@ -794,7 +801,19 @@ export class SupabaseService {
    * Lista todas as atribuições de um engenheiro
    */
   async listarAtribuicoesEngenheiro(eng_id: string): Promise<Atribuicao[]> {
-    if (!this.connected) return [];
+    try {
+      return await this.listarAtribuicoesEngenheiroOuFalha(eng_id);
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Como listarAtribuicoesEngenheiro, mas falha em vez de devolver [] — para quem mostra a
+   * lista ao engenheiro: lista vazia por erro aparecia como "nenhum projeto".
+   */
+  async listarAtribuicoesEngenheiroOuFalha(eng_id: string): Promise<Atribuicao[]> {
+    if (!this.connected) throw new SupabaseUnavailableError('listarAtribuicoesEngenheiro');
 
     try {
       const { data, error } = await this.supabase
@@ -806,13 +825,14 @@ export class SupabaseService {
 
       if (error) {
         console.error('❌ Erro ao listar atribuições:', error);
-        return [];
+        throw new SupabaseUnavailableError('listarAtribuicoesEngenheiro');
       }
 
       return data || [];
     } catch (error: any) {
+      if (error instanceof SupabaseUnavailableError) throw error;
       console.error('❌ Erro ao listar atribuições:', error.message);
-      return [];
+      throw new SupabaseUnavailableError('listarAtribuicoesEngenheiro');
     }
   }
 
@@ -1139,7 +1159,10 @@ export class SupabaseService {
     tipo: string | undefined,
     descricao: string | undefined,
     horasTrabalhadasTotal: number,
-    horasRetrabalho: number
+    horasRetrabalho: number,
+    // Dia em BRT. A RPC usava CURRENT_DATE (UTC no Supabase): apontar depois das 21h BRT
+    // gravava as horas no dia seguinte, longe do relato.
+    dataApontamento: string = dataLocalBR()
   ): Promise<ResultadoRegistroRetrabalho> {
     if (!this.connected) {
       console.error(`❌ Erro ao registrar retrabalho (${eng_projeto_id}): sem conexão`);
@@ -1155,6 +1178,7 @@ export class SupabaseService {
         p_descricao: descricao || null,
         p_horas_trabalhadas_total: horasTrabalhadasTotal ?? null,
         p_horas_retrabalho: horasRetrabalho ?? null,
+        p_data: dataApontamento,
       });
 
       if (error) {
@@ -1503,12 +1527,16 @@ export class SupabaseService {
       // maybeSingle(), não single(): com single() "0 linhas" chega como erro
       // PGRST116, pelo mesmo caminho de um timeout. Aqui, 0 linhas devolve
       // data: null / error: null, e `error` volta a significar falha real.
-      const { data, error } = await this.supabase
+      // Com e sem o 9 depois do DDD (o WhatsApp entrega muitos celulares sem ele). Sem
+      // maybeSingle(): se as duas formas existirem, ele erraria por "varias linhas" e isso
+      // viraria "banco indisponivel". Prefere a forma exata.
+      const variantes = variantesTelefoneBR(telefoneNormalizado);
+      const { data: linhas, error } = await this.supabase
         .from('engenheiros')
         .select('*')
-        .eq('telefone', telefoneNormalizado)
-        .eq('ativo', true)
-        .maybeSingle();
+        .in('telefone', variantes)
+        .eq('ativo', true);
+      const data = linhas?.find((l: any) => l.telefone === telefoneNormalizado) ?? linhas?.[0] ?? null;
 
       console.log(`      🔍 [SUPABASE] Query concluída!`);
 
@@ -1550,12 +1578,16 @@ export class SupabaseService {
       console.log(`      🔍 [SUPABASE] Telefone normalizado: "${telefoneNormalizado}"`);
       console.log(`      🔍 [SUPABASE] Executando query...`);
 
-      const { data, error } = await this.supabase
+      // Com e sem o 9 depois do DDD (o WhatsApp entrega muitos celulares sem ele). Sem
+      // maybeSingle(): se as duas formas existirem, ele erraria por "varias linhas" e isso
+      // viraria "banco indisponivel". Prefere a forma exata.
+      const variantes = variantesTelefoneBR(telefoneNormalizado);
+      const { data: linhas, error } = await this.supabase
         .from('dono_empresa')
         .select('*')
-        .eq('telefone', telefoneNormalizado)
-        .eq('ativo', true)
-        .maybeSingle();
+        .in('telefone', variantes)
+        .eq('ativo', true);
+      const data = linhas?.find((l: any) => l.telefone === telefoneNormalizado) ?? linhas?.[0] ?? null;
 
       console.log(`      🔍 [SUPABASE] Query concluída!`);
 
@@ -2098,7 +2130,9 @@ export class SupabaseService {
   async atualizarFeitoDia(
     eng_projeto_id: string,
     feito_texto: string,
-    observacoes?: string
+    observacoes?: string,
+    // Mesmo dia das horas (o fluxo passa o que usou em registrarRetrabalho).
+    dataRegistro: string = dataLocalBR()
   ): Promise<ResultadoFeitoDia> {
     if (!this.connected) {
       console.error(`❌ Erro ao registrar feito do dia (${eng_projeto_id}): sem conexão`);
@@ -2129,7 +2163,7 @@ export class SupabaseService {
           eng_projeto_id,
           projeto_id: atrib.projeto_id,
           eng_id: atrib.eng_id,
-          data_registro: dataLocalBR(),
+          data_registro: dataRegistro,
           feito_texto,
           data_fim_dia: new Date().toISOString(),
           editavel: false,
@@ -2713,7 +2747,20 @@ export class SupabaseService {
    * Fonte única do status/✅ por área (engenheiros_projetos.percentual_ponderado).
    */
   async buscarProgressoArea(projetoId: string, areaId: string | number, engProjetoId?: string): Promise<number> {
-    if (!this.connected) return 0;
+    try {
+      return await this.buscarProgressoAreaOuFalha(projetoId, areaId, engProjetoId);
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Como buscarProgressoArea, mas falha em vez de devolver 0 — para listagens, onde um 0%
+   * falso troca o status e o filtro de pendentes. Quem so recalcula o numero para a mensagem
+   * depois de gravar continua usando buscarProgressoArea.
+   */
+  async buscarProgressoAreaOuFalha(projetoId: string, areaId: string | number, engProjetoId?: string): Promise<number> {
+    if (!this.connected) throw new SupabaseUnavailableError('buscarProgressoArea');
     try {
       let query = this.supabase
         .from('engenheiros_projetos')
@@ -2729,12 +2776,13 @@ export class SupabaseService {
       const { data, error } = await query.limit(1);
       if (error) {
         console.error('❌ Erro ao buscar progresso da área:', error);
-        return 0;
+        throw new SupabaseUnavailableError('buscarProgressoArea');
       }
       return Number((data as any)?.[0]?.percentual_ponderado ?? 0);
     } catch (error: any) {
+      if (error instanceof SupabaseUnavailableError) throw error;
       console.error('❌ Erro ao buscar progresso da área:', error.message);
-      return 0;
+      throw new SupabaseUnavailableError('buscarProgressoArea');
     }
   }
 

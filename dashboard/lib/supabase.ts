@@ -1,5 +1,22 @@
 import { createBrowserClient } from '@supabase/ssr'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { buscarTodasAsPaginas } from '@/lib/paginacao'
+
+// Erro de consulta virava [] ou null e a tela mostrava zeros como se fossem dados. Cada falha
+// fica registrada aqui; o painel consulta depois de carregar e avisa que os numeros podem
+// estar incompletos.
+const falhasDeCarga = new Set<string>()
+
+function registrarFalha(origem: string, error: unknown) {
+  console.error(`Erro ao buscar ${origem}:`, error)
+  falhasDeCarga.add(origem)
+}
+
+export function consumirFalhasDeCarga(): string[] {
+  const lista = [...falhasDeCarga]
+  falhasDeCarga.clear()
+  return lista
+}
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || ''
@@ -240,7 +257,7 @@ export async function fetchVisaoGeral(): Promise<VisaoGeral | null> {
     .single()
 
   if (error) {
-    console.error('Erro ao buscar visão geral:', error)
+    registrarFalha('visão geral', error)
     return null
   }
 
@@ -254,7 +271,7 @@ export async function fetchAtrasosEngenheiro(): Promise<AtrasosEngenheiro[]> {
     .order('dias_medios_atraso', { ascending: false })
 
   if (error) {
-    console.error('Erro ao buscar atrasos por engenheiro:', error)
+    registrarFalha('atrasos por engenheiro', error)
     return []
   }
 
@@ -268,7 +285,7 @@ export async function fetchAtrasosArea(): Promise<AtrasosArea[]> {
     .order('dias_medio_atraso', { ascending: false })
 
   if (error) {
-    console.error('Erro ao buscar atrasos por área:', error)
+    registrarFalha('atrasos por área', error)
     return []
   }
 
@@ -282,7 +299,7 @@ export async function fetchCargaTrabalho(): Promise<CargaTrabalho[]> {
     .order('dias_restantes', { ascending: false })
 
   if (error) {
-    console.error('Erro ao buscar carga de trabalho:', error)
+    registrarFalha('carga de trabalho', error)
     return []
   }
 
@@ -296,7 +313,7 @@ export async function fetchRetrabalhoEngenheiro(): Promise<RetrabalhoEngenheiro[
     .order('total_retrabalhos', { ascending: false })
 
   if (error) {
-    console.error('Erro ao buscar retrabalho por engenheiro:', error)
+    registrarFalha('retrabalho por engenheiro', error)
     return []
   }
 
@@ -310,7 +327,7 @@ export async function fetchRetrabalhoGeral(): Promise<RetrabalhoGeral | null> {
     .single()
 
   if (error) {
-    console.error('Erro ao buscar retrabalho geral:', error)
+    registrarFalha('retrabalho geral', error)
     return null
   }
 
@@ -345,7 +362,7 @@ export async function fetchRetrabalhoPorProjeto(): Promise<RetrabalhoPorProjeto[
     .order('percentual_retrabalho_projeto', { ascending: false })
 
   if (error) {
-    console.error('Erro ao buscar retrabalho por projeto:', error)
+    registrarFalha('retrabalho por projeto', error)
     return []
   }
 
@@ -361,7 +378,7 @@ async function fetchRetrabalhoPorProjetoLegado(): Promise<RetrabalhoPorProjeto[]
   ])
 
   if (projRes.error || retRes.error) {
-    console.error('Erro ao buscar retrabalho por projeto:', projRes.error || retRes.error)
+    registrarFalha('retrabalho por projeto', projRes.error || retRes.error)
     return []
   }
 
@@ -410,7 +427,7 @@ export async function fetchRetrabalhoDetalhesPorProjeto(
     .order('data_retrabalho', { ascending: false })
 
   if (error) {
-    console.error('Erro ao buscar detalhes de retrabalho por projeto:', error)
+    registrarFalha('detalhes de retrabalho por projeto', error)
     return []
   }
 
@@ -427,7 +444,7 @@ export async function fetchRetrabalhoAreaPorProjeto(
     .order('total_retrabalhos_area', { ascending: false })
 
   if (error) {
-    console.error('Erro ao buscar retrabalho por área do projeto:', error)
+    registrarFalha('retrabalho por área do projeto', error)
     return []
   }
 
@@ -444,7 +461,7 @@ export async function fetchRetrabalhoMotivosPorProjeto(
     .order('quantidade', { ascending: false })
 
   if (error) {
-    console.error('Erro ao buscar motivos de retrabalho por projeto:', error)
+    registrarFalha('motivos de retrabalho por projeto', error)
     return []
   }
 
@@ -458,7 +475,7 @@ export async function fetchRetrabalhoMotivosGeral(): Promise<RetrabalhoMotivo[]>
     .order('quantidade', { ascending: false })
 
   if (error) {
-    console.error('Erro ao buscar motivos gerais de retrabalho:', error)
+    registrarFalha('motivos gerais de retrabalho', error)
     return []
   }
 
@@ -472,7 +489,7 @@ export async function fetchRetrabalhoTaxaPorArea(): Promise<RetrabalhoTaxaArea[]
     .order('percentual_retrabalho_disciplina', { ascending: false })
 
   if (error) {
-    console.error('Erro ao buscar retrabalho por horas por area:', error)
+    registrarFalha('retrabalho por horas por area', error)
     return []
   }
 
@@ -483,20 +500,27 @@ export async function fetchProducaoApontamentosPeriodo(
   dataInicio: string,
   dataFim: string
 ): Promise<ProducaoApontamentoPeriodo[]> {
-  const { data, error } = await supabase
-    .from('vw_dashboard_producao_apontamentos')
-    .select(
-      'eng_id, engenheiro, projeto_id, codigo_projeto, cliente, area_id, area_codigo, area_descricao, instancia_label, data_retrabalho, horas_trabalhadas_total, horas_retrabalho'
-    )
-    .gte('data_retrabalho', dataInicio)
-    .lte('data_retrabalho', dataFim)
-    .order('engenheiro', { ascending: true })
-    .order('codigo_projeto', { ascending: true })
-    .order('area_descricao', { ascending: true })
+  // As horas sao somadas no navegador: sem paginar, passar de 1000 apontamentos no periodo
+  // encolhia o total sem aviso. apontamento_id fecha a ordem (paginas sem repetir/pular).
+  const { data, error } = await buscarTodasAsPaginas<ProducaoApontamentoPeriodo>((de, ate) =>
+    supabase
+      .from('vw_dashboard_producao_apontamentos')
+      .select(
+        'eng_id, engenheiro, projeto_id, codigo_projeto, cliente, area_id, area_codigo, area_descricao, instancia_label, data_retrabalho, horas_trabalhadas_total, horas_retrabalho'
+      )
+      .gte('data_retrabalho', dataInicio)
+      .lte('data_retrabalho', dataFim)
+      .order('engenheiro', { ascending: true })
+      .order('codigo_projeto', { ascending: true })
+      .order('area_descricao', { ascending: true })
+      .order('apontamento_id', { ascending: true })
+      .range(de, ate)
+  )
 
+  // Lanca: o ProducaoPeriodoCard ja tem catch com mensagem; devolver [] mostrava "0h".
   if (error) {
     console.error('Erro ao buscar apontamentos de producao por periodo:', error)
-    return []
+    throw new Error('Falha ao buscar apontamentos de producao por periodo')
   }
 
   return (data as ProducaoApontamentoPeriodo[]) || []
@@ -548,12 +572,12 @@ export async function fetchProducaoEngenheiroPeriodo(
   ])
 
   if (horasRes.error) {
-    console.error('Erro ao buscar producao por periodo:', horasRes.error)
+    registrarFalha('producao por periodo', horasRes.error)
     return []
   }
 
   if (engRes.error) {
-    console.error('Erro ao buscar nomes de engenheiros:', engRes.error)
+    registrarFalha('nomes de engenheiros', engRes.error)
   }
 
   const nomeMap = new Map((engRes.data || []).map((e) => [e.eng_id, e.nome]))
@@ -589,7 +613,7 @@ async function fetchRetrabalhoTaxaPorAreaLegado(): Promise<RetrabalhoTaxaArea[]>
   ])
 
   if (retRes.error || epRes.error || projRes.error || areaRes.error) {
-    console.error('Erro ao buscar taxa de retrabalho por área:', retRes.error || epRes.error || projRes.error || areaRes.error)
+    registrarFalha('taxa de retrabalho por área', retRes.error || epRes.error || projRes.error || areaRes.error)
     return []
   }
 
@@ -647,7 +671,7 @@ export async function fetchProjetosStatus(): Promise<ProjetosStatus[]> {
     .select('*')
 
   if (error) {
-    console.error('Erro ao buscar projetos por status:', error)
+    registrarFalha('projetos por status', error)
     return []
   }
 
@@ -655,14 +679,19 @@ export async function fetchProjetosStatus(): Promise<ProjetosStatus[]> {
 }
 
 export async function fetchProjetos(): Promise<Projeto[]> {
-  const { data, error } = await supabase
-    .from('vw_projetos_detalhado')
-    .select('*')
-    .eq('ativo', true)
-    .order('created_at', { ascending: false })
+  const { data, error } = await buscarTodasAsPaginas<Projeto>((de, ate) =>
+    supabase
+      .from('vw_projetos_detalhado')
+      .select('*')
+      .eq('ativo', true)
+      .order('created_at', { ascending: false })
+      .order('projeto_id', { ascending: true })
+      .order('atribuicao_id', { ascending: true, nullsFirst: true })
+      .range(de, ate)
+  )
 
   if (error) {
-    console.error('Erro ao buscar projetos:', error)
+    registrarFalha('projetos', error)
     return []
   }
 
@@ -674,17 +703,27 @@ export async function fetchEngenheiros(): Promise<Engenheiro[]> {
   const [engRes, cargaRes, retRes, atrasosRes] = await Promise.all([
     supabase.from('engenheiros').select('*').eq('ativo', true).order('nome', { ascending: true }),
     supabase.from('vw_bloco3_carga_trabalho').select('*'),
-    supabase.from('retrabalho_projetos').select('eng_id'),
+    // So dias COM retrabalho: desde 20260728 a tabela guarda todo apontamento diario, e
+    // contar linhas inflava o "total de retrabalhos" com dias sem retrabalho. Paginado
+    // porque cresce todo dia.
+    buscarTodasAsPaginas<{ eng_id: string }>((de, ate) =>
+      supabase
+        .from('retrabalho_projetos')
+        .select('eng_id')
+        .eq('necessitou_retrabalho', true)
+        .order('id', { ascending: true })
+        .range(de, ate)
+    ),
     supabase.from('vw_bloco2_atrasos_engenheiro').select('*'),
   ])
 
   if (engRes.error) {
-    console.error('Erro ao buscar engenheiros:', engRes.error)
+    registrarFalha('engenheiros', engRes.error)
     return []
   }
-  if (cargaRes.error) console.error('Erro ao buscar carga de trabalho:', cargaRes.error)
-  if (retRes.error) console.error('Erro ao buscar retrabalhos:', retRes.error)
-  if (atrasosRes.error) console.error('Erro ao buscar atrasos:', atrasosRes.error)
+  if (cargaRes.error) registrarFalha('carga de trabalho', cargaRes.error)
+  if (retRes.error) registrarFalha('retrabalhos', retRes.error)
+  if (atrasosRes.error) registrarFalha('atrasos', atrasosRes.error)
 
   const cargaMap = new Map<string, CargaTrabalho>()
   for (const c of (cargaRes.data || [])) {
@@ -725,17 +764,24 @@ export async function fetchAreas(): Promise<Area[]> {
   // Busca areas base + engenheiros_projetos para agregar
   const [areasRes, epRes, etapasRes] = await Promise.all([
     supabase.from('areas').select('*').eq('ativo', true).order('codigo', { ascending: true }),
-    supabase.from('engenheiros_projetos').select('area_id, ativo, data_conclusao').eq('ativo', true),
+    buscarTodasAsPaginas<{ area_id: string; ativo: boolean; data_conclusao: string | null }>((de, ate) =>
+      supabase
+        .from('engenheiros_projetos')
+        .select('area_id, ativo, data_conclusao')
+        .eq('ativo', true)
+        .order('id', { ascending: true })
+        .range(de, ate)
+    ),
     supabase.from('area_etapas_template').select('area_id, tipo, ativo').eq('ativo', true),
   ])
 
   if (areasRes.error) {
-    console.error('Erro ao buscar áreas:', areasRes.error)
+    registrarFalha('áreas', areasRes.error)
     return []
   }
 
-  if (epRes.error) console.error('Erro ao buscar atribuicoes por area:', epRes.error)
-  if (etapasRes.error) console.error('Erro ao buscar templates de area:', etapasRes.error)
+  if (epRes.error) registrarFalha('atribuicoes por area', epRes.error)
+  if (etapasRes.error) registrarFalha('templates de area', etapasRes.error)
 
   // Agregar por area_id
   const aggMap = new Map<string, { total: number; ativas: number; concluidas: number }>()

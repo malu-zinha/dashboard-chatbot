@@ -23,6 +23,8 @@ function criarFlow() {
   const gravacoes: Gravacao[] = []
 
   flow.supabase = {
+    // A confirmacao grava o relato junto com as horas.
+    atualizarFeitoDia: async () => ({ ok: true }),
     registrarRetrabalho: async (
       _atribuicaoId: string,
       necessitou: boolean,
@@ -204,6 +206,8 @@ const enviar = async (flow: any, msg: string): Promise<string> =>
   let falhar = true
   const gravacoes: Gravacao[] = []
   flow.supabase = {
+    // A confirmacao grava o relato junto com as horas.
+    atualizarFeitoDia: async () => ({ ok: true }),
     registrarRetrabalho: async (
       _id: string, necessitou: boolean, motivo: string | undefined,
       _t: undefined, _d: undefined, horasTotal: number, horasRetrabalho: number
