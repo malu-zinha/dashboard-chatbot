@@ -2,12 +2,17 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { formatarDataBR, toDataISO } from '../dashboard/lib/datas.ts'
-import {
+// dashboard/ e um pacote CommonJS (sem "type": "module"): daqui do ESM da raiz o modulo
+// chega como default, e o import nomeado falhava antes de qualquer assert rodar.
+import datasMod from '../dashboard/lib/datas.ts'
+import filtrosMod from '../dashboard/lib/projetoFilters.ts'
+
+const { formatarDataBR, toDataISO } = datasMod as typeof import('../dashboard/lib/datas.ts')
+const {
   particionarPorPeriodoConclusao,
   periodoConclusaoAtivo,
   projetoConcluidoNoPeriodo,
-} from '../dashboard/lib/projetoFilters.ts'
+} = filtrosMod as typeof import('../dashboard/lib/projetoFilters.ts')
 
 // =====================================================
 // formatarDataBR — o bug do print
