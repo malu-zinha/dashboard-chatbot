@@ -7,8 +7,8 @@
 // 3. Criar novos projetos
 // =====================================================
 
-import { getSupabaseService, SupabaseService } from '../../integrations/supabase/supabaseService.ts';
-import { statusPorPercentual } from '../../logic/execucao/filtros.ts';
+import { getSupabaseService, SupabaseService, SupabaseUnavailableError } from '../../integrations/supabase/supabaseService.ts';
+import { isPercentualPendente, statusPorPercentual } from '../../logic/execucao/filtros.ts';
 import { formatProjetoDisciplinaLinha } from '../../logic/projetos/display.ts';
 import { normalizeProjectCode, validateWhatsapp } from '../../logic/validation/validateInput.ts';
 import { redactSecrets } from '../../logic/security/redactSecrets.ts';
@@ -232,6 +232,13 @@ export class OwnerFlow {
       // A mensagem crua ia direto para o WhatsApp do dono — podia carregar
       // detalhe do Postgres ou, no caso do incidente, a própria Secret Key.
       console.error(`❌ Erro no step ${this.stepAtual}:`, redactSecrets(error));
+      if (error instanceof SupabaseUnavailableError) {
+        return {
+          mensagem: '⚠️ Não consegui acessar os dados agora. Tente de novo em alguns minutos.\n\nDigite "menu" para recomeçar.',
+          finalizado: true,
+          erro: 'indisponivel',
+        };
+      }
       return {
         mensagem: '❌ Ocorreu um erro ao processar sua solicitação.\n\nDigite "menu" para recomeçar.',
         finalizado: true,
@@ -1986,8 +1993,8 @@ export class OwnerFlow {
     this.contexto.transf_eng_origem_id = engOrigem.eng_id;
     this.contexto.transf_eng_origem_nome = engOrigem.nome;
 
-    // Buscar atribuições do engenheiro
-    const atribuicoes = await getSupabase().listarAtribuicoesEngenheiro(engOrigem.eng_id);
+    // Buscar atribuições do engenheiro (OuFalha: erro nao pode virar "nao tem tarefas")
+    const atribuicoes = await getSupabase().listarAtribuicoesEngenheiroOuFalha(engOrigem.eng_id);
 
     if (atribuicoes.length === 0) {
       return { mensagem: `❌ ${engOrigem.nome} não tem tarefas atribuídas.\n\n_Digite "menu"_`, finalizado: true };
@@ -1998,12 +2005,11 @@ export class OwnerFlow {
     for (const atrib of atribuicoes) {
       const projeto = await getSupabase().buscarProjetoPorId(atrib.projeto_id);
       const area = await getSupabase().buscarAreaPorId(atrib.area_id);
-      // pular atribuições onde a (projeto, área) já está 100% concluída
-      const pavs = await getSupabase().buscarPavimentosComEtapas(atrib.projeto_id, String(atrib.area_id), atrib.id);
-      const aindaPendente = pavs.length === 0 || pavs.some((p: any) =>
-        (p.ativo !== false) && p.etapas.some((e: any) => !e.concluida && e.ativo !== false)
-      );
-      if (!aindaPendente) continue;
+      // Pular as 100% concluidas. Mesma regra do fluxo do engenheiro e do dashboard: o
+      // percentual ponderado. A regra antiga olhava so os pavimentos e escondia atribuicoes
+      // com todos os pavimentos prontos e etapas globais pendentes.
+      const pct = await getSupabase().buscarProgressoAreaOuFalha(atrib.projeto_id, String(atrib.area_id), atrib.id);
+      if (!isPercentualPendente(pct)) continue;
       atribsEnriquecidas.push({
         ...atrib,
         codigo_projeto: projeto?.codigo_projeto || '?',

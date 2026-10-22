@@ -18,6 +18,7 @@ import {
   filterGlobaisPendentes,
   statusPorPercentual,
   filterPendentesPorPercentual,
+  isPercentualPendente,
   montarOpcoesEscopo,
   formatAreaLinha,
   type EscopoAcao,
@@ -702,33 +703,6 @@ export class EngineerProjectFlow {
 _Digite o número da opção desejada_`;
   }
 
-  /**
-   * Remove atribuições onde a (projeto, área) já está 100% concluída.
-   * Usado nas listagens onde o engenheiro escolhe um projeto para AGIR.
-   */
-  private async filtrarAtribuicoesPendentes<T extends { id: string; projeto_id: string; area_id: string | number }>(
-    atribuicoes: T[]
-  ): Promise<T[]> {
-    const result: T[] = [];
-    for (const atrib of atribuicoes) {
-      const pavs = await this.supabase.buscarPavimentosComEtapas(atrib.projeto_id, String(atrib.area_id), atrib.id);
-      // sem pavimentos configurados → manter (engenheiro precisa ver a mensagem)
-      if (pavs.length === 0) {
-        result.push(atrib);
-        continue;
-      }
-      // pavimento sem etapas configuradas conta como pendente (não-configurado ≠ concluído)
-      const temPavimentoSemEtapas = pavs.some((p: any) =>
-        p.ativo !== false && (p.etapas ?? []).filter((e: any) => e.ativo !== false).length === 0
-      );
-      const temEtapaPendente = pavs.some((p: any) =>
-        p.ativo !== false && (p.etapas ?? []).some((e: any) => !e.concluida && e.ativo !== false)
-      );
-      if (temPavimentoSemEtapas || temEtapaPendente) result.push(atrib);
-    }
-    return result;
-  }
-
   private cancelar(): FlowResult {
     return {
       mensagem: '❌ *Fluxo cancelado*\n\nDigite "menu" para voltar ao início.',
@@ -744,7 +718,7 @@ _Digite o número da opção desejada_`;
     atrib: { id: string; projeto_id: string; area_id: string | number }
   ): Promise<boolean> {
     // Fonte única: percentual ponderado da disciplina (pavimentos + globais)
-    return (await this.supabase.buscarProgressoAreaOuFalha(atrib.projeto_id, String(atrib.area_id), atrib.id)) >= 100;
+    return !isPercentualPendente(await this.supabase.buscarProgressoAreaOuFalha(atrib.projeto_id, String(atrib.area_id), atrib.id));
   }
 
   // =====================================================
