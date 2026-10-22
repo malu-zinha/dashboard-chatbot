@@ -12,6 +12,7 @@ import { createClient } from '@supabase/supabase-js';
 import { logSupabaseError, redactSecrets } from '../../logic/security/redactSecrets.ts';
 import { InvalidCredentialError, readCredential } from '../../logic/security/envSecret.ts';
 import { dataLocalBR } from '../../logic/datas/dataLocal';
+import { variantesTelefoneBR } from '../../logic/validation/telefoneBR';
 
 console.log('🔍 [SUPABASE] createClient importado do @supabase/supabase-js');
 
@@ -1507,12 +1508,16 @@ export class SupabaseService {
       // maybeSingle(), não single(): com single() "0 linhas" chega como erro
       // PGRST116, pelo mesmo caminho de um timeout. Aqui, 0 linhas devolve
       // data: null / error: null, e `error` volta a significar falha real.
-      const { data, error } = await this.supabase
+      // Com e sem o 9 depois do DDD (o WhatsApp entrega muitos celulares sem ele). Sem
+      // maybeSingle(): se as duas formas existirem, ele erraria por "varias linhas" e isso
+      // viraria "banco indisponivel". Prefere a forma exata.
+      const variantes = variantesTelefoneBR(telefoneNormalizado);
+      const { data: linhas, error } = await this.supabase
         .from('engenheiros')
         .select('*')
-        .eq('telefone', telefoneNormalizado)
-        .eq('ativo', true)
-        .maybeSingle();
+        .in('telefone', variantes)
+        .eq('ativo', true);
+      const data = linhas?.find((l: any) => l.telefone === telefoneNormalizado) ?? linhas?.[0] ?? null;
 
       console.log(`      🔍 [SUPABASE] Query concluída!`);
 
@@ -1554,12 +1559,16 @@ export class SupabaseService {
       console.log(`      🔍 [SUPABASE] Telefone normalizado: "${telefoneNormalizado}"`);
       console.log(`      🔍 [SUPABASE] Executando query...`);
 
-      const { data, error } = await this.supabase
+      // Com e sem o 9 depois do DDD (o WhatsApp entrega muitos celulares sem ele). Sem
+      // maybeSingle(): se as duas formas existirem, ele erraria por "varias linhas" e isso
+      // viraria "banco indisponivel". Prefere a forma exata.
+      const variantes = variantesTelefoneBR(telefoneNormalizado);
+      const { data: linhas, error } = await this.supabase
         .from('dono_empresa')
         .select('*')
-        .eq('telefone', telefoneNormalizado)
-        .eq('ativo', true)
-        .maybeSingle();
+        .in('telefone', variantes)
+        .eq('ativo', true);
+      const data = linhas?.find((l: any) => l.telefone === telefoneNormalizado) ?? linhas?.[0] ?? null;
 
       console.log(`      🔍 [SUPABASE] Query concluída!`);
 
