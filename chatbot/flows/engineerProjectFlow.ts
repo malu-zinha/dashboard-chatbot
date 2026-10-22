@@ -129,6 +129,9 @@ interface FlowState {
   // calcular de novo no fim deixaria horas e relato em dias diferentes se a meia-noite
   // passasse entre os dois passos.
   dataApontamento?: string;
+  // O relato vai junto com as horas na confirmacao; o fim so regrava se houver observacao
+  // ou se esta primeira gravacao tiver falhado.
+  relatoGravado?: boolean;
   observacoesTexto?: string;
   // Multi-seleção (Fase 3)
   modoMultiSelecao?: 1 | 2;
@@ -1163,6 +1166,17 @@ _Digite o número da opção desejada_`;
         };
       }
 
+      // O relato ia so no fim, depois da pergunta de observacoes: a sessao expira em 15 min e
+      // quem parava ali perdia o relato sem aviso. Gravando aqui, so a observacao (opcional)
+      // fica para depois. Falha aqui nao trava o fluxo: o fim tenta de novo e avisa.
+      const relato = await this.supabase.atualizarFeitoDia(
+        this.state.selectedAtribuicaoId!,
+        this.state.feitoTexto!,
+        undefined,
+        this.state.dataApontamento
+      );
+      this.state.relatoGravado = relato.ok;
+
       this.goToStep('observacoes_pergunta');
 
       const perguntaObs = this.renderObservacoesPergunta().mensagem;
@@ -1254,13 +1268,17 @@ _Digite o número da opção desejada_`;
   }
 
   private async salvarNotificacaoNoturna(): Promise<FlowResult> {
-    // Salvar feito do dia (em projetos_previsao) e observações (em engenheiros_projetos)
-    const salvo = await this.supabase.atualizarFeitoDia(
-      this.state.selectedAtribuicaoId!,
-      this.state.feitoTexto!,
-      this.state.observacoesTexto || undefined,  // Apenas as observações, sem repetir o feito
-      this.state.dataApontamento
-    );
+    // O relato ja foi gravado na confirmacao das horas. Volta ao banco so para a observacao,
+    // ou para tentar de novo o relato que falhou ali.
+    const precisaGravar = Boolean(this.state.observacoesTexto) || !this.state.relatoGravado;
+    const salvo = precisaGravar
+      ? await this.supabase.atualizarFeitoDia(
+          this.state.selectedAtribuicaoId!,
+          this.state.feitoTexto!,
+          this.state.observacoesTexto || undefined,  // Apenas as observações, sem repetir o feito
+          this.state.dataApontamento
+        )
+      : { ok: true as const };
 
     // As horas e o retrabalho ja foram gravados pela RPC, antes da pergunta de observacoes.
     // Mandar "tente novamente" sem dizer isso faria o engenheiro refazer o apontamento inteiro
@@ -1269,7 +1287,8 @@ _Digite o número da opção desejada_`;
       // Quando o relato falha, a observacao nem chega a ser tentada: atualizarFeitoDia
       // retorna antes do update em engenheiros_projetos. Nomear so o relato deixaria o
       // engenheiro supor que a observacao entrou.
-      const perdido = salvo.motivo === 'erro_observacoes'
+      // Se o relato ja entrou na confirmacao, a unica coisa em jogo aqui era a observacao.
+      const perdido = salvo.motivo === 'erro_observacoes' || this.state.relatoGravado
         ? 'a observação'
         : this.state.observacoesTexto
           ? 'o relato do dia nem a observação'
