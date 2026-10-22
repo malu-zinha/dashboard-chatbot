@@ -11,6 +11,7 @@ import {
 } from '../../integrations/sheets/engineerSheetService.ts';
 import { getSupabaseService } from '../../integrations/supabase/supabaseService.ts';
 import { redactSecrets } from '../../logic/security/redactSecrets.ts';
+import { dataLocalBR } from '../../logic/datas/dataLocal.ts';
 import {
   filterEtapasPendentes,
   filterPavimentosPendentes,
@@ -124,6 +125,10 @@ interface FlowState {
   motivoRetrabalho?: string;
   horasTrabalhadasTotal?: number;
   horasRetrabalho?: number;
+  // Dia (BRT) do apontamento noturno, fixado na confirmacao das horas e reusado no relato:
+  // calcular de novo no fim deixaria horas e relato em dias diferentes se a meia-noite
+  // passasse entre os dois passos.
+  dataApontamento?: string;
   observacoesTexto?: string;
   // Multi-seleção (Fase 3)
   modoMultiSelecao?: 1 | 2;
@@ -155,6 +160,12 @@ export function parseHorasRetrabalho(valor: string): number | null {
   return Number.isFinite(horas) ? horas : null;
 }
 
+// Em producao havia apontamentos de 20, 32, 40 e 80h num dia, alguns depois da tela de
+// confirmacao. Acima de 16h e quase certamente digito errado ou varios dias somados; entre
+// 12h e 16h pode ser real, entao so avisa. O banco tem um CHECK de 24h como ultima barreira.
+export const HORAS_ALERTA_DIA = 12;
+export const HORAS_MAXIMAS_DIA = 16;
+
 export function calcularPercentualRetrabalhoHoras(
   horasRetrabalho: number,
   horasTrabalhadasTotal: number
@@ -180,6 +191,13 @@ export function validarHorasRetrabalho(input: {
     return {
       valido: false,
       mensagem: 'Informe um número maior que zero para as horas trabalhadas.',
+    };
+  }
+
+  if (horasTrabalhadasTotal > HORAS_MAXIMAS_DIA) {
+    return {
+      valido: false,
+      mensagem: `Mais de ${HORAS_MAXIMAS_DIA}h num dia? Confira o número. Se for de vários dias, aponte cada dia separado.`,
     };
   }
 
@@ -222,6 +240,9 @@ export function formatarResumoHoras(input: {
   const horasRetrabalho = input.horasRetrabalho ?? 0;
 
   let resumo = `⏱️ Horas trabalhadas: *${horasTrabalhadasTotal}h*\n`;
+  if (horasTrabalhadasTotal > HORAS_ALERTA_DIA) {
+    resumo += `❗ Mais de ${HORAS_ALERTA_DIA}h num dia — confira antes de confirmar.\n`;
+  }
 
   if (!input.teveRetrabalho) {
     return resumo + `🔄 Sem retrabalho hoje\n`;
@@ -1118,6 +1139,7 @@ _Digite o número da opção desejada_`;
         };
       }
 
+      this.state.dataApontamento = dataLocalBR();
       const gravado = await this.supabase.registrarRetrabalho(
         this.state.selectedAtribuicaoId!,
         teveRetrabalho,
@@ -1126,7 +1148,8 @@ _Digite o número da opção desejada_`;
         undefined,
         // validarHorasRetrabalho acima ja rejeitou null e <= 0
         this.state.horasTrabalhadasTotal!,
-        this.state.horasRetrabalho ?? 0
+        this.state.horasRetrabalho ?? 0,
+        this.state.dataApontamento
       );
 
       // Avancar sem conferir diria "horas registradas" com nada gravado, e as horas do dia se
@@ -1235,7 +1258,8 @@ _Digite o número da opção desejada_`;
     const salvo = await this.supabase.atualizarFeitoDia(
       this.state.selectedAtribuicaoId!,
       this.state.feitoTexto!,
-      this.state.observacoesTexto || undefined  // Apenas as observações, sem repetir o feito
+      this.state.observacoesTexto || undefined,  // Apenas as observações, sem repetir o feito
+      this.state.dataApontamento
     );
 
     // As horas e o retrabalho ja foram gravados pela RPC, antes da pergunta de observacoes.

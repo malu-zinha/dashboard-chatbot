@@ -1139,7 +1139,10 @@ export class SupabaseService {
     tipo: string | undefined,
     descricao: string | undefined,
     horasTrabalhadasTotal: number,
-    horasRetrabalho: number
+    horasRetrabalho: number,
+    // Dia em BRT. A RPC usava CURRENT_DATE (UTC no Supabase): apontar depois das 21h BRT
+    // gravava as horas no dia seguinte, longe do relato.
+    dataApontamento: string = dataLocalBR()
   ): Promise<ResultadoRegistroRetrabalho> {
     if (!this.connected) {
       console.error(`❌ Erro ao registrar retrabalho (${eng_projeto_id}): sem conexão`);
@@ -1155,6 +1158,7 @@ export class SupabaseService {
         p_descricao: descricao || null,
         p_horas_trabalhadas_total: horasTrabalhadasTotal ?? null,
         p_horas_retrabalho: horasRetrabalho ?? null,
+        p_data: dataApontamento,
       });
 
       if (error) {
@@ -2098,7 +2102,9 @@ export class SupabaseService {
   async atualizarFeitoDia(
     eng_projeto_id: string,
     feito_texto: string,
-    observacoes?: string
+    observacoes?: string,
+    // Mesmo dia das horas (o fluxo passa o que usou em registrarRetrabalho).
+    dataRegistro: string = dataLocalBR()
   ): Promise<ResultadoFeitoDia> {
     if (!this.connected) {
       console.error(`❌ Erro ao registrar feito do dia (${eng_projeto_id}): sem conexão`);
@@ -2129,7 +2135,7 @@ export class SupabaseService {
           eng_projeto_id,
           projeto_id: atrib.projeto_id,
           eng_id: atrib.eng_id,
-          data_registro: dataLocalBR(),
+          data_registro: dataRegistro,
           feito_texto,
           data_fim_dia: new Date().toISOString(),
           editavel: false,
