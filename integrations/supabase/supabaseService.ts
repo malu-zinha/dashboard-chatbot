@@ -420,8 +420,10 @@ export class SupabaseService {
   /**
    * Checa se o engenheiro tem atribuições (projetos) ativas
    */
+  // Lanca quando nao consegue checar: devolver false liberava a desativacao de quem tem
+  // projetos ativos sempre que o banco falhava.
   async checarEngenheiroTemAtribuicoesAtivas(eng_id: string): Promise<boolean> {
-    if (!this.connected) return false;
+    if (!this.connected) throw new SupabaseUnavailableError('checarEngenheiroTemAtribuicoesAtivas');
 
     try {
       const { count, error } = await this.supabase
@@ -432,13 +434,14 @@ export class SupabaseService {
 
       if (error) {
         console.error('❌ Erro ao checar atribuições do engenheiro:', error);
-        return false;
+        throw new SupabaseUnavailableError('checarEngenheiroTemAtribuicoesAtivas');
       }
 
       return (count ?? 0) > 0;
     } catch (error: any) {
+      if (error instanceof SupabaseUnavailableError) throw error;
       console.error('❌ Erro ao checar atribuições:', error.message);
-      return false;
+      throw new SupabaseUnavailableError('checarEngenheiroTemAtribuicoesAtivas');
     }
   }
 
@@ -468,6 +471,9 @@ export class SupabaseService {
 
       return { success: true };
     } catch (error: any) {
+      if (error instanceof SupabaseUnavailableError) {
+        return { success: false, error: 'nao_foi_possivel_verificar' };
+      }
       console.error('❌ Erro ao desativar engenheiro:', error.message);
       return { success: false, error: error.message };
     }
@@ -795,7 +801,19 @@ export class SupabaseService {
    * Lista todas as atribuições de um engenheiro
    */
   async listarAtribuicoesEngenheiro(eng_id: string): Promise<Atribuicao[]> {
-    if (!this.connected) return [];
+    try {
+      return await this.listarAtribuicoesEngenheiroOuFalha(eng_id);
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Como listarAtribuicoesEngenheiro, mas falha em vez de devolver [] — para quem mostra a
+   * lista ao engenheiro: lista vazia por erro aparecia como "nenhum projeto".
+   */
+  async listarAtribuicoesEngenheiroOuFalha(eng_id: string): Promise<Atribuicao[]> {
+    if (!this.connected) throw new SupabaseUnavailableError('listarAtribuicoesEngenheiro');
 
     try {
       const { data, error } = await this.supabase
@@ -807,13 +825,14 @@ export class SupabaseService {
 
       if (error) {
         console.error('❌ Erro ao listar atribuições:', error);
-        return [];
+        throw new SupabaseUnavailableError('listarAtribuicoesEngenheiro');
       }
 
       return data || [];
     } catch (error: any) {
+      if (error instanceof SupabaseUnavailableError) throw error;
       console.error('❌ Erro ao listar atribuições:', error.message);
-      return [];
+      throw new SupabaseUnavailableError('listarAtribuicoesEngenheiro');
     }
   }
 
@@ -2728,7 +2747,20 @@ export class SupabaseService {
    * Fonte única do status/✅ por área (engenheiros_projetos.percentual_ponderado).
    */
   async buscarProgressoArea(projetoId: string, areaId: string | number, engProjetoId?: string): Promise<number> {
-    if (!this.connected) return 0;
+    try {
+      return await this.buscarProgressoAreaOuFalha(projetoId, areaId, engProjetoId);
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Como buscarProgressoArea, mas falha em vez de devolver 0 — para listagens, onde um 0%
+   * falso troca o status e o filtro de pendentes. Quem so recalcula o numero para a mensagem
+   * depois de gravar continua usando buscarProgressoArea.
+   */
+  async buscarProgressoAreaOuFalha(projetoId: string, areaId: string | number, engProjetoId?: string): Promise<number> {
+    if (!this.connected) throw new SupabaseUnavailableError('buscarProgressoArea');
     try {
       let query = this.supabase
         .from('engenheiros_projetos')
@@ -2744,12 +2776,13 @@ export class SupabaseService {
       const { data, error } = await query.limit(1);
       if (error) {
         console.error('❌ Erro ao buscar progresso da área:', error);
-        return 0;
+        throw new SupabaseUnavailableError('buscarProgressoArea');
       }
       return Number((data as any)?.[0]?.percentual_ponderado ?? 0);
     } catch (error: any) {
+      if (error instanceof SupabaseUnavailableError) throw error;
       console.error('❌ Erro ao buscar progresso da área:', error.message);
-      return 0;
+      throw new SupabaseUnavailableError('buscarProgressoArea');
     }
   }
 

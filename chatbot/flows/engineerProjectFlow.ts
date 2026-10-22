@@ -9,7 +9,7 @@ import type { ProjectData } from '../../integrations/sheets/engineerSheetService
 import {
   getEngineerSheetService,
 } from '../../integrations/sheets/engineerSheetService.ts';
-import { getSupabaseService } from '../../integrations/supabase/supabaseService.ts';
+import { getSupabaseService, SupabaseUnavailableError } from '../../integrations/supabase/supabaseService.ts';
 import { redactSecrets } from '../../logic/security/redactSecrets.ts';
 import { dataLocalBR } from '../../logic/datas/dataLocal.ts';
 import {
@@ -304,75 +304,58 @@ export class EngineerProjectFlow {
     console.log('🔍 [DEBUG] WhatsApp:', this.whatsapp);
     console.log('🔍 [DEBUG] Supabase conectado?', this.supabase.isConnected());
 
-    // Tentar buscar do Supabase primeiro
-    if (this.supabase.isConnected()) {
-      try {
-        console.log('🔍 [DEBUG] Buscando engenheiro no Supabase...');
-        const engenheiro = await this.supabase.buscarEngenheiroPorWhatsapp(this.whatsapp);
-        console.log('🔍 [DEBUG] Engenheiro encontrado?', engenheiro ? 'SIM' : 'NÃO');
-
-        if (engenheiro) {
-          console.log('🔍 [DEBUG] eng_id:', engenheiro.eng_id);
-          console.log('🔍 [DEBUG] Buscando atribuições...');
-          const atribuicoes = await this.supabase.listarAtribuicoesEngenheiro(engenheiro.eng_id);
-          console.log('🔍 [DEBUG] Atribuições encontradas:', atribuicoes.length);
-          console.log('🔍 [DEBUG] Atribuições:', JSON.stringify(atribuicoes, null, 2));
-
-          // Enriquecer com dados de projeto, área e status
-          const atribuicoesEnriquecidas = [];
-          for (const atrib of atribuicoes) {
-            console.log('🔍 [DEBUG] Processando atribuição:', atrib.id);
-            const projeto = await this.supabase.buscarProjetoPorId(atrib.projeto_id);
-            console.log('🔍 [DEBUG] Projeto:', projeto?.codigo_projeto);
-            const area = await this.supabase.buscarAreaPorId(atrib.area_id);
-            console.log('🔍 [DEBUG] Área:', area?.descricao);
-
-            // Percentual da disciplina (projeto+área): pavimentos + globais.
-            // O status (texto) deriva do percentual — fonte única, igual ao ✅ e ao dashboard.
-            // (status_id é coluna morta: marcação manual de status foi removida.)
-            const percentualFinal = await this.supabase.buscarProgressoArea(atrib.projeto_id, String(atrib.area_id), atrib.id);
-
-            atribuicoesEnriquecidas.push({
-              id: atrib.id,  // eng_projeto_id
-              codigo: projeto?.codigo_projeto || '',
-              cliente: projeto?.cliente || '',
-              area: atrib.instancia_label || area?.descricao || '',
-              area_id: atrib.area_id,
-              status: statusPorPercentual(percentualFinal),
-              projeto_id: atrib.projeto_id,
-              percentual: percentualFinal,
-              data_prevista: atrib.data_prevista,
-            });
-          }
-
-          const atribuicoesPendentes = filterPendentesPorPercentual(
-            atribuicoesEnriquecidas,
-            atrib => atrib.percentual
-          );
-          console.log('🔍 [DEBUG] Atribuições enriquecidas:', atribuicoesEnriquecidas.length);
-          console.log('🔍 [DEBUG] Atribuições pendentes:', atribuicoesPendentes.length);
-          return atribuicoesPendentes;
-        } else {
-          console.log('❌ [DEBUG] Engenheiro não encontrado no Supabase');
-        }
-      } catch (error: any) {
-        console.error('❌ Erro ao buscar atribuições do Supabase:', redactSecrets(error));
-        console.error('❌ Stack:', redactSecrets(error?.stack));
-        // Fallback para planilha
-      }
+    // Sem banco, falha: o fluxo responde "nao consegui acessar". Antes caia numa planilha legada
+    // com id '' (qualquer gravacao depois falhava) ou devolvia lista vazia ("nenhum projeto").
+    if (!this.supabase.isConnected()) {
+      throw new SupabaseUnavailableError('buscarAtribuicoesEngenheiro');
     }
 
-    // Fallback: buscar da planilha
-    const projects = await this.sheetService.listAllProjects();
-    return projects.map(proj => ({
-      id: '',  // Não temos eng_projeto_id da planilha
-      codigo: proj.codigo,
-      cliente: proj.cliente,
-      area: proj.area || '',
-      area_id: '',  // Não temos area_id da planilha
-      status: proj.status || '',
-      projeto_id: ''  // Não temos projeto_id da planilha
-    }));
+    // buscarEngenheiroPorTelefone distingue "nao cadastrado" (null) de "indisponivel" (lanca);
+    // o wrapper por WhatsApp trocava o segundo pelo primeiro.
+    const engenheiro = await this.supabase.buscarEngenheiroPorTelefone(this.whatsapp);
+    if (!engenheiro) {
+      console.log('❌ [DEBUG] Engenheiro não encontrado no Supabase');
+      return [];
+    }
+
+    console.log('🔍 [DEBUG] eng_id:', engenheiro.eng_id);
+    const atribuicoes = await this.supabase.listarAtribuicoesEngenheiroOuFalha(engenheiro.eng_id);
+    console.log('🔍 [DEBUG] Atribuições encontradas:', atribuicoes.length);
+
+    // Enriquecer com dados de projeto, área e status
+    const atribuicoesEnriquecidas = [];
+    for (const atrib of atribuicoes) {
+      console.log('🔍 [DEBUG] Processando atribuição:', atrib.id);
+      const projeto = await this.supabase.buscarProjetoPorId(atrib.projeto_id);
+      console.log('🔍 [DEBUG] Projeto:', projeto?.codigo_projeto);
+      const area = await this.supabase.buscarAreaPorId(atrib.area_id);
+      console.log('🔍 [DEBUG] Área:', area?.descricao);
+
+      // Percentual da disciplina (projeto+área): pavimentos + globais.
+      // O status (texto) deriva do percentual — fonte única, igual ao ✅ e ao dashboard.
+      // (status_id é coluna morta: marcação manual de status foi removida.)
+      const percentualFinal = await this.supabase.buscarProgressoAreaOuFalha(atrib.projeto_id, String(atrib.area_id), atrib.id);
+
+      atribuicoesEnriquecidas.push({
+        id: atrib.id,  // eng_projeto_id
+        codigo: projeto?.codigo_projeto || '',
+        cliente: projeto?.cliente || '',
+        area: atrib.instancia_label || area?.descricao || '',
+        area_id: atrib.area_id,
+        status: statusPorPercentual(percentualFinal),
+        projeto_id: atrib.projeto_id,
+        percentual: percentualFinal,
+        data_prevista: atrib.data_prevista,
+      });
+    }
+
+    const atribuicoesPendentes = filterPendentesPorPercentual(
+      atribuicoesEnriquecidas,
+      atrib => atrib.percentual
+    );
+    console.log('🔍 [DEBUG] Atribuições enriquecidas:', atribuicoesEnriquecidas.length);
+    console.log('🔍 [DEBUG] Atribuições pendentes:', atribuicoesPendentes.length);
+    return atribuicoesPendentes;
   }
 
   /**
@@ -550,6 +533,13 @@ export class EngineerProjectFlow {
       }
     } catch (error: any) {
       console.error('Erro no fluxo:', redactSecrets(error));
+      if (error instanceof SupabaseUnavailableError) {
+        return {
+          mensagem: '⚠️ Não consegui acessar os dados agora. Tente de novo em alguns minutos.',
+          finalizado: false,
+          erro: 'indisponivel'
+        };
+      }
       return {
         mensagem: '❌ Erro ao processar. Tente novamente ou digite "cancelar".',
         finalizado: false,
@@ -754,7 +744,7 @@ _Digite o número da opção desejada_`;
     atrib: { id: string; projeto_id: string; area_id: string | number }
   ): Promise<boolean> {
     // Fonte única: percentual ponderado da disciplina (pavimentos + globais)
-    return (await this.supabase.buscarProgressoArea(atrib.projeto_id, String(atrib.area_id), atrib.id)) >= 100;
+    return (await this.supabase.buscarProgressoAreaOuFalha(atrib.projeto_id, String(atrib.area_id), atrib.id)) >= 100;
   }
 
   // =====================================================
@@ -1525,7 +1515,7 @@ _Digite o número da opção desejada_`;
     // Concluídas (100%) aparecem com ✅, mas não são selecionáveis para marcar.
     const areasComPct: Array<{ id: string; area_id: string | number; area: string; pct: number }> = [];
     for (const a of areasDoProjeto) {
-      const pct = await this.supabase.buscarProgressoArea(projeto.projeto_id, String(a.area_id), a.id);
+      const pct = await this.supabase.buscarProgressoAreaOuFalha(projeto.projeto_id, String(a.area_id), a.id);
       areasComPct.push({ id: a.id, area_id: a.area_id, area: a.area, pct });
     }
 

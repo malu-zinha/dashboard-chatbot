@@ -1803,7 +1803,14 @@ export class OwnerFlow {
     if (mensagem.trim() === '1') {
       const payload: any = {};
       payload[this.contexto.eng_campo_edit!] = this.contexto.edit_novo_valor;
-      await getSupabase().atualizarEngenheiro(this.contexto.viz_eng_id!, payload);
+      // O resultado era ignorado: telefone repetido (UNIQUE) ou banco fora respondiam "Atualizado".
+      const res = await getSupabase().atualizarEngenheiro(this.contexto.viz_eng_id!, payload);
+      if (!res.success) {
+        if (/duplicate key|unique/i.test(res.error ?? '')) {
+          return { mensagem: `❌ Esse telefone já está cadastrado para outro engenheiro. Nada foi alterado.\n\n_Digite "menu" para voltar._`, finalizado: true };
+        }
+        return { mensagem: `❌ Não consegui atualizar agora. Nada foi alterado — tente de novo em alguns minutos.\n\n_Digite "menu" para voltar._`, finalizado: true };
+      }
       return { mensagem: `✅ Atualizado com sucesso!\n\n_Digite "menu" para voltar._`, finalizado: true };
     }
     return { mensagem: `❌ Cancelado.\n\n_Digite "menu" para voltar._`, finalizado: true };
@@ -1829,7 +1836,11 @@ export class OwnerFlow {
         if (res.error === 'engenheiro_com_projetos') {
           return { mensagem: `❌ Este engenheiro possui projetos ativos! Retire-o dos projetos antes de excluí-lo.\n\n_Digite "menu" para voltar._`, finalizado: true };
         }
-        return { mensagem: `❌ Erro: ${res.error}`, finalizado: true };
+        if (res.error === 'nao_foi_possivel_verificar') {
+          return { mensagem: `❌ Não consegui verificar se ele tem projetos ativos, então nada foi removido. Tente de novo em alguns minutos.\n\n_Digite "menu" para voltar._`, finalizado: true };
+        }
+        // Sem repassar o texto cru do banco para o WhatsApp.
+        return { mensagem: `❌ Não consegui remover agora. Tente de novo em alguns minutos.\n\n_Digite "menu" para voltar._`, finalizado: true };
       }
       return { mensagem: `✅ Engenheiro excluído.\n\n_Digite "menu" para voltar._`, finalizado: true };
     }

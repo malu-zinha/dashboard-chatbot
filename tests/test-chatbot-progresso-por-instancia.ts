@@ -58,7 +58,7 @@ assert.match(
 
 assert.match(
   engineerFlow,
-  /this\.supabase\.buscarProgressoArea\(atrib\.projeto_id, String\(atrib\.area_id\), atrib\.id\)/,
+  /this\.supabase\.buscarProgressoArea(?:OuFalha)?\(atrib\.projeto_id, String\(atrib\.area_id\), atrib\.id\)/,
   'fluxo deve calcular percentual da atribuicao usando eng_projeto_id'
 );
 
@@ -70,7 +70,7 @@ assert.match(
 
 assert.match(
   engineerFlow,
-  /this\.supabase\.buscarProgressoArea\(atrib\.projeto_id, String\(atrib\.area_id\), atrib\.id\)/,
+  /this\.supabase\.buscarProgressoArea(?:OuFalha)?\(atrib\.projeto_id, String\(atrib\.area_id\), atrib\.id\)/,
   'checagem de conclusao deve usar a instancia selecionada'
 );
 
