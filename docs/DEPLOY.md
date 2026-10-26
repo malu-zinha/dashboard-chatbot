@@ -119,6 +119,6 @@ As notificações proativas passam por uma fila, então há três lugares onde p
 ## O que não existe
 
 Para poupar tempo de quem for procurar: não há Dockerfile, docker-compose, fly.toml, render.yaml,
-PM2, systemd nem CI (`.github/` não existe — nada roda testes automaticamente). `dashboard/vercel.json`
-existe, mas a Vercel é caminho legado; Railway é o que está em uso. O chatbot **não compila** — roda
+PM2 nem systemd. O CI (`.github/workflows/ci.yml`) roda tipos, testes, lint e build em todo PR, mas
+não faz deploy — Railway publica a cada push na `main`. O chatbot **não compila** — roda
 TypeScript direto com `tsx`, e `npm run build` é apenas typecheck.
