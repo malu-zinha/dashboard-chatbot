@@ -9,7 +9,28 @@
 
 import dotenv from 'dotenv';
 import { redactSecrets } from '../../logic/security/redactSecrets.ts';
+import { mascararTelefone } from '../../logic/security/mascararPII.ts';
 dotenv.config();
+
+// Sem resposta do provedor neste tempo, o envio conta como falha. Sem limite,
+// um fetch preso segurava o worker de notificacoes e a conversa.
+export const TIMEOUT_ENVIO_MS = 15_000;
+
+/**
+ * Em producao, sem WHATSAPP_PROVIDER real, o servico caia no modo
+ * desenvolvimento: so imprime no log e devolve sucesso, e as notificacoes
+ * eram marcadas como enviadas sem sair. Devolve o motivo para recusar o boot,
+ * ou null se a configuracao serve.
+ */
+export function problemaConfigProvider(env: Record<string, string | undefined>): string | null {
+  const producao =
+    env.NODE_ENV === 'production' || Boolean(env.RAILWAY_ENVIRONMENT_NAME || env.RAILWAY_ENVIRONMENT);
+  if (!producao) return null;
+  const provider = env.WHATSAPP_PROVIDER;
+  if (provider === 'twilio' || provider === 'meta') return null;
+  return `WHATSAPP_PROVIDER=${provider ?? '(vazio)'} em producao: use "twilio" ou "meta". ` +
+    'O modo desenvolvimento so imprime as mensagens no log e as daria como enviadas.';
+}
 
 // =====================================================
 // INTERFACE: WhatsAppProvider
@@ -88,7 +109,8 @@ class MetaWhatsAppProvider implements WhatsAppProvider {
             preview_url: false,
             body: message
           }
-        })
+        }),
+        signal: AbortSignal.timeout(TIMEOUT_ENVIO_MS)
       });
 
       if (!response.ok) {
@@ -99,7 +121,7 @@ class MetaWhatsAppProvider implements WhatsAppProvider {
       }
 
       const data = await response.json();
-      console.log(`✅ Mensagem enviada via Meta API para ${to}`);
+      console.log(`✅ Mensagem enviada via Meta API para ${mascararTelefone(to)}`);
       console.log(`   Message ID: ${data.messages?.[0]?.id || 'N/A'}`);
       return true;
 
@@ -175,7 +197,8 @@ class TwilioWhatsAppProvider implements WhatsAppProvider {
           'Authorization': `Basic ${credentials}`,
           'Content-Type': 'application/x-www-form-urlencoded'
         },
-        body: formData.toString()
+        body: formData.toString(),
+        signal: AbortSignal.timeout(TIMEOUT_ENVIO_MS)
       });
 
       if (!response.ok) {
@@ -186,7 +209,7 @@ class TwilioWhatsAppProvider implements WhatsAppProvider {
       }
 
       const data = await response.json();
-      console.log(`✅ Mensagem enviada via Twilio para ${to}`);
+      console.log(`✅ Mensagem enviada via Twilio para ${mascararTelefone(to)}`);
       console.log(`   Message SID: ${data.sid || 'N/A'}`);
       return true;
 

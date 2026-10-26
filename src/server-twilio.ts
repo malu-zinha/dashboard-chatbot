@@ -10,7 +10,12 @@ import express from 'express';
 import { messageHandler } from '../chatbot/handlers/messageHandler.ts';
 import { getCronJobManager } from '../integrations/cron/cronJobs.ts';
 import { iniciarSincronizacaoAutomatica } from '../integrations/cron/syncDatabaseToSheets.ts';
-import { getWhatsAppService } from '../integrations/whatsapp/whatsappService.ts';
+import { getWhatsAppService, problemaConfigProvider } from '../integrations/whatsapp/whatsappService.ts';
+import { criarWebhookWhatsapp } from '../integrations/whatsapp/webhookWhatsapp.ts';
+import { getSupabaseService } from '../integrations/supabase/supabaseService.ts';
+import { verificarSaude } from '../integrations/saude/healthcheck.ts';
+import { sincronizacaoSheetsAtiva, variaveisObrigatoriasBoot } from '../integrations/cron/configSincronizacao.ts';
+import { mascararTelefone } from '../logic/security/mascararPII.ts';
 import { getNotificationService } from '../integrations/notifications/notificationService.ts';
 import { getNotificationWorker } from '../integrations/notifications/notificationWorker.ts';
 import { redactSecrets } from '../logic/security/redactSecrets.ts';
@@ -60,12 +65,9 @@ const validarAssinaturaTwilio: express.RequestHandler = (req, res, next) => {
 
 console.log('🚀 Iniciando Twilio WhatsApp Bot Server...\n');
 
-// Validações básicas
-const requiredEnvVars = [
-  'GOOGLE_APPLICATION_CREDENTIALS',
-  'GOOGLE_SHEETS_ENGINEER_ID',
-  'GOOGLE_SHEETS_ENGINEER_NAME'
-];
+// Validações básicas (as do Google só valem com a sincronização do Sheets ligada)
+const requiredEnvVars = variaveisObrigatoriasBoot(process.env);
+const syncSheetsAtiva = sincronizacaoSheetsAtiva(process.env);
 
 const twilioEnvVars = [
   'TWILIO_ACCOUNT_SID',
@@ -90,14 +92,25 @@ if (missingTwilio.length > 0) {
   console.warn('   ℹ️  Configure Twilio para enviar mensagens pelo WhatsApp\n');
 }
 
+// Em produção, sem provider real o bot só imprimiria as mensagens no log.
+const problemaProvider = problemaConfigProvider(process.env);
+if (problemaProvider) {
+  console.error(`❌ ${problemaProvider}`);
+  process.exit(1);
+}
+
 // Verificar Supabase (opcional mas recomendado)
 const temSupabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 console.log('📋 Modo de operação:');
 if (temSupabase) {
   console.log('   ✅ Supabase (Banco de dados)');
-  console.log('   ✅ Google Sheets (Visualização)');
-  console.log('   ✅ Sincronização automática a cada 5min');
+  if (syncSheetsAtiva) {
+    console.log('   ✅ Google Sheets (Visualização)');
+    console.log('   ✅ Sincronização automática a cada 5min');
+  } else {
+    console.log('   ⏸️  Sincronização com o Google Sheets desligada (ENABLE_SHEETS_SYNC=false)');
+  }
 } else {
   console.log('   ⚠️  Apenas Google Sheets (sem banco de dados)');
   console.log('   ℹ️  Configure Supabase para melhor desempenho');
@@ -127,83 +140,45 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check alternativo
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Health check usado pelo Railway no deploy: consulta o banco de verdade.
+app.get('/health', async (req, res) => {
+  const { http, corpo } = await verificarSaude(async () => {
+    if (!temSupabase) throw new Error('Supabase não configurado');
+    const { error } = await getSupabaseService()
+      .getClient()
+      .from('engenheiros')
+      .select('eng_id', { head: true })
+      .limit(1);
+    if (error) throw new Error(error.message);
+  });
+  res.status(http).json(corpo);
 });
 
 // Webhook Twilio - Recebe mensagens do WhatsApp
-app.post('/webhook/whatsapp', validarAssinaturaTwilio, async (req, res) => {
-  try {
-    const { From, Body, MessageSid } = req.body;
-
-    console.log('\n' + '='.repeat(60));
-    console.log('📨 MENSAGEM RECEBIDA VIA TWILIO');
-    console.log('='.repeat(60));
-    console.log(`📞 De: ${From}`);
-    console.log(`💬 Mensagem: "${Body}"`);
-    console.log(`🆔 SID: ${MessageSid}`);
-    console.log('='.repeat(60));
-
-    if (!From || !Body) {
-      console.error('❌ Mensagem inválida (sem From ou Body)');
-      return res.status(400).send('Bad Request');
-    }
-
-    // Normalizar número de telefone
-    // Twilio envia no formato: whatsapp:+5511999999999
-    const userId = From.replace('whatsapp:', '').trim();
-
-    console.log(`🔄 Processando mensagem de ${userId}...`);
-
-    // Processar via messageHandler
-    const handlerResponse = await messageHandler.processarMensagem(userId, Body);
-
-    console.log(`✅ Resposta gerada (${handlerResponse.resposta.length} chars)`);
-
-    // Enviar resposta via WhatsApp Service
-    const whatsappService = getWhatsAppService();
-    await whatsappService.sendMessage(userId, handlerResponse.resposta);
-
-    console.log('✅ Resposta enviada com sucesso!\n');
-
-    // Responder ao Twilio com 200 OK (sem TwiML para evitar duplicação)
-    res.status(200).send('OK');
-
-  } catch (error: any) {
-    console.error('\n❌ ERRO NO WEBHOOK:');
-    console.error(`   Erro: ${redactSecrets(error?.message ?? error)}`);
-    console.error(`   Stack: ${redactSecrets(error?.stack)}\n`);
-
-    res.status(500).send('Internal Server Error');
-  }
+// Responde ao Twilio na hora e processa depois (detalhes em webhookWhatsapp.ts).
+const webhookWhatsapp = criarWebhookWhatsapp({
+  processar: (telefone, mensagem) => messageHandler.processarMensagem(telefone, mensagem),
+  enviar: (telefone, mensagem) => getWhatsAppService().sendMessage(telefone, mensagem),
 });
+app.post('/webhook/whatsapp', validarAssinaturaTwilio, webhookWhatsapp);
 
 // Webhook Twilio - Status de mensagens enviadas
 app.post('/webhook/status', validarAssinaturaTwilio, (req, res) => {
   const { MessageSid, MessageStatus, To } = req.body;
 
-  console.log(`📬 Status da mensagem ${MessageSid} para ${To}: ${MessageStatus}`);
+  console.log(`📬 Status da mensagem ${MessageSid} para ${mascararTelefone(To)}: ${MessageStatus}`);
 
   res.sendStatus(200);
 });
 
 // =====================================================
-// HELPERS
-// =====================================================
-
-function escapeXml(unsafe: string): string {
-  return unsafe
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-// =====================================================
 // INICIALIZAÇÃO
 // =====================================================
+
+// Promise rejeitada sem catch: registra em vez de passar em silêncio.
+process.on('unhandledRejection', (motivo: any) => {
+  console.error('❌ Promise rejeitada sem tratamento:', redactSecrets(motivo?.stack ?? motivo?.message ?? motivo));
+});
 
 (async () => {
   try {
@@ -226,13 +201,13 @@ function escapeXml(unsafe: string): string {
     cronManager.start();
 
     // Iniciar sincronização automática Supabase → Google Sheets
-    if (temSupabase) {
+    if (temSupabase && syncSheetsAtiva) {
       console.log('\n🔄 Iniciando sincronização automática (Supabase → Sheets)...');
       iniciarSincronizacaoAutomatica();
     }
 
     // Iniciar servidor Express
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log('\n' + '='.repeat(60));
       console.log('✅ SERVIDOR INICIADO COM SUCESSO!');
       console.log('='.repeat(60));
@@ -246,6 +221,26 @@ function escapeXml(unsafe: string): string {
       console.log('   2. Configure as variáveis de ambiente do Twilio no .env');
       console.log('   3. Configure WHATSAPP_PROVIDER=twilio no .env\n');
     });
+
+    // No deploy o Railway manda SIGTERM ao container antigo. Para de aceitar
+    // conexões, desliga os crons e espera as mensagens em processamento
+    // terminarem (até 10 s; o railway.json dá 15 s antes do SIGKILL).
+    let desligando = false;
+    const desligar = async (sinal: string) => {
+      if (desligando) return;
+      desligando = true;
+      console.log(`\n🛑 ${sinal} recebido: encerrando...`);
+      cronManager.stop();
+      server.close();
+      await Promise.race([
+        webhookWhatsapp.aguardarEmAndamento(),
+        new Promise((resolve) => setTimeout(resolve, 10_000)),
+      ]);
+      console.log('👋 Servidor encerrado');
+      process.exit(0);
+    };
+    process.on('SIGTERM', () => void desligar('SIGTERM'));
+    process.on('SIGINT', () => void desligar('SIGINT'));
 
   } catch (error: any) {
     console.error('❌ Erro fatal ao iniciar sistema:', error);
