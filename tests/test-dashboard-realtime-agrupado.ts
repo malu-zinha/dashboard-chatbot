@@ -13,7 +13,9 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 // O dashboard e CommonJS para o tsx: importa o modulo inteiro (padrao dos test-dashboard-*.ts).
-import mod from '../dashboard/lib/recargaAgrupada.ts'
+import * as modNs from '../dashboard/lib/recargaAgrupada.ts'
+
+const mod = ((modNs as any).default ?? modNs)
 
 const { criarRecargaAgrupada } = mod as typeof import('../dashboard/lib/recargaAgrupada.ts')
 

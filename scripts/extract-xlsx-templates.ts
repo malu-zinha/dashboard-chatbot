@@ -4,7 +4,7 @@
  *
  * Uso:
  *   npm i -D xlsx
- *   npx ts-node scripts/extract-xlsx-templates.ts > /tmp/templates.sql
+ *   npx tsx scripts/extract-xlsx-templates.ts > /tmp/templates.sql
  *
  * Cole a saída no migration 20260429_pavimentos_etapas_por_area.sql,
  * substituindo o marcador TEMPLATES_INSERTS_PLACEHOLDER.

@@ -16,27 +16,30 @@ const mariaRitaRegressao = {
 
 assert(statusDonoPorProgresso.length === 1, 'helper do dono recebe apenas dados da view');
 
+// A view ainda traz status_descricao (status legado), que o helper deve ignorar.
+const comStatusLegado = (linha: object) => linha as Parameters<typeof statusDonoPorProgresso>[0];
+
 assert(
   statusDonoPorProgresso(mariaRitaRegressao) === 'Concluído',
   'dono mostra Concluído quando percentual_ponderado e data_conclusao indicam tarefa finalizada'
 );
 
 assert(
-  statusDonoPorProgresso({
+  statusDonoPorProgresso(comStatusLegado({
     status_descricao: 'Aguardando Início',
     percentual_andamento: 100,
     data_conclusao: '2026-06-12',
-  }) === 'Concluído',
+  })) === 'Concluído',
   'dono usa percentual_andamento da view para tarefa concluida'
 );
 
 assert(
-  statusDonoPorProgresso({ status_descricao: 'Aguardando Início', percentual_andamento: 41.69 }) === 'Em Andamento',
+  statusDonoPorProgresso(comStatusLegado({ status_descricao: 'Aguardando Início', percentual_andamento: 41.69 })) === 'Em Andamento',
   'dono ignora status legado e deriva Em Andamento do percentual'
 );
 
 assert(
-  statusDonoPorProgresso({ status_descricao: 'Aguardando Início', percentual_andamento: 0 }) === 'Aguardando Início',
+  statusDonoPorProgresso(comStatusLegado({ status_descricao: 'Aguardando Início', percentual_andamento: 0 })) === 'Aguardando Início',
   'dono preserva Aguardando Início quando progresso e conclusao nao existem'
 );
 

@@ -10,7 +10,9 @@
 // =====================================================
 
 import assert from 'node:assert/strict'
-import mod from '../dashboard/lib/paginacao.ts'
+import * as modNs from '../dashboard/lib/paginacao.ts'
+
+const mod = ((modNs as any).default ?? modNs)
 
 // dashboard/ e CommonJS; daqui do ESM o modulo chega como default.
 const { buscarTodasAsPaginas } = mod as typeof import('../dashboard/lib/paginacao.ts')

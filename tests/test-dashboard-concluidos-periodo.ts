@@ -4,8 +4,12 @@ import { resolve } from 'node:path'
 
 // dashboard/ e um pacote CommonJS (sem "type": "module"): daqui do ESM da raiz o modulo
 // chega como default, e o import nomeado falhava antes de qualquer assert rodar.
-import datasMod from '../dashboard/lib/datas.ts'
-import filtrosMod from '../dashboard/lib/projetoFilters.ts'
+import * as datasModNs from '../dashboard/lib/datas.ts'
+
+const datasMod = ((datasModNs as any).default ?? datasModNs)
+import * as filtrosModNs from '../dashboard/lib/projetoFilters.ts'
+
+const filtrosMod = ((filtrosModNs as any).default ?? filtrosModNs)
 
 const { formatarDataBR, toDataISO } = datasMod as typeof import('../dashboard/lib/datas.ts')
 const {

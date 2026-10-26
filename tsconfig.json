@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
+    "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
     "noEmit": true,
@@ -13,10 +13,18 @@
     "outDir": "./dist",
     "resolveJsonModule": true
   },
-  "ts-node": {
-    "esm": true,
-    "experimentalSpecifierResolution": "node"
-  },
-  "include": ["src/**/*", "chatbot/**/*", "integrations/**/*", "logic/**/*"],
-  "exclude": ["node_modules", "dist", "tests/**/*"]
+  "include": [
+    "src/**/*",
+    "chatbot/**/*",
+    "integrations/**/*",
+    "logic/**/*",
+    "tests/*.ts",
+    "scripts/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "tests/manual/**",
+    "scripts/extract-xlsx-templates.ts"
+  ]
 }
