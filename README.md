@@ -175,55 +175,38 @@ Atenção a duas armadilhas:
 
 ## Banco de dados: como montar
 
-Não há `supabase/config.toml` nem migrations versionadas pelo CLI. A prática real — declarada nos
-cabeçalhos dos próprios arquivos — é **colar o SQL no SQL Editor do Supabase, na ordem**:
+Não há `supabase/config.toml` nem migrations versionadas pelo CLI: o SQL é colado no SQL Editor
+do Supabase. A pasta `supabase/` tem:
 
-1. `supabase/MASTER_SCHEMA_COMPLETO.sql` — schema base (tabelas do núcleo)
-2. `supabase/migrations/*.sql` — 28 arquivos, em ordem cronológica pelo nome
-3. Os arquivos soltos em `supabase/` que definem funções e views usadas em produção:
-   `chatbot_functions.sql`, `functions_dono.sql`, `seed_complemento_chatbot.sql`,
-   `criar_tipos_projeto.sql`, `CRIAR_VIEWS.sql`, `triggers_e_views.sql`
+| Onde | O que é |
+|---|---|
+| `migrations/00000000_baseline.sql` | **A estrutura que está valendo em produção**: 23 tabelas, 66 funções, 34 views, 28 triggers, RLS, policies e permissões, exportadas do banco em 26/10/2026. Sem dados. |
+| `migrations/2026*.sql` | O histórico das mudanças. As anteriores a 26/10/2026 já estão no baseline; as posteriores são aplicadas por cima dele. |
+| `rollbacks/` | O SQL que desfaz cada migration nova. |
+| `consultas/` | Consultas avulsas: `exportar_estrutura.sql` (só leitura, gera o baseline) e `definir_owner.sql`. |
+| `seeds/` | Dados de referência antigos (disciplinas, status, tipos de projeto). Ver o aviso abaixo. |
+| `_arquivo/` | SQL antigo, só como histórico. **Não rodar** — muitos sobrescrevem a versão que vale. |
 
-> **Onde essa ordem morde.** O passo 3 vem depois do 2, então um `CREATE OR REPLACE` num arquivo
-> solto sobrescreve a versão que veio das migrations. `triggers_e_views.sql`,
-> `CORRIGIR_TRIGGERS.sql` e `tabela_evandro_dono.sql` carregam cópias antigas de
-> `sincronizar_task_para_engenheiro()` — aplicá-las reverte tanto o carimbo em `atribuido_por`
-> quanto `instancia_label`/`complemento_area_ref_id`. As três estão marcadas com um aviso no
-> topo da função. Em caso de dúvida, `supabase/migrations/` é a fonte de verdade: reaplique a
-> migration mais recente que define a função.
+**Qual versão de uma função ou view vale?** A do baseline, ou a de uma migration mais nova que ela.
+Para conferir se o baseline continua igual à produção, rode de novo
+`supabase/consultas/exportar_estrutura.sql` e gere o arquivo com
+`npx tsx scripts/montar-baseline.ts <export.csv>`; o `git diff` mostra o que mudou fora das
+migrations.
 
-Três coisas que você precisa saber antes de confiar num banco novo:
+**Banco novo** (outro projeto Supabase, testes):
+1. `migrations/00000000_baseline.sql`, depois as migrations com data posterior a 26/10/2026.
+2. Os dados de referência (disciplinas em `areas`, `status_codes`, `tipos_obra`,
+   `motivos_retrabalho`…). O baseline não traz dados, e os arquivos de `seeds/` são **anteriores**
+   ao estado atual — confira contra a produção antes de usar. Em particular, os dois seeds de
+   disciplinas se excluem: `seed_areas_completo.sql` insere a taxonomia antiga (`H1`–`H6`,
+   `E1`–`E4`…) e `reverter_areas_genericas.sql` apaga esses códigos e insere os genéricos
+   (`ELETRICO`, `HIDRAULICO`, `DRT`…), que são os que valem hoje.
+3. Crie o usuário do dono em Authentication → Users e rode `consultas/definir_owner.sql` com o
+   email dele. A migration `20260601_auth_dashboard.sql` marca como owner um UUID fixo que só existe
+   na produção — sem este passo o projeto nasce sem owner e o `/admin` fica inacessível.
 
-**Parte das RPCs vive fora de `migrations/`.** Funções que o código chama em produção —
-`cadastrar_engenheiro`, `atribuir_area_projeto`, `buscar_meus_projetos`, `listar_areas_disponiveis`,
-`gerar_proximo_codigo_projeto`, `dono_distribuir_tarefa` e outras — estão apenas nos arquivos soltos
-listados acima. Aplicar só `migrations/` deixa o chatbot quebrado em tempo de execução.
-
-**O owner inicial é um UUID fixo.** `supabase/migrations/20260601_auth_dashboard.sql` insere o
-primeiro `user_profiles` com role `owner` a partir de um UUID hardcoded. Num Supabase novo esse
-insert não encontra ninguém e **o projeto nasce sem owner** — o dashboard sobe, mas `/admin` e tudo
-que depende de owner ficam inacessíveis. Crie o usuário no Auth e insira o `user_profiles`
-manualmente.
-
-**`supabase/sql-editor-patches/` pode divergir a semântica.** O patch
-`20260804_corrigir_filtros_instancia_legada.sql` redefine funções de cálculo de progresso para
-tratar `eng_projeto_id IS NULL` como instância legada em vez de coringa. Bancos que receberam o
-patch e bancos que não receberam **calculam progresso de forma diferente**. Não há como saber pelo
-repositório qual é o estado de um banco; confira as funções antes de investigar divergência de
-percentual.
-
-**Dois seeds de disciplinas se destroem mutuamente.** `supabase/seed_areas_completo.sql` insere a
-taxonomia antiga de códigos (`H1`–`H6`, `E1`–`E4`, `T1`–`T4`, `G1`–`G4`, `CL1`–`CL4`), e
-`supabase/reverter_areas_genericas.sql` **apaga exatamente esses códigos** e insere os genéricos
-(`ELETRICO`, `HIDRAULICO`, `COMPATIBILIZACAO`, `DRT`…). As duas listas não têm interseção, e é a
-segunda que vale hoje. Rodar na ordem errada deixa o banco com a taxonomia errada — e o chatbot não
-encontra disciplina nenhuma. Os códigos antigos sobrevivem apenas no caminho legado do Sheets
-(`integrations/sheets/engineerSheetService.ts`), então não podem ser removidos do código.
-
-Há ainda dezenas de `.sql` soltos em `supabase/` (`CORRIGIR_RETRABALHO*.sql`,
-`RECRIAR_TODAS_VIEWS.sql`, `views_retrabalho_apenas.sql`, `NOVAS_VIEWS_RETRABALHO.sql`…) com
-versões **antigas e conflitantes** das mesmas views. Quando houver dúvida sobre qual definição vale,
-a resposta é: **a mais recente em `supabase/migrations/`**.
+O baseline foi conferido num Postgres local: aplicado num banco vazio, a nova exportação sai
+idêntica à da produção (459 objetos, nenhuma diferença).
 
 ---
 
@@ -344,10 +327,9 @@ registros antigos não são verificados).
 "Total de retrabalhos" (por engenheiro) conta só os dias com `necessitou_retrabalho = true`: a
 tabela guarda todo apontamento diário desde 2026-07-28.
 
-Cuidado ao ler SQL antigo: arquivos como `supabase/CRIAR_VIEWS.sql` e
-`supabase/views_retrabalho_apenas.sql` ainda contêm a fórmula anterior
-(`AVG(CASE WHEN necessitou_retrabalho THEN 100 ELSE 0 END)`). A definição válida é a da migration de
-2026-07-28.
+Cuidado ao ler SQL antigo: arquivos como `supabase/_arquivo/CRIAR_VIEWS.sql` e
+`supabase/_arquivo/views_retrabalho_apenas.sql` ainda contêm a fórmula anterior
+(`AVG(CASE WHEN necessitou_retrabalho THEN 100 ELSE 0 END)`). A definição válida é a do baseline.
 
 ### Outros indicadores
 
@@ -625,18 +607,22 @@ Coisas em que você vai tropeçar. Estão aqui de propósito — um README que e
 
 **Banco**
 
-- Parte das RPCs em uso vive **fora de `migrations/`** (ver [seção 4](#banco-de-dados-como-montar)).
-- `supabase/sql-editor-patches/` pode deixar bancos com semânticas diferentes de progresso.
-- O owner inicial é um UUID hardcoded: banco novo nasce sem owner.
-- Várias funções e views foram **redefinidas múltiplas vezes** em migrations diferentes
-  (`dashboard_atribuir_projeto_com_pavimentos` 6×, `vw_projetos_detalhado` 5×,
-  `vw_projetos_completo` 3×). Só a mais recente vale.
-- `20260529_sync_ponderado_dashboard.sql` se autodeclara obsoleta.
-  `20260831_dashboard_producao_apontamentos.sql` é byte a byte idêntica à de `20260901`.
-- `20260319_progresso_ponderado.sql` cria triggers sem `IF NOT EXISTS`: reexecutar falha.
-- **`gerar_proximo_codigo_projeto()` quebra com código que tenha ano embutido.** Ele monta `PRJ-%03d`
-  a partir do maior número já usado, extraindo **todos os dígitos** do código. Um projeto cadastrado
-  como `PRJ-2025-001` é lido como o número `2025001` e congela a numeração automática nesse patamar.
+- A estrutura vale pelo **baseline** (`supabase/migrations/00000000_baseline.sql`, ver
+  [seção 4](#banco-de-dados-como-montar)). As migrations antigas são histórico: várias funções e
+  views foram redefinidas muitas vezes (`dashboard_atribuir_projeto_com_pavimentos` 6×,
+  `vw_projetos_detalhado` 5×), `20260529_sync_ponderado_dashboard.sql` se autodeclara obsoleta e
+  `20260319_progresso_ponderado.sql` não é reexecutável. Não reaplique migration antiga.
+- **36 usos de `CURRENT_DATE` (UTC) em funções e views**: datas de conclusão
+  (`atualizar_progresso_area`, `auto_preencher_data_conclusao`, `marcar_area_concluida`…), previsões
+  (`registrar_previsao_dia`) e as views de atraso (`vw_bloco2_atrasos_*`, `vw_grafico_atrasos_engenheiro`).
+  Depois das 21h de Brasília elas usam o dia seguinte. Só o apontamento de horas já usa `hoje_brt()`.
+- **Código morto no banco:** `atribuir_area_projeto` declara `v_area_id INTEGER` com `areas.area_id`
+  UUID e falha sempre; `gerar_proximo_codigo_projeto()` junta todos os dígitos do código (`PRJ-2025-001`
+  vira 2025001). Nenhum código chama as duas — os projetos recebem o código digitado no dashboard.
+- Os triggers `trg_calcular_percentual_status` e `trg_auto_conclusao` **não são resíduo**: o bot ainda
+  muda `status_id` (`atualizar_status_projeto`, `registrar_retrabalho_dia`) e várias telas leem
+  `percentual_andamento`, que o primeiro preenche. O par `trg_sync_datas_para_prazos` /
+  `trg_sync_datas_de_prazos` é uma sincronização nos dois sentidos, protegida contra laço.
 - **Os 5 níveis de `complexidade_tarefas` são provisórios.** O seed traz 1/3/7/15/30 dias com o
   comentário "ajustar conforme sua tabela" — nunca foram validados pelo cliente. Qualquer número
   derivado de complexidade é estimativa de placeholder.
