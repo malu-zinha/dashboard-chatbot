@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const migrationPath = resolve('supabase/migrations/20260831_disciplinas_administrativo_energisa.sql')
-const seedPath = resolve('supabase/seed_areas_completo.sql')
+const seedPath = resolve('supabase/seeds/seed_areas_completo.sql')
 const mockPath = resolve('dashboard/lib/mockData.ts')
 const sheetsPath = resolve('integrations/sheets/engineerSheetService.ts')
 
