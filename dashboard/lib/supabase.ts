@@ -1035,7 +1035,8 @@ export async function criarProjeto(params: {
 // Setup realtime subscriptions
 export function subscribeToChanges(
   table: string,
-  callback: () => void
+  callback: () => void,
+  onStatus?: (conectado: boolean) => void
 ) {
   if (!isSupabaseConfigured) {
     return null
@@ -1054,7 +1055,8 @@ export function subscribeToChanges(
         callback()
       }
     )
-    .subscribe()
+    // SUBSCRIBED = recebendo eventos; CHANNEL_ERROR, TIMED_OUT e CLOSED = nao.
+    .subscribe((status) => onStatus?.(status === 'SUBSCRIBED'))
 
   return channel
 }

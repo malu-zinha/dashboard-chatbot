@@ -70,6 +70,7 @@ import {
   Area,
 } from '@/lib/supabase'
 import { buildEngenheirosExecucao } from '@/lib/engenheirosExecucao'
+import { criarRecargaAgrupada } from '@/lib/recargaAgrupada'
 import { useIsOwnerActive } from '@/hooks/useIsOwnerActive'
 
 const ProjetosStatusChart = dynamic(() => import('@/components/ProjetosStatusChart'), {
@@ -107,6 +108,12 @@ export default function DashboardClient() {
   // Recargas do Realtime se sobrepoem; so a mais recente pode gravar na tela, senao uma
   // resposta atrasada sobrescreve dados mais novos.
   const cargaAtual = useRef(0)
+  // Status de cada canal do Realtime: "Conectado" so quando todos estao recebendo eventos.
+  const [canaisConectados, setCanaisConectados] = useState<Record<string, boolean>>({})
+  const realtimeConectado =
+    isSupabaseConfigured &&
+    Object.keys(canaisConectados).length > 0 &&
+    Object.values(canaisConectados).every(Boolean)
   const [isLoading, setIsLoading] = useState(true)
   const isOwner = useIsOwnerActive()
   
@@ -214,12 +221,25 @@ export default function DashboardClient() {
       )
       return
     }
-    const channels = [
-      subscribeToChanges('engenheiros_projetos', loadData),
-      subscribeToChanges('projetos', loadData),
-      subscribeToChanges('retrabalho_projetos', loadData),
-    ]
+    // Eventos em sequencia viram uma recarga so; com a aba escondida, a recarga
+    // espera a aba voltar (detalhes em lib/recargaAgrupada.ts).
+    const recarga = criarRecargaAgrupada(loadData, {
+      estaVisivel: () => document.visibilityState === 'visible',
+    })
+    const aoMudarVisibilidade = () => {
+      if (document.visibilityState === 'visible') recarga.aoFicarVisivel()
+    }
+    document.addEventListener('visibilitychange', aoMudarVisibilidade)
+
+    const tabelas = ['engenheiros_projetos', 'projetos', 'retrabalho_projetos']
+    const channels = tabelas.map((tabela) =>
+      subscribeToChanges(tabela, recarga.agendar, (conectado) =>
+        setCanaisConectados((atual) => ({ ...atual, [tabela]: conectado }))
+      )
+    )
     return () => {
+      recarga.cancelar()
+      document.removeEventListener('visibilitychange', aoMudarVisibilidade)
       channels.forEach((channel) => {
         if (channel) supabase.removeChannel(channel)
       })
@@ -361,7 +381,7 @@ export default function DashboardClient() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-tecpred-light">
-      <Header lastUpdate={lastUpdate} isLoading={isLoading} isConnected={isSupabaseConfigured} />
+      <Header lastUpdate={lastUpdate} isLoading={isLoading} isConnected={realtimeConectado} />
 
       <main className="container mx-auto px-6 py-8">
         {isLoading && !lastUpdate && (

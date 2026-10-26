@@ -51,6 +51,11 @@ tabelas:
 São as que `components/DashboardClient.tsx` assina. Sem isso o dashboard funciona, mas só atualiza
 com refresh manual — e o sintoma (dados velhos, sem erro nenhum) não aponta para a causa.
 
+Eventos em sequência (uma atribuição com vários pavimentos gera dezenas) viram **uma recarga só**,
+1,5 s depois do último; com a aba escondida, a recarga espera a aba voltar
+(`lib/recargaAgrupada.ts`). O indicador **Conectado/Desconectado** do topo mostra o status real dos
+três canais do Realtime — se ficar em "Desconectado", a tela não está recebendo atualizações.
+
 ## Rotas
 
 | Rota | O que é |

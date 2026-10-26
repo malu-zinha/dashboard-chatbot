@@ -12,6 +12,7 @@ import { isPercentualPendente, statusPorPercentual } from '../../logic/execucao/
 import { formatProjetoDisciplinaLinha } from '../../logic/projetos/display.ts';
 import { normalizeProjectCode, validateWhatsapp } from '../../logic/validation/validateInput.ts';
 import { redactSecrets } from '../../logic/security/redactSecrets.ts';
+import { resumoTexto } from '../../logic/security/mascararPII.ts';
 
 // Lazy loading para evitar problemas com dotenv
 let supabaseServiceInstance: SupabaseService | null = null;
@@ -135,7 +136,7 @@ export class OwnerFlow {
   // =====================================================
 
   async processarMensagem(mensagem: string): Promise<FlowResult> {
-    console.log(`\n🔷 OwnerFlow [${this.stepAtual}]: "${mensagem}"`);
+    console.log(`\n🔷 OwnerFlow [${this.stepAtual}]: ${resumoTexto(mensagem)}`);
 
     const steps: Record<string, StepFunction> = {
       inicio: this.stepInicio.bind(this),

@@ -89,8 +89,16 @@ npm start            # produção: tsx src/server-twilio.ts
 npm run build        # NÃO gera dist/ — o tsconfig usa noEmit, então isto é só typecheck
 ```
 
-O servidor expõe `GET /` e `GET /health` (health check com status do banco),
-`POST /webhook/whatsapp` (mensagens) e `POST /webhook/status` (callbacks de entrega do Twilio).
+O servidor expõe `GET /`, `GET /health` (consulta o banco, com limite de 3 s: 200 com o banco
+respondendo, 503 sem ele — o Railway usa no deploy, ver `railway.json`), `POST /webhook/whatsapp`
+(mensagens) e `POST /webhook/status` (callbacks de entrega do Twilio).
+
+O webhook de mensagens responde ao Twilio **na hora**, com TwiML vazio, e processa depois; a resposta
+do bot sai pela API do Twilio. Antes ele só respondia depois de processar tudo, e nas conversas mais
+lentas o Twilio desistia em 15 s (erro 11200). A mesma `MessageSid` não é processada duas vezes. No
+`SIGTERM` do deploy, o servidor para os crons e espera até 10 s as mensagens em andamento
+(`drainingSeconds: 15` no `railway.json`). Os logs mostram só os 4 últimos dígitos do telefone e o
+tamanho do texto, nunca o conteúdo da mensagem.
 Os dois webhooks exigem `X-Twilio-Signature` válida (403 sem ela) sempre que
 `WHATSAPP_PROVIDER=twilio` ou `TWILIO_AUTH_TOKEN` estiver definido; só o desenvolvimento local puro
 dispensa, para testar com `curl`.
@@ -131,11 +139,12 @@ Copie `.env.example` para `.env` na raiz. O dashboard usa um `.env.local` própr
 |---|---|---|---|
 | `SUPABASE_URL` | Projeto Supabase | **Sim, na prática** — sem ela nenhuma autenticação resolve e todo usuário recebe "serviço indisponível" | `''` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Chave de serviço (ignora RLS) | **Sim, na prática** | `''` |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Caminho do JSON da service account | **Sim** — o boot faz `exit(1)` se faltar | — |
-| `GOOGLE_SHEETS_ENGINEER_ID` | Planilha do engenheiro | **Sim** — `exit(1)` se faltar | `''` |
-| `GOOGLE_SHEETS_ENGINEER_NAME` | Nome da aba | **Sim** — `exit(1)` se faltar | `Engenheiro(a)` |
+| `ENABLE_SHEETS_SYNC` | Liga a sincronização banco → Google Sheets (automática e o comando `sync` do dono) | Não | ligada; `false` ou `0` desliga |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Caminho do JSON da service account | **Com o Sheets ligado** — o boot faz `exit(1)` se faltar | — |
+| `GOOGLE_SHEETS_ENGINEER_ID` | Planilha do engenheiro | **Com o Sheets ligado** — `exit(1)` se faltar | `''` |
+| `GOOGLE_SHEETS_ENGINEER_NAME` | Nome da aba | **Com o Sheets ligado** — `exit(1)` se faltar | `Engenheiro(a)` |
 | `GOOGLE_SHEETS_ENGINEER_RANGE` | Intervalo lido | Não | `A1:AE1000` |
-| `WHATSAPP_PROVIDER` | `development` \| `twilio` \| `meta` | Não | `development` |
+| `WHATSAPP_PROVIDER` | `development` \| `twilio` \| `meta` | **Em produção** (`NODE_ENV=production` ou Railway): o boot recusa sem `twilio`/`meta`, porque o modo `development` só imprime no log e dava as notificações como enviadas | `development` |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` | Credenciais Twilio | Se `WHATSAPP_PROVIDER=twilio` (a falta só gera warning no boot) | `''` |
 | `TWILIO_WEBHOOK_BASE_URL` | URL pública exatamente como no console do Twilio, usada para conferir `X-Twilio-Signature` quando o host encaminhado pelo proxy não bate (domínio próprio) | Não | host do request |
 | `META_ACCESS_TOKEN` / `META_PHONE_NUMBER_ID` / `META_API_VERSION` | Credenciais Meta | Se `WHATSAPP_PROVIDER=meta` | `''` / `''` / `v18.0` |
@@ -151,8 +160,8 @@ Atenção a duas armadilhas:
 - A validação de boot checa se a **variável** está definida, não se o arquivo de credenciais
   existe. Com `GOOGLE_APPLICATION_CREDENTIALS=./credentials.json` e nenhum `credentials.json` no
   disco, o servidor sobe normalmente e só falha quando tenta falar com o Sheets.
-- `GOOGLE_SHEETS_ENGINEER_ID` e `_NAME` são exigidas no boot mesmo que você não use Sheets. Para
-  rodar só com Supabase, defina qualquer valor nelas.
+- Para rodar sem Sheets, use `ENABLE_SHEETS_SYNC=false`: as variáveis do Google deixam de ser
+  exigidas no boot.
 
 ### Dashboard (`dashboard/.env.local`)
 
@@ -638,7 +647,19 @@ Coisas em que você vai tropeçar. Estão aqui de propósito — um README que e
   `.gitignore`, o código só aceita caminho de arquivo (`keyFile`) e não há volume configurado.
   `GOOGLE_CREDENTIALS_JSON` não é lida por nenhum código, apesar de guias antigos sugerirem. O boot
   passa de qualquer forma — a validação checa a variável, não o arquivo — então a sincronização falha
-  só em runtime. Nada além do Sheets depende disso. Ver [docs/DEPLOY.md](docs/DEPLOY.md).
+  só em runtime, depois de fazer as consultas ao banco. Nada além do Sheets depende disso: sem uso da
+  planilha, `ENABLE_SHEETS_SYNC=false` desliga tudo. Ver [docs/DEPLOY.md](docs/DEPLOY.md).
+- A sincronização limpa e reescreve a planilha; execuções nunca se sobrepõem (o cron e o comando
+  `sync`, que agora é só do dono, passam pela mesma trava).
+
+**Notificações**
+
+- O worker reserva cada notificação antes de enviar (soma a tentativa só se ninguém mexeu nela desde
+  a leitura), então duas rodadas ou duas instâncias não mandam a mesma notificação.
+- Lembretes para quem não fala com o bot há mais de 24 h saem com erro 63016 do WhatsApp (fora da
+  janela de atendimento). **É o comportamento desejado**: sem conversa recente, sem lembrete.
+- Os lembretes das 11:20 e 16:30 não têm trava entre instâncias: se um deploy cair exatamente nesse
+  minuto, os dois containers podem disparar. Em um mês de histórico do Twilio isso não aconteceu.
 
 **Dashboard**
 

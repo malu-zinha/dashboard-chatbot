@@ -9,6 +9,7 @@ import cron from 'node-cron';
 import { getSupabaseService } from '../supabase/supabaseService.ts';
 import { getGoogleSheetsService } from '../sheets/googleSheetsService.ts';
 import dotenv from 'dotenv';
+import { semSobreposicao } from './semSobreposicao.ts';
 
 dotenv.config();
 
@@ -363,6 +364,13 @@ export async function executarSincronizacao(): Promise<void> {
 }
 
 /**
+ * Limpa e reescreve a planilha: duas execucoes ao mesmo tempo (cron e comando
+ * "sync" do dono, ou um cron lento) misturavam as linhas. Todo disparo passa
+ * por aqui.
+ */
+export const sincronizarSemSobreposicao = semSobreposicao('Sincronização Sheets', executarSincronizacao);
+
+/**
  * Configura cron job para sincronização automática
  */
 export function iniciarSincronizacaoAutomatica(): void {
@@ -379,13 +387,13 @@ export function iniciarSincronizacaoAutomatica(): void {
 
   // Executar sincronização imediatamente ao iniciar
   console.log('🚀 Executando primeira sincronização...');
-  executarSincronizacao().catch(error => {
+  sincronizarSemSobreposicao().catch(error => {
     console.error('❌ Erro na primeira sincronização:', error);
   });
 
   // Agendar sincronizações periódicas
   cron.schedule(cronExpression, () => {
-    executarSincronizacao().catch(error => {
+    sincronizarSemSobreposicao().catch(error => {
       console.error('❌ Erro na sincronização automática:', error);
     });
   });
