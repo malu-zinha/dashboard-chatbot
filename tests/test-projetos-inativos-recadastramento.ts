@@ -7,7 +7,7 @@ const migrationPath = resolve(
 )
 const migrationSql = readFileSync(migrationPath, 'utf8')
 const chatbotFunctionsSql = readFileSync(
-  resolve('supabase/chatbot_functions.sql'),
+  resolve('supabase/_arquivo/chatbot_functions.sql'),
   'utf8'
 )
 const supabaseService = readFileSync(

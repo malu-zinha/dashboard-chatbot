@@ -166,7 +166,7 @@ const enviar = async (flow: any, msg: string): Promise<string> =>
     'o backfill deve copiar o carimbo antes de limpar observacoes'
   )
   // O carimbo existe com e sem acento no historico: 'Atribuido por' nas migrations recentes,
-  // 'Atribuído por' nas antigas (supabase/triggers_e_views.sql).
+  // 'Atribuído por' nas antigas (supabase/_arquivo/triggers_e_views.sql).
   assert.match(
     migration,
     /observacoes ~\* '\^Atribu\[ií\]do por:'/,

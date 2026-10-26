@@ -3,7 +3,7 @@
 Diagrama e detalhes do schema. O [README](../README.md#modelo-de-dados) resume o essencial; aqui
 ficam os nomes de coluna, o diagrama e as sutilezas que não cabiam lá.
 
-A fonte de verdade é o SQL: `supabase/MASTER_SCHEMA_COMPLETO.sql` mais `supabase/migrations/`. Quando
+A fonte de verdade é o SQL: `supabase/migrations/00000000_baseline.sql` (a estrutura de produção em 26/10/2026) mais as migrations posteriores. Quando
 este documento divergir do SQL, o SQL está certo.
 
 ## O núcleo
@@ -211,7 +211,7 @@ Várias foram **redefinidas múltiplas vezes** em migrations diferentes; só a m
 | `vw_bloco1_visao_geral`, `vw_bloco3_carga_trabalho` | `20260606_conclusao_por_area.sql` |
 | `vw_dashboard_producao_apontamentos` | `20260901_fix_dashboard_producao_apontamentos_assignment_join.sql` |
 | `vw_relatorio_projeto_pdf` | `20260717_status_historico_paralisacao.sql` |
-| `vw_bloco2_atrasos_engenheiro`, `vw_bloco2_atrasos_area` | **`supabase/CRIAR_VIEWS.sql`** — fora de `migrations/` |
+| `vw_bloco2_atrasos_engenheiro`, `vw_bloco2_atrasos_area` | baseline (antes só em `supabase/_arquivo/CRIAR_VIEWS.sql`, fora de `migrations/`) |
 
 Duas views consultadas por código são definidas fora de `migrations/` (última linha da tabela), e uma
 — `view_dashboard_ceo`, usada por `integrations/sheets/ceo_sync.ts` — **não é criada por nenhum SQL do

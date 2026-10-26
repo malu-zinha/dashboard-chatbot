@@ -5,11 +5,11 @@ import { resolve } from 'node:path'
 const migrationPath = resolve(
   'supabase/migrations/20260825_disciplinas_calculo_areas_eee_canteiro_drt.sql'
 )
-const reverterPath = resolve('supabase/reverter_areas_genericas.sql')
-const seedPath = resolve('supabase/seed_areas_completo.sql')
+const reverterPath = resolve('supabase/seeds/reverter_areas_genericas.sql')
+const seedPath = resolve('supabase/seeds/seed_areas_completo.sql')
 const mockPath = resolve('dashboard/lib/mockData.ts')
 const sheetsPath = resolve('integrations/sheets/engineerSheetService.ts')
-const insertTestPath = resolve('supabase/INSERT_TEST_TASK.sql')
+const insertTestPath = resolve('supabase/_arquivo/INSERT_TEST_TASK.sql')
 
 assert.ok(existsSync(migrationPath), 'Migration 20260825 deve existir')
 assert.ok(existsSync(reverterPath), 'reverter_areas_genericas.sql deve existir')

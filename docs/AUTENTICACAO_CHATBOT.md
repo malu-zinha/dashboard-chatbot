@@ -18,7 +18,7 @@ desse número no banco. Consequências que valem entender antes de mexer:
 - O bot usa a **service role key** do Supabase, que **ignora RLS**. Nenhuma policy do banco protege
   nada aqui; o controle é a consulta que o código faz.
 - `engenheiros.telefone` tem constraint `UNIQUE`, adicionada por
-  `supabase/adicionar_telefone_auth.sql` (não está no schema base).
+  `supabase/_arquivo/adicionar_telefone_auth.sql` (hoje no baseline, `supabase/migrations/00000000_baseline.sql`).
 
 ## Fluxo
 

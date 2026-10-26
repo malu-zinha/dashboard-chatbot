@@ -178,9 +178,9 @@ async function testConnection() {
     console.log('   3. Projeto Supabase pausado/inativo');
     console.log('\n💡 Solução:');
     console.log('   Execute no SQL Editor do Supabase:');
-    console.log('   → supabase/MASTER_SCHEMA_COMPLETO.sql');
-    console.log('   → supabase/adicionar_telefone_auth.sql');
-    console.log('   → supabase/chatbot_functions.sql\n');
+    console.log('   → supabase/_arquivo/MASTER_SCHEMA_COMPLETO.sql');
+    console.log('   → supabase/_arquivo/adicionar_telefone_auth.sql');
+    console.log('   → supabase/_arquivo/chatbot_functions.sql\n');
     process.exit(1);
   }
 }

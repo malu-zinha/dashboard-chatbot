@@ -5,7 +5,7 @@ const migration = readFileSync(
   'supabase/migrations/20260708_dashboard_alteracao_energisa.sql',
   'utf8',
 );
-const seed = readFileSync('supabase/seed_areas_completo.sql', 'utf8');
+const seed = readFileSync('supabase/seeds/seed_areas_completo.sql', 'utf8');
 const mock = readFileSync('dashboard/lib/mockData.ts', 'utf8');
 
 assert.match(migration, /ALTERACAO_ENERGISA/);

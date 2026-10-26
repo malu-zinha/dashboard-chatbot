@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const migrationPath = resolve('supabase/migrations/20260722_renomear_brt_para_drt.sql')
-const reverterPath = resolve('supabase/reverter_areas_genericas.sql')
+const reverterPath = resolve('supabase/seeds/reverter_areas_genericas.sql')
 
 assert.ok(existsSync(migrationPath), 'Migration 20260722_renomear_brt_para_drt.sql deve existir')
 assert.ok(existsSync(reverterPath), 'reverter_areas_genericas.sql deve existir')
