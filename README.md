@@ -612,10 +612,10 @@ Coisas em que você vai tropeçar. Estão aqui de propósito — um README que e
   views foram redefinidas muitas vezes (`dashboard_atribuir_projeto_com_pavimentos` 6×,
   `vw_projetos_detalhado` 5×), `20260529_sync_ponderado_dashboard.sql` se autodeclara obsoleta e
   `20260319_progresso_ponderado.sql` não é reexecutável. Não reaplique migration antiga.
-- **36 usos de `CURRENT_DATE` (UTC) em funções e views**: datas de conclusão
-  (`atualizar_progresso_area`, `auto_preencher_data_conclusao`, `marcar_area_concluida`…), previsões
-  (`registrar_previsao_dia`) e as views de atraso (`vw_bloco2_atrasos_*`, `vw_grafico_atrasos_engenheiro`).
-  Depois das 21h de Brasília elas usam o dia seguinte. Só o apontamento de horas já usa `hoje_brt()`.
+- **"Hoje" é o dia de Brasília** em todo o banco desde `20261027_hoje_brt_em_todo_o_banco.sql`:
+  funções, views e defaults usam `hoje_brt()`, nunca `CURRENT_DATE` (que no Supabase é UTC e, das
+  21h à meia-noite, já é o dia seguinte). No código, use `dataLocalBR()` (`logic/datas/dataLocal.ts`),
+  nunca `new Date().toISOString().split('T')[0]`. Registros gravados antes ficaram como estavam.
 - **Código morto no banco:** `atribuir_area_projeto` declara `v_area_id INTEGER` com `areas.area_id`
   UUID e falha sempre; `gerar_proximo_codigo_projeto()` junta todos os dígitos do código (`PRJ-2025-001`
   vira 2025001). Nenhum código chama as duas — os projetos recebem o código digitado no dashboard.
