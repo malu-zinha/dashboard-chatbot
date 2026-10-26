@@ -1,0 +1,52 @@
+# Roda em todo PR e em todo push na main. Nao acessa banco nem rede de
+# producao: os testes automaticos (tests/*.ts) usam dubles; os scripts que
+# falam com o Supabase ficam em tests/manual/ e nao entram aqui.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  chatbot:
+    name: Chatbot (tipos e testes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # whatsapp-web.js (caminho legado) baixa um Chromium no npm ci; os testes nao usam.
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  dashboard:
+    name: Dashboard (lint e build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
