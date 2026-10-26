@@ -11,7 +11,9 @@
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import mod from '../dashboard/lib/adminProjetos.ts'
+import * as modNs from '../dashboard/lib/adminProjetos.ts'
+
+const mod = ((modNs as any).default ?? modNs)
 
 // dashboard/ e CommonJS; daqui do ESM o modulo chega como default.
 const { validarCriarProjeto, montarArgsAtribuirProjeto } = mod as typeof import('../dashboard/lib/adminProjetos.ts')

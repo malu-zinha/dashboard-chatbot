@@ -12,7 +12,9 @@ import assert from 'node:assert/strict'
 import type { EntradaAcesso } from '../dashboard/lib/acessoMiddleware.ts'
 // dashboard/ e um pacote CommonJS (sem "type": "module"); daqui do ESM da
 // raiz o modulo chega como default.
-import acessoMiddleware from '../dashboard/lib/acessoMiddleware.ts'
+import * as acessoMiddlewareNs from '../dashboard/lib/acessoMiddleware.ts'
+
+const acessoMiddleware = ((acessoMiddlewareNs as any).default ?? acessoMiddlewareNs)
 
 const { decidirAcesso } = acessoMiddleware as typeof import('../dashboard/lib/acessoMiddleware.ts')
 

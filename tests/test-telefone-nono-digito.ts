@@ -22,15 +22,15 @@ function ok(nome: string) {
 
 console.log('\n📱 Nono digito\n')
 
-assert.deepEqual(variantesTelefoneBR('+558399886288'), ['+558399886288', '+5583999886288'])
+assert.deepEqual(variantesTelefoneBR('+558391110000'), ['+558391110000', '+5583991110000'])
 ok('sem o 9: tambem procura com o 9')
-assert.deepEqual(variantesTelefoneBR('+5583999886288'), ['+5583999886288', '+558399886288'])
+assert.deepEqual(variantesTelefoneBR('+5583991110000'), ['+5583991110000', '+558391110000'])
 ok('com o 9: tambem procura sem o 9')
 assert.deepEqual(variantesTelefoneBR('+558332221111'), ['+558332221111'])
 ok('fixo (comeca com 2-5) nao ganha variante')
 assert.deepEqual(variantesTelefoneBR('+14155238886'), ['+14155238886'])
 ok('numero estrangeiro nao ganha variante')
-assert.deepEqual(variantesTelefoneBR('5583999886288'), ['5583999886288', '558399886288'])
+assert.deepEqual(variantesTelefoneBR('5583991110000'), ['5583991110000', '558391110000'])
 ok('sem o + continua funcionando (mantem o formato recebido)')
 
 // Busca no servico: cliente falso captura o filtro e devolve as linhas
@@ -49,26 +49,26 @@ function servico(linhas: any[], erro: any = null) {
 }
 
 {
-  const { svc, capturado } = servico([{ nome: 'Marina', telefone: '+558399886288' }])
-  const eng = await svc.buscarEngenheiroPorTelefone('+5583999886288')
-  assert.deepEqual(capturado.in, { col: 'telefone', vals: ['+5583999886288', '+558399886288'] })
-  assert.equal(eng.nome, 'Marina')
+  const { svc, capturado } = servico([{ nome: 'Engenheira A', telefone: '+558391110000' }])
+  const eng = await svc.buscarEngenheiroPorTelefone('+5583991110000')
+  assert.deepEqual(capturado.in, { col: 'telefone', vals: ['+5583991110000', '+558391110000'] })
+  assert.equal(eng.nome, 'Engenheira A')
   ok('engenheiro cadastrado sem o 9 e reconhecido quando chega com o 9')
 }
 
 {
   const { svc } = servico([
-    { nome: 'Outro', telefone: '+558399886288' },
-    { nome: 'Exato', telefone: '+5583999886288' },
+    { nome: 'Outro', telefone: '+558391110000' },
+    { nome: 'Exato', telefone: '+5583991110000' },
   ])
-  const eng = await svc.buscarEngenheiroPorTelefone('+5583999886288')
+  const eng = await svc.buscarEngenheiroPorTelefone('+5583991110000')
   assert.equal(eng.nome, 'Exato')
   ok('se as duas formas existirem, prefere a exata (sem erro de "varias linhas")')
 }
 
 {
   const { svc } = servico([])
-  assert.equal(await svc.buscarEngenheiroPorTelefone('+558399886288'), null)
+  assert.equal(await svc.buscarEngenheiroPorTelefone('+558391110000'), null)
   ok('nenhuma das formas: continua "nao cadastrado" (null)')
 }
 
@@ -82,7 +82,7 @@ function servico(linhas: any[], erro: any = null) {
 
 {
   const { svc } = servico([], { message: 'timeout' })
-  await assert.rejects(() => svc.buscarEngenheiroPorTelefone('+558399886288'), /indispon|Unavailable/i)
+  await assert.rejects(() => svc.buscarEngenheiroPorTelefone('+558391110000'), /indispon|Unavailable/i)
   ok('erro do banco continua sendo "indisponivel", nunca "nao cadastrado"')
 }
 

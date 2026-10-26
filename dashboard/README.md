@@ -130,7 +130,7 @@ O `rm -rf .next/cache/*`, o `config.cache = false` no webpack e o `Cache-Control
 isso que quase toda página declara `export const dynamic = 'force-dynamic'`. **Não remova esses
 ajustes sem testar um deploy real** — o sintoma é o app servir código de versões anteriores.
 
-`vercel.json` existe, mas a Vercel é caminho alternativo/legado. Railway é o que está em uso.
+Railway é o único deploy. O health check do deploy é `/api/health` (público), configurado em `railway.json`.
 
 ## Coisas a saber antes de mexer
 

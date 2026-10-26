@@ -56,7 +56,7 @@ integrations/supabase/    acesso ao banco (supabaseService.ts)
 integrations/sheets/      sincronização legada com Google Sheets
 integrations/cron/        agendamentos (notificações e sync)
 supabase/migrations/      SQL do schema
-tests/                    78 arquivos de teste (64 deles .ts)
+tests/                    68 testes automaticos (npm test); tests/manual/ para scripts que falam com o banco
 ```
 
 > Uma nota sobre `logic/`: o dashboard tem uma **cópia deliberada** de
@@ -425,7 +425,7 @@ Next.js 14 em `dashboard/`. Quatro rotas:
 - **`/` e `/inicio`** — a tela principal (mesma página nos dois caminhos)
 - **`/login`** — email e senha via Supabase Auth
 - **`/admin`** — só owner ativo; senão redireciona
-- **`/test`** — devolve `OK`, health check
+- **`/api/health`** — `{"status":"ok"}`, health check do deploy (público)
 
 ### A tela principal
 
@@ -479,38 +479,38 @@ privilégios padrão; funções que **escrevem** precisam de `REVOKE EXECUTE ...
 
 ## Testes
 
-Não há framework nem runner único. Cada arquivo em `tests/` é um script auto-executável com
-`node:assert/strict`, rodado individualmente:
-
 ```bash
-npx tsx tests/test-chatbot-horas-confirmacao.ts
+npm test                  # os 68 testes automaticos, 4 por vez (scripts/rodar-testes.ts)
+npm test -- fuso          # so os arquivos com "fuso" no nome
+npm run typecheck         # tsc --noEmit, incluindo tests/ e scripts/
+npm run test:seguranca    # redacao de segredos, autenticacao, banco indisponivel, acesso
+cd dashboard && npm run lint && npm run build
 ```
 
-**Não existe `npm test`.** O agrupamento que existe é:
+Cada arquivo `tests/*.ts` é um script independente que sai com código 1 se falhar
+(`node:assert/strict` ou contagem própria) — dá para rodar um só com `npx tsx tests/<arquivo>`.
+**Nenhum acessa banco nem rede**: o Supabase é substituído por dublês. É o que o CI roda
+(`.github/workflows/ci.yml`, em todo PR e push na `main`), junto com o lint e o build do dashboard.
 
-```bash
-npm run test:seguranca    # redação de segredos, autenticação, banco indisponível
-npm run test:redact
-npm run test:auth-erro
-npm run test:indisponivel
-npx tsc --noEmit          # typecheck (é o que `npm run build` faz)
-```
-
-Os 64 arquivos `.ts` em `tests/` seguem quatro padrões:
+Os padrões:
 
 | Padrão | O que faz |
 |---|---|
-| `test-chatbot-*.ts` | Dirige o flow por várias mensagens, com duplo de Supabase. Ex.: `test-chatbot-voltar.ts`, `test-chatbot-horas-confirmacao.ts` |
-| `test-dashboard-*.ts` | Lê os arquivos do dashboard **como texto** e faz assert com regex (não importa os módulos) |
-| `test-*-migration.ts` | Valida o SQL de uma migration |
-| `test-marcar-etapa.ts`, `test-interactive.ts` | REPL interativo para percorrer o fluxo à mão — **gravam de verdade** no Supabase |
+| `test-chatbot-*.ts` | Dirige o flow por várias mensagens, com dublê de Supabase. Ex.: `test-chatbot-voltar.ts`, `test-chatbot-horas-confirmacao.ts` |
+| `test-dashboard-*.ts` | Lê os arquivos do dashboard como texto e faz assert com regex, ou importa a lógica pura de `dashboard/lib/` |
+| `test-*-migration.ts` | Valida o SQL de uma migration (contra o baseline, quando ela recria objetos) |
+
+`tests/manual/` guarda o que **não** é automático: diagnósticos, REPLs e testes de integração que
+leem ou gravam no Supabase do `.env`. Os que gravam (`test-marcar-etapa.ts`, `test-interactive.ts`,
+`test-conclusao-area.ts`) só rodam com `RUN_DB_TESTS=1` — aponte o `.env` para um projeto de teste.
 
 Para escrever um teste de conversa novo, copie o harness de `tests/test-chatbot-voltar.ts`:
-instancia `EngineerProjectFlow`, troca `(flow as any).supabase` por um duplo e semeia
-`(flow as any).state` para começar no passo que interessa.
+instancia `EngineerProjectFlow`, troca `(flow as any).supabase` por um dublê e semeia
+`(flow as any).state` para começar no passo que interessa. Não use telefone, email ou nome real em
+teste: o repositório é público.
 
-Roteiros manuais ficam em `tests/test-engineer-flow.md` — **atenção: os Testes 1 a 10 descrevem um
-fluxo que não existe mais** (ver [Limitações](#limitações-conhecidas)). O Teste 13 é fiel.
+Roteiros manuais ficam em `tests/manual/test-engineer-flow.md` — **atenção: os Testes 1 a 10
+descrevem um fluxo que não existe mais** (ver [Limitações](#limitações-conhecidas)). O Teste 13 é fiel.
 
 ---
 
@@ -545,8 +545,9 @@ https://<seu-app>.up.railway.app/webhook/whatsapp    (mensagens)
 https://<seu-app>.up.railway.app/webhook/status      (status de entrega)
 ```
 
-Não existe Dockerfile, CI, nem pipeline de testes. `dashboard/vercel.json` existe, mas a Vercel é
-caminho alternativo/legado — Railway é o que está em uso.
+Não existe Dockerfile. O CI (`.github/workflows/ci.yml`) roda tipos, testes, lint e build em todo
+PR, mas não faz deploy: o Railway publica sozinho a cada push na `main`. Os dois serviços têm health
+check de deploy (`/health` no chatbot, `/api/health` no dashboard).
 
 ---
 
@@ -579,15 +580,10 @@ Coisas em que você vai tropeçar. Estão aqui de propósito — um README que e
 
 **Ferramental**
 
-- **~22 scripts do `package.json` estão quebrados.** Todos os que usam `ts-node --esm` falham com
-  `ERR_UNKNOWN_FILE_EXTENSION` (ts-node 10 + ESM em Node 20). Inclui `test:supabase`,
-  `test:interactive`, `test:marcar-etapa`, `check:env`, `diagnostico`. Use `npx tsx <arquivo>` no
-  lugar. Alguns scripts apontam para arquivos ou módulos que não existem mais
-  (`test:planilha`, `test:query`, `test:update`, `test:bot`).
-- **Não há `npm test` nem CI.** Não existe `.github/`; nada roda automaticamente.
-- `npm run build` **não gera build** — o `tsconfig` tem `noEmit: true`, então é só typecheck.
-- `ioredis` e `xlsx` são importados por algum código mas **não estão declarados** no
-  `package.json` nem instalados. `SessionService` (Redis) existe e não é usado por ninguém.
+- `ioredis` (em `SessionService`, que ninguém usa) e `xlsx` (em `scripts/extract-xlsx-templates.ts`)
+  não estão declarados no `package.json`. O script do `xlsx` fica fora do typecheck.
+- `whatsapp-web.js` (caminho legado) puxa um Chromium no `npm ci`; o CI pula esse download com
+  `PUPPETEER_SKIP_DOWNLOAD`, o deploy do Railway ainda baixa.
 
 **Chatbot**
 
@@ -669,7 +665,7 @@ repeti-lo — todos foram verificados contra o código:
 | [`docs/DEPLOY.md`](docs/DEPLOY.md) | O que fazer nos painéis: Railway, Twilio (sandbox, templates), Supabase |
 | [`docs/AUTENTICACAO_CHATBOT.md`](docs/AUTENTICACAO_CHATBOT.md) | Como o bot identifica quem fala, e por que "não cadastrado" e "banco fora" são desfechos distintos |
 | [`dashboard/README.md`](dashboard/README.md) | Rodar e mexer no dashboard: telas, Realtime, acesso, armadilhas |
-| [`tests/test-engineer-flow.md`](tests/test-engineer-flow.md) | Roteiro de testes manuais do fluxo do engenheiro |
+| [`tests/manual/test-engineer-flow.md`](tests/manual/test-engineer-flow.md) | Roteiro de testes manuais do fluxo do engenheiro |
 
 Se encontrar um documento que contradiz este README, o README está certo — e o documento deveria ter
 sido apagado. Vinte e nove arquivos de documentação foram removidos por descreverem um sistema que não
