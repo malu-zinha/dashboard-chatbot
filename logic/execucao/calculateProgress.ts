@@ -7,6 +7,8 @@
 // de execução, progresso acumulado e análise de performance
 // =====================================================
 
+import { dataLocalBR } from '../datas/dataLocal.ts';
+
 // =====================================================
 // TIPOS E INTERFACES
 // =====================================================
@@ -199,8 +201,10 @@ export function projectCompletion(
 
   // Calcular data estimada de conclusão
   const hoje = new Date();
-  const data_conclusao = new Date(hoje);
-  data_conclusao.setDate(hoje.getDate() + dias_restantes_estimado);
+  // Conta a partir do dia de Brasilia (o servidor roda em UTC); a soma de dias
+  // e feita em UTC sobre essa data para nao depender do fuso da maquina.
+  const data_conclusao = new Date(`${dataLocalBR(hoje)}T00:00:00Z`);
+  data_conclusao.setUTCDate(data_conclusao.getUTCDate() + dias_restantes_estimado);
   const data_conclusao_estimada = data_conclusao.toISOString().split('T')[0];
 
   // Calcular percentual necessário diário para cumprir prazo (se houver)

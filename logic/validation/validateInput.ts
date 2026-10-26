@@ -7,6 +7,8 @@
 // enviar para as APIs do backend
 // =====================================================
 
+import { dataLocalBR } from '../datas/dataLocal.ts';
+
 // =====================================================
 // TIPOS E INTERFACES
 // =====================================================
@@ -131,7 +133,7 @@ export function validateExecution(data: ExecutionData): ValidationResult {
     }
   } else {
     // Se não forneceu data, usar hoje
-    dados_normalizados.data = new Date().toISOString().split('T')[0];
+    dados_normalizados.data = dataLocalBR();
   }
 
   // Validar observações (tamanho máximo)
@@ -213,7 +215,7 @@ export function validateRework(data: ReworkData): ValidationResult {
       dados_normalizados.data = normalizeDate(data.data);
     }
   } else {
-    dados_normalizados.data = new Date().toISOString().split('T')[0];
+    dados_normalizados.data = dataLocalBR();
   }
 
   return {

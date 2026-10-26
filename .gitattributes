@@ -1,3 +1,5 @@
 # O baseline guarda o corpo das funcoes exatamente como estao em producao
 # (algumas tem quebras de linha \r\n). Nao converter finais de linha.
 supabase/migrations/00000000_baseline.sql -text
+supabase/migrations/20261027_hoje_brt_em_todo_o_banco.sql -text
+supabase/rollbacks/20261027_hoje_brt_em_todo_o_banco.rollback.sql -text
