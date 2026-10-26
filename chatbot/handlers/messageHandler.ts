@@ -19,6 +19,7 @@ import {
   SupabaseUnavailableError,
 } from '../../integrations/supabase/supabaseService.ts';
 import { redactSecrets } from '../../logic/security/redactSecrets.ts';
+import { sincronizacaoSheetsAtiva } from '../../integrations/cron/configSincronizacao.ts';
 
 // Lazy loading: criar instância apenas quando necessário
 let supabaseServiceInstance: SupabaseService | null = null;
@@ -324,8 +325,8 @@ export class MessageHandler {
   private async processarComandoGlobal(mensagem: string, sessao: UserSession): Promise<string | null> {
     const mensagemLower = mensagem.toLowerCase().trim();
 
-    // Comando: Sincronizar manualmente
-    if (mensagemLower === 'sync' || mensagemLower === 'sincronizar') {
+    // Comando: Sincronizar manualmente (so o dono; para os outros e mensagem comum)
+    if ((mensagemLower === 'sync' || mensagemLower === 'sincronizar') && sessao.tipo_usuario === 'dono') {
       return await this.executarSincronizacaoManual();
     }
 
@@ -560,24 +561,25 @@ Digite *menu* para ver as opções disponíveis`;
   // =====================================================
 
   private async executarSincronizacaoManual(): Promise<string> {
-    try {
-      const { executarSincronizacao } = await import('../../integrations/cron/syncDatabaseToSheets.ts');
-
-      // Executar sincronização em background
-      executarSincronizacao().catch(error => {
-        console.error('❌ Erro na sincronização manual:', error);
-      });
-
-      return `🔄 *Sincronização iniciada!*\n\n` +
-        `Os dados do Supabase estão sendo sincronizados\n` +
-        `para o Google Sheets agora.\n\n` +
-        `⏱️ Aguarde alguns segundos e verifique a planilha.\n\n` +
-        `_A sincronização automática continua a cada 5 minutos_`;
-    } catch (error: any) {
-      console.error('Erro ao executar sincronização manual:', error);
-      return `❌ Erro ao iniciar sincronização.\n\n` +
-        `Verifique se o Supabase está configurado corretamente.`;
+    if (!sincronizacaoSheetsAtiva(process.env)) {
+      return `⏸️ A sincronização com o Google Sheets está desligada neste servidor (ENABLE_SHEETS_SYNC=false).`;
     }
+
+    // Em background, pela mesma trava da sincronizacao automatica.
+    this.dispararSincronizacaoSheets().catch(error => {
+      console.error('❌ Erro na sincronização manual:', redactSecrets(error?.message ?? error));
+    });
+
+    return `🔄 *Sincronização iniciada!*\n\n` +
+      `Os dados do Supabase estão sendo sincronizados\n` +
+      `para o Google Sheets agora.\n\n` +
+      `⏱️ Aguarde alguns segundos e verifique a planilha.\n\n` +
+      `_A sincronização automática continua a cada 5 minutos_`;
+  }
+
+  private async dispararSincronizacaoSheets(): Promise<void> {
+    const { sincronizarSemSobreposicao } = await import('../../integrations/cron/syncDatabaseToSheets.ts');
+    await sincronizarSemSobreposicao();
   }
 
   // =====================================================
