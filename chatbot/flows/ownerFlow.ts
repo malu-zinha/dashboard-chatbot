@@ -13,6 +13,7 @@ import { formatProjetoDisciplinaLinha } from '../../logic/projetos/display.ts';
 import { normalizeProjectCode, validateWhatsapp } from '../../logic/validation/validateInput.ts';
 import { redactSecrets } from '../../logic/security/redactSecrets.ts';
 import { resumoTexto } from '../../logic/security/mascararPII.ts';
+import { dataLocalBR } from '../../logic/datas/dataLocal.ts';
 
 // Lazy loading para evitar problemas com dotenv
 let supabaseServiceInstance: SupabaseService | null = null;
@@ -891,7 +892,7 @@ export class OwnerFlow {
     const input = mensagem.trim().toLowerCase();
     
     if (input === 'hoje') {
-      this.contexto.dist_data_inicio = new Date().toISOString().split('T')[0];
+      this.contexto.dist_data_inicio = dataLocalBR();
     } else {
       const data = this.parsearData(input);
       if (!data) {
@@ -1612,7 +1613,7 @@ export class OwnerFlow {
   private parsearData(input: string): string | null {
     const val = input.toLowerCase().trim();
     if (val === 'hoje') {
-      return new Date().toISOString().split('T')[0];
+      return dataLocalBR();
     }
 
     const partes = val.split('/');
