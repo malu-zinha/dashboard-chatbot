@@ -19,6 +19,7 @@ import {
   SupabaseUnavailableError,
 } from '../../integrations/supabase/supabaseService.ts';
 import { redactSecrets } from '../../logic/security/redactSecrets.ts';
+import { mascararTelefone, resumoTexto } from '../../logic/security/mascararPII.ts';
 import { sincronizacaoSheetsAtiva } from '../../integrations/cron/configSincronizacao.ts';
 
 // Lazy loading: criar instância apenas quando necessário
@@ -106,8 +107,8 @@ export class MessageHandler {
   private async processarMensagemInterno(whatsapp: string, mensagem: string): Promise<MessageResponse> {
     try {
       console.log(`\n🔵 MessageHandler.processarMensagem()`);
-      console.log(`   WhatsApp: ${whatsapp}`);
-      console.log(`   Mensagem: "${mensagem}"`);
+      console.log(`   WhatsApp: ${mascararTelefone(whatsapp)}`);
+      console.log(`   Mensagem: ${resumoTexto(mensagem)}`);
 
       // Normalizar WhatsApp
       const whatsappNormalizado = this.normalizarWhatsapp(whatsapp);
@@ -116,7 +117,7 @@ export class MessageHandler {
       let sessao = this.sessoes.get(whatsappNormalizado);
 
       if (!sessao) {
-        console.log(`   📝 Criando nova sessão para ${whatsappNormalizado}`);
+        console.log(`   📝 Criando nova sessão para ${mascararTelefone(whatsappNormalizado)}`);
 
         // AUTENTICAÇÃO: Verificar se é engenheiro ou dono
         console.log(`   🔍 [DEBUG] Iniciando autenticação...`);
@@ -273,8 +274,8 @@ export class MessageHandler {
       }
     } catch (error: any) {
       console.error('\n❌ ERRO no MessageHandler:');
-      console.error(`   WhatsApp: ${whatsapp}`);
-      console.error(`   Mensagem: "${mensagem}"`);
+      console.error(`   WhatsApp: ${mascararTelefone(whatsapp)}`);
+      console.error(`   Mensagem: ${resumoTexto(mensagem)}`);
       console.error(`   Erro: ${redactSecrets(error?.message ?? error)}`);
       console.error(`   Stack: ${redactSecrets(error?.stack)}\n`);
       return {
@@ -314,7 +315,7 @@ export class MessageHandler {
     }
 
     // Consultas rodaram normalmente e o telefone não existe em nenhuma tabela.
-    console.log(`   ⚠️ Número não cadastrado: ${whatsapp}`);
+    console.log(`   ⚠️ Número não cadastrado: ${mascararTelefone(whatsapp)}`);
     return { tipo: 'nao_cadastrado' };
   }
 
@@ -608,7 +609,7 @@ Digite *menu* para ver as opções disponíveis`;
 
       return cleaned;
     } catch (error: any) {
-      console.error(`❌ Erro ao normalizar WhatsApp "${whatsapp}":`, error);
+      console.error(`❌ Erro ao normalizar WhatsApp ${mascararTelefone(whatsapp)}:`, error);
       return whatsapp.replace(/[^\d+]/g, '').replace(/^(\d+)$/, '+55$1');
     }
   }
@@ -626,7 +627,7 @@ Digite *menu* para ver as opções disponíveis`;
 
     sessoesARemover.forEach(whatsapp => {
       this.sessoes.delete(whatsapp);
-      console.log(`Sessão expirada removida: ${whatsapp}`);
+      console.log(`Sessão expirada removida: ${mascararTelefone(whatsapp)}`);
     });
 
     if (sessoesARemover.length > 0) {

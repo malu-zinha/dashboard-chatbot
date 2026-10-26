@@ -13,6 +13,7 @@ import { logSupabaseError, redactSecrets } from '../../logic/security/redactSecr
 import { InvalidCredentialError, readCredential } from '../../logic/security/envSecret.ts';
 import { dataLocalBR } from '../../logic/datas/dataLocal';
 import { variantesTelefoneBR } from '../../logic/validation/telefoneBR';
+import { mascararTelefone } from '../../logic/security/mascararPII.ts';
 
 console.log('🔍 [SUPABASE] createClient importado do @supabase/supabase-js');
 
@@ -334,7 +335,7 @@ export class SupabaseService {
         return null;
       }
 
-      console.log(`✅ Engenheiro criado: ${nome} (${whatsappNormalizado})`);
+      console.log(`✅ Engenheiro criado: ${nome} (${mascararTelefone(whatsappNormalizado)})`);
       return engenheiro;
     } catch (error: any) {
       console.error('❌ Erro ao criar engenheiro:', error.message);
@@ -1510,7 +1511,7 @@ export class SupabaseService {
    * banco está fora do ar.
    */
   async buscarEngenheiroPorTelefone(telefone: string): Promise<Engenheiro | null> {
-    console.log(`      🔍 [SUPABASE] buscarEngenheiroPorTelefone("${telefone}")`);
+    console.log(`      🔍 [SUPABASE] buscarEngenheiroPorTelefone(${mascararTelefone(telefone)})`);
     if (!this.connected) {
       // Sem cliente não houve consulta — não dá para afirmar que o número não
       // existe. Antes isto retornava null e derrubava 100% dos usuários para
@@ -1521,7 +1522,7 @@ export class SupabaseService {
 
     try {
       const telefoneNormalizado = telefone.replace(/[^\d+]/g, '');
-      console.log(`      🔍 [SUPABASE] Telefone normalizado: "${telefoneNormalizado}"`);
+      console.log(`      🔍 [SUPABASE] Telefone normalizado: ${mascararTelefone(telefoneNormalizado)}`);
       console.log(`      🔍 [SUPABASE] Executando query...`);
 
       // maybeSingle(), não single(): com single() "0 linhas" chega como erro
@@ -1567,7 +1568,7 @@ export class SupabaseService {
    * SupabaseUnavailableError = a consulta não rodou.
    */
   async buscarDonoPorTelefone(telefone: string): Promise<any | null> {
-    console.log(`      🔍 [SUPABASE] buscarDonoPorTelefone("${telefone}")`);
+    console.log(`      🔍 [SUPABASE] buscarDonoPorTelefone(${mascararTelefone(telefone)})`);
     if (!this.connected) {
       console.error(`      ❌ [SUPABASE] Não conectado — impossível verificar cadastro`);
       throw new SupabaseUnavailableError('buscarDonoPorTelefone');
@@ -1575,7 +1576,7 @@ export class SupabaseService {
 
     try {
       const telefoneNormalizado = telefone.replace(/[^\d+]/g, '');
-      console.log(`      🔍 [SUPABASE] Telefone normalizado: "${telefoneNormalizado}"`);
+      console.log(`      🔍 [SUPABASE] Telefone normalizado: ${mascararTelefone(telefoneNormalizado)}`);
       console.log(`      🔍 [SUPABASE] Executando query...`);
 
       // Com e sem o 9 depois do DDD (o WhatsApp entrega muitos celulares sem ele). Sem
