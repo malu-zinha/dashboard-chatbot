@@ -12,7 +12,19 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { getSupabaseService } from '../integrations/supabase/supabaseService.ts';
+import { getSupabaseService } from '../../integrations/supabase/supabaseService.ts';
+
+// Grava no banco do .env (hoje, a producao). So roda de proposito, contra um
+// projeto Supabase de teste.
+if (process.env.RUN_DB_TESTS !== '1') {
+  console.error(
+    'Este script GRAVA no banco apontado pelo .env. Para rodar de proposito, contra um ' +
+      'projeto Supabase de teste: RUN_DB_TESTS=1 npx tsx tests/manual/' +
+      new URL(import.meta.url).pathname.split('/').pop(),
+  );
+  process.exit(1);
+}
+
 
 async function main() {
   const sb = getSupabaseService();

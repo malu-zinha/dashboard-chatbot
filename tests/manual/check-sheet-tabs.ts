@@ -3,7 +3,7 @@
 // DIAGNÓSTICO: Verificar abas da planilha
 // =====================================================
 
-import { getGoogleSheetsService } from '../integrations/sheets/googleSheetsService.ts';
+import { getGoogleSheetsService } from '../../integrations/sheets/googleSheetsService.ts';
 import { google } from 'googleapis';
 import dotenv from 'dotenv';
 

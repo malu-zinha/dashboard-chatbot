@@ -10,7 +10,7 @@ dotenv.config();
 console.log('✅ [2/4] dotenv configurado!');
 
 console.log('🔍 [3/4] Tentando importar messageHandler...');
-import { messageHandler } from '../chatbot/handlers/messageHandler.ts';
+import { messageHandler } from '../../chatbot/handlers/messageHandler.ts';
 console.log('✅ [3/4] messageHandler importado!');
 
 console.log('🔍 [4/4] Tentando chamar processarMensagem()...');

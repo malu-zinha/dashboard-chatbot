@@ -5,7 +5,7 @@
 // Execute: npm run test:sync
 // =====================================================
 
-import { executarSincronizacao } from '../integrations/cron/syncDatabaseToSheets.ts';
+import { executarSincronizacao } from '../../integrations/cron/syncDatabaseToSheets.ts';
 import dotenv from 'dotenv';
 
 dotenv.config();

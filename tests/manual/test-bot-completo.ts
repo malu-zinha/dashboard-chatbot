@@ -17,15 +17,15 @@ import readline from 'readline';
 console.log('🔍 [INICIO] readline importado!');
 
 console.log('🔍 [INICIO] Importando messageHandler...');
-import { messageHandler } from '../chatbot/handlers/messageHandler.ts';
+import { messageHandler } from '../../chatbot/handlers/messageHandler.ts';
 console.log('🔍 [INICIO] messageHandler importado!');
 
 console.log('🔍 [INICIO] Importando getSupabaseService...');
-import { getSupabaseService } from '../integrations/supabase/supabaseService.ts';
+import { getSupabaseService } from '../../integrations/supabase/supabaseService.ts';
 console.log('🔍 [INICIO] getSupabaseService importado!');
 
 console.log('🔍 [INICIO] Importando executarSincronizacao...');
-import { executarSincronizacao } from '../integrations/cron/syncDatabaseToSheets.ts';
+import { executarSincronizacao } from '../../integrations/cron/syncDatabaseToSheets.ts';
 console.log('🔍 [INICIO] executarSincronizacao importado!');
 
 console.log('🔍 [INICIO] Todas as importações concluídas!');
@@ -149,7 +149,7 @@ async function processMessage(msg: string) {
 // Pedir número do usuário antes de começar
 function perguntarNumero(): Promise<string> {
   return new Promise((resolve) => {
-    console.log(`${c.yellow}📱 Digite seu número de WhatsApp (ex: +5583988990772):${c.reset}`);
+    console.log(`${c.yellow}📱 Digite seu número de WhatsApp (ex: +5583900000000):${c.reset}`);
     rl.question(`${c.cyan}> ${c.reset}`, (numero) => {
       const numeroLimpo = numero.trim();
       if (!numeroLimpo) {

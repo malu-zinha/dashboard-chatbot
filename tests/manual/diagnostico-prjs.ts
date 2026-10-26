@@ -7,7 +7,7 @@ import {
   generateApprovalCsv,
   type ClassifiedConclusionAuditRow,
   type ConclusionAuditRow,
-} from '../logic/auditoria/conclusaoAudit.ts';
+} from '../../logic/auditoria/conclusaoAudit.ts';
 
 dotenv.config();
 

@@ -13,7 +13,7 @@ console.log('✅ [3/6] dotenv.config() executado!');
 console.log('✅ SUPABASE_URL:', process.env.SUPABASE_URL ? 'OK' : 'FALTA');
 
 console.log('🔍 [4/6] Tentando importar getSupabaseService...');
-import { getSupabaseService } from '../integrations/supabase/supabaseService.ts';
+import { getSupabaseService } from '../../integrations/supabase/supabaseService.ts';
 console.log('✅ [4/6] getSupabaseService importado!');
 
 console.log('🔍 [5/6] Tentando chamar getSupabaseService()...');

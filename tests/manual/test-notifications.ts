@@ -9,9 +9,9 @@
  */
 
 import dotenv from 'dotenv';
-import { getNotificationService } from '../integrations/notifications/notificationService.ts';
-import { getNotificationWorker } from '../integrations/notifications/notificationWorker.ts';
-import { getWhatsAppService } from '../integrations/whatsapp/whatsappService.ts';
+import { getNotificationService } from '../../integrations/notifications/notificationService.ts';
+import { getNotificationWorker } from '../../integrations/notifications/notificationWorker.ts';
+import { getWhatsAppService } from '../../integrations/whatsapp/whatsappService.ts';
 
 // Carregar variáveis de ambiente
 dotenv.config();

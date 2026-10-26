@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { SupabaseService } from '../../integrations/supabase/supabaseService';
+import { SupabaseService } from '../../../integrations/supabase/supabaseService';
 
 /**
  * Testes de integração para pavimentos/etapas seedados por área.

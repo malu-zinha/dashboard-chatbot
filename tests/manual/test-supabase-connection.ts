@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { getSupabaseService } from '../integrations/supabase/supabaseService.ts';
+import { getSupabaseService } from '../../integrations/supabase/supabaseService.ts';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -162,7 +162,7 @@ async function testConnection() {
     console.log('   ✅ SupabaseService funcionando');
     console.log('   ✅ Autenticação por telefone pronta');
     console.log('\n💡 Próximos passos:');
-    console.log('   1. Cadastrar telefone do dono: UPDATE dono_empresa SET telefone = \'+5583988990772\'');
+    console.log('   1. Cadastrar telefone do dono: UPDATE dono_empresa SET telefone = \'+5583900000000\'');
     console.log('   2. Testar bot completo: npm run test:bot-completo');
     console.log('   3. Iniciar WhatsApp: npm start\n');
     

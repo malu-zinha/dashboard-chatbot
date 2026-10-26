@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
-import { NotificationService } from '../integrations/notifications/notificationService.ts';
-import { WhatsAppService, type WhatsAppProvider } from '../integrations/whatsapp/whatsappService.ts';
+import { NotificationService } from '../../integrations/notifications/notificationService.ts';
+import { WhatsAppService, type WhatsAppProvider } from '../../integrations/whatsapp/whatsappService.ts';
 
 dotenv.config();
 

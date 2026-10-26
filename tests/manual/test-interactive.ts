@@ -6,9 +6,21 @@
 // =====================================================
 
 import readline from 'readline';
-import { EngineerProjectFlow } from '../chatbot/flows/engineerProjectFlow.ts';
-import { getEngineerSheetService } from '../integrations/sheets/engineerSheetService.ts';
+import { EngineerProjectFlow } from '../../chatbot/flows/engineerProjectFlow.ts';
+import { getEngineerSheetService } from '../../integrations/sheets/engineerSheetService.ts';
 import dotenv from 'dotenv';
+
+// Grava no banco do .env (hoje, a producao). So roda de proposito, contra um
+// projeto Supabase de teste.
+if (process.env.RUN_DB_TESTS !== '1') {
+  console.error(
+    'Este script GRAVA no banco apontado pelo .env. Para rodar de proposito, contra um ' +
+      'projeto Supabase de teste: RUN_DB_TESTS=1 npx tsx tests/manual/' +
+      new URL(import.meta.url).pathname.split('/').pop(),
+  );
+  process.exit(1);
+}
+
 
 // Carregar variáveis de ambiente
 dotenv.config();
@@ -115,7 +127,7 @@ async function testValidations() {
   });
 
   log('\n📊 Validações de Constantes:', 'yellow');
-  const { TIPOS_PROJETO, AREAS_PROJETO, STATUS_PROJETO, ETAPAS_PROJETO } = await import('../integrations/sheets/engineerSheetService.ts');
+  const { TIPOS_PROJETO, AREAS_PROJETO, STATUS_PROJETO, ETAPAS_PROJETO } = await import('../../integrations/sheets/engineerSheetService.ts');
   log(`  ✅ Tipos de projeto: ${TIPOS_PROJETO.length} opções`, 'green');
   log(`  ✅ Áreas: ${AREAS_PROJETO.length} opções`, 'green');
   log(`  ✅ Status: ${STATUS_PROJETO.length} opções`, 'green');

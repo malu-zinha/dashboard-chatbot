@@ -10,15 +10,21 @@
 // que JÁ existe no banco, e verificar que a próxima mensagem o
 // reconhece (não retorna "Número não cadastrado").
 //
-// Uso: npx tsx tests/test-reauth-sessao.ts
+// Uso: TELEFONE_CADASTRADO_TESTE=+55... npx tsx tests/manual/test-reauth-sessao.ts
 // =====================================================
 
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { MessageHandler } from '../chatbot/handlers/messageHandler.ts';
+import { MessageHandler } from '../../chatbot/handlers/messageHandler.ts';
 
-const TELEFONE_CADASTRADO = '+558391184542'; // Maria Rita (engenheira existente)
+// Telefone de um engenheiro que existe no banco do .env. Fica fora do codigo
+// (o repositorio e publico).
+const TELEFONE_CADASTRADO = process.env.TELEFONE_CADASTRADO_TESTE ?? '';
+if (!TELEFONE_CADASTRADO) {
+  console.error('Defina TELEFONE_CADASTRADO_TESTE com o telefone de um engenheiro cadastrado.');
+  process.exit(1);
+}
 
 async function main() {
   const h: any = new MessageHandler();

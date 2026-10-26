@@ -5,7 +5,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { EngineerProjectFlow } from '../chatbot/flows/engineerProjectFlow.ts';
+import { EngineerProjectFlow } from '../../chatbot/flows/engineerProjectFlow.ts';
 
 console.log('\n╔════════════════════════════════════════════════════════════╗');
 console.log('║     🧪 TESTE AUTOMATIZADO DOS 3 MODOS                    ║');

@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import readline from 'readline';
-import { getGoogleSheetsService } from '../integrations/sheets/googleSheetsService.ts';
-import { QueryService } from '../chatbot/handlers/queryService.ts';
+import { getGoogleSheetsService } from '../../integrations/sheets/googleSheetsService.ts';
+import { QueryService } from '../../chatbot/handlers/queryService.ts';
 
 // Carregar variáveis de ambiente
 dotenv.config();

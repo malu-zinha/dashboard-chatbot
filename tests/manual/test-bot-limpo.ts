@@ -8,7 +8,7 @@
 // =====================================================
 
 import readline from 'readline';
-import { messageHandler } from '../chatbot/handlers/messageHandler.ts';
+import { messageHandler } from '../../chatbot/handlers/messageHandler.ts';
 import dotenv from 'dotenv';
 
 dotenv.config();

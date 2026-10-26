@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import readline from 'readline';
-import { getGoogleSheetsService } from '../integrations/sheets/googleSheetsService.ts';
+import { getGoogleSheetsService } from '../../integrations/sheets/googleSheetsService.ts';
 
 // Carregar variáveis de ambiente
 dotenv.config();

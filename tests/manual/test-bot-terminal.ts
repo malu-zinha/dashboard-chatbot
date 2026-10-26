@@ -7,10 +7,10 @@
 // =====================================================
 
 import readline from 'readline';
-import { messageHandler } from '../chatbot/handlers/messageHandler.ts';
-import { QueryService } from '../chatbot/handlers/queryService.ts';
+import { messageHandler } from '../../chatbot/handlers/messageHandler.ts';
+import { QueryService } from '../../chatbot/handlers/queryService.ts';
 import dotenv from 'dotenv';
-import { getGoogleSheetsService } from '../integrations/sheets/googleSheetsService.ts';
+import { getGoogleSheetsService } from '../../integrations/sheets/googleSheetsService.ts';
 
 // Carregar variáveis de ambiente
 dotenv.config();

@@ -1,6 +1,6 @@
 /**
  * Script de diagnóstico para número específico que não recebe resposta
- * Número: +55 83 98899-0772
+ * Número: +55 83 90000-0000 (troque pelo numero investigado)
  */
 
 import dotenv from 'dotenv';
@@ -9,8 +9,8 @@ dotenv.config();
 import { Client, LocalAuth } from 'whatsapp-web.js';
 import qrcode from 'qrcode-terminal';
 
-const NUMERO_PROBLEMA = '5583988990772'; // +55 83 98899-0772
-const NUMERO_PROBLEMA_FORMATADO = '+5583988990772';
+const NUMERO_PROBLEMA = '5583900000000'; // +55 83 90000-0000 (troque pelo numero investigado)
+const NUMERO_PROBLEMA_FORMATADO = '+5583900000000';
 
 console.log('\n╔════════════════════════════════════════════════════════════╗');
 console.log('║   🔍 DIAGNÓSTICO: NÚMERO ESPECÍFICO                        ║');
