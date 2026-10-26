@@ -8,6 +8,8 @@
 import { getSupabaseService } from '../supabase/supabaseService.ts';
 import { getWhatsAppService } from '../whatsapp/whatsappService.ts';
 import type { WhatsAppService } from '../whatsapp/whatsappService.ts';
+import { mascararTelefone } from '../../logic/security/mascararPII.ts';
+import { redactSecrets } from '../../logic/security/redactSecrets.ts';
 
 // =====================================================
 // TIPOS
@@ -33,6 +35,9 @@ export class NotificationWorker {
   private whatsappService: WhatsAppService;
   private maxTentativas: number = 5;
   private loteSize: number = 10;
+  // Rodada em andamento: o cron dispara a cada minuto mesmo se a anterior
+  // ainda estiver enviando, e as duas pegariam as mesmas pendentes.
+  private processando: boolean = false;
 
   constructor(whatsappService?: WhatsAppService) {
     this.supabaseService = getSupabaseService();
@@ -51,6 +56,8 @@ export class NotificationWorker {
    * Busca até 10 notificações não enviadas e tenta enviar
    */
   async processarNotificacoesPendentes(): Promise<void> {
+    if (this.processando) return;
+    this.processando = true;
     try {
       const pendentes = await this.buscarNotificacoesPendentes();
 
@@ -81,7 +88,9 @@ export class NotificationWorker {
       }
 
     } catch (error: any) {
-      console.error('❌ Erro ao processar notificações pendentes:', error.message);
+      console.error('❌ Erro ao processar notificações pendentes:', redactSecrets(error?.message ?? error));
+    } finally {
+      this.processando = false;
     }
   }
 
@@ -100,7 +109,7 @@ export class NotificationWorker {
       .limit(this.loteSize);
 
     if (error) {
-      console.error('❌ Erro ao buscar notificações pendentes:', error);
+      console.error('❌ Erro ao buscar notificações pendentes:', redactSecrets(error));
       return [];
     }
 
@@ -108,55 +117,66 @@ export class NotificationWorker {
   }
 
   /**
+   * Reserva a notificacao antes de enviar: soma 1 em tentativas so se ela
+   * ainda estiver pendente e com o mesmo numero de tentativas que foi lido.
+   * Se outra rodada (ou outra instancia, na troca de container do deploy) ja
+   * reservou, nenhuma linha muda e esta desiste. Assim cada tentativa sai
+   * uma vez so.
+   */
+  private async reservar(notif: NotificacaoPendente): Promise<boolean> {
+    const supabase = this.supabaseService.getClient();
+    const { data, error } = await supabase
+      .from('notificacoes_whatsapp')
+      .update({ tentativas: notif.tentativas + 1 })
+      .eq('notificacao_id', notif.notificacao_id)
+      .eq('enviada', false)
+      .eq('tentativas', notif.tentativas)
+      .select('notificacao_id');
+
+    if (error) {
+      console.error(`   ❌ Erro ao reservar notificação ${notif.notificacao_id}:`, redactSecrets(error));
+      return false;
+    }
+    return (data?.length ?? 0) > 0;
+  }
+
+  /**
    * Processa uma notificação individual
    */
   private async processarNotificacao(notif: NotificacaoPendente): Promise<boolean> {
     const supabase = this.supabaseService.getClient();
+    const tel = mascararTelefone(notif.telefone);
+    const tentativa = notif.tentativas + 1;
+
+    if (!(await this.reservar(notif))) return false;
 
     try {
-      // Tentar enviar mensagem
-      const sucesso = await this.whatsappService.sendMessage(
-        notif.telefone,
-        notif.mensagem
-      );
+      const sucesso = await this.whatsappService.sendMessage(notif.telefone, notif.mensagem);
 
-      if (sucesso) {
-        // Marcar como enviada
-        await supabase
-          .from('notificacoes_whatsapp')
-          .update({
-            enviada: true,
-            data_envio: new Date().toISOString(),
-            tentativas: notif.tentativas + 1
-          })
-          .eq('notificacao_id', notif.notificacao_id);
-
-        console.log(`   ✅ Notificação enviada: ${notif.tipo} - ${notif.telefone}`);
-        return true;
-
-      } else {
-        // Incrementar tentativas (falha)
-        await supabase
-          .from('notificacoes_whatsapp')
-          .update({
-            tentativas: notif.tentativas + 1
-          })
-          .eq('notificacao_id', notif.notificacao_id);
-
-        console.log(`   ❌ Falha no envio (tentativa ${notif.tentativas + 1}/${this.maxTentativas}): ${notif.telefone}`);
+      if (!sucesso) {
+        console.log(`   ❌ Falha no envio (tentativa ${tentativa}/${this.maxTentativas}): ${tel}`);
         return false;
       }
 
-    } catch (error: any) {
-      // Erro ao enviar - incrementar tentativas
-      await supabase
+      const { error } = await supabase
         .from('notificacoes_whatsapp')
-        .update({
-          tentativas: notif.tentativas + 1
-        })
+        .update({ enviada: true, data_envio: new Date().toISOString() })
         .eq('notificacao_id', notif.notificacao_id);
 
-      console.error(`   ❌ Erro ao processar notificação ${notif.notificacao_id}:`, error.message);
+      if (error) {
+        // A mensagem saiu, mas a linha continua pendente: o worker vai
+        // reenviar na proxima rodada (ate o limite de tentativas).
+        console.error(
+          `   ❌ Notificação ${notif.notificacao_id} enviada, mas não foi marcada como enviada:`,
+          redactSecrets(error),
+        );
+      }
+
+      console.log(`   ✅ Notificação enviada: ${notif.tipo} - ${tel}`);
+      return true;
+
+    } catch (error: any) {
+      console.error(`   ❌ Erro ao processar notificação ${notif.notificacao_id}:`, redactSecrets(error?.message ?? error));
       return false;
     }
   }
