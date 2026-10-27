@@ -326,21 +326,18 @@ export class EngineerProjectFlow {
     const atribuicoes = await this.supabase.listarAtribuicoesEngenheiroOuFalha(engenheiro.eng_id);
     console.log('🔍 [DEBUG] Atribuições encontradas:', atribuicoes.length);
 
-    // Enriquecer com dados de projeto, área e status
-    const atribuicoesEnriquecidas = [];
-    for (const atrib of atribuicoes) {
-      console.log('🔍 [DEBUG] Processando atribuição:', atrib.id);
-      const projeto = await this.supabase.buscarProjetoPorId(atrib.projeto_id);
-      console.log('🔍 [DEBUG] Projeto:', projeto?.codigo_projeto);
-      const area = await this.supabase.buscarAreaPorId(atrib.area_id);
-      console.log('🔍 [DEBUG] Área:', area?.descricao);
+    // Projetos e areas em uma consulta cada, para a lista inteira (antes: 3 consultas por item).
+    const projetos = await this.supabase.buscarProjetosPorIdsOuFalha(atribuicoes.map((a) => a.projeto_id));
+    const areas = await this.supabase.buscarAreasPorIdsOuFalha(atribuicoes.map((a) => a.area_id));
 
-      // Percentual da disciplina (projeto+área): pavimentos + globais.
+    const atribuicoesEnriquecidas = atribuicoes.map((atrib) => {
+      const projeto = projetos.get(atrib.projeto_id);
+      const area = areas.get(String(atrib.area_id));
+      // Percentual da disciplina (projeto+área): pavimentos + globais, ja calculado na propria
+      // linha de engenheiros_projetos (o mesmo valor que buscarProgressoAreaOuFalha leria).
       // O status (texto) deriva do percentual — fonte única, igual ao ✅ e ao dashboard.
-      // (status_id é coluna morta: marcação manual de status foi removida.)
-      const percentualFinal = await this.supabase.buscarProgressoAreaOuFalha(atrib.projeto_id, String(atrib.area_id), atrib.id);
-
-      atribuicoesEnriquecidas.push({
+      const percentualFinal = Number(atrib.percentual_ponderado ?? 0);
+      return {
         id: atrib.id,  // eng_projeto_id
         codigo: projeto?.codigo_projeto || '',
         cliente: projeto?.cliente || '',
@@ -350,8 +347,8 @@ export class EngineerProjectFlow {
         projeto_id: atrib.projeto_id,
         percentual: percentualFinal,
         data_prevista: atrib.data_prevista,
-      });
-    }
+      };
+    });
 
     const atribuicoesPendentes = filterPendentesPorPercentual(
       atribuicoesEnriquecidas,
@@ -715,7 +712,7 @@ _Digite o número da opção desejada_`;
 
     for (let index = 0; index < atribuicoes.length; index++) {
       const atrib = atribuicoes[index];
-      const concluido = await this._isAtribuicaoConcluida(atrib);
+      const concluido = !isPercentualPendente(atrib.percentual);
       const flag = concluido ? ' ✅' : '';
       mensagem += `${index + 1}️⃣ *${atrib.codigo}* - ${atrib.cliente}${flag}\n`;
       mensagem += `   Área: ${atrib.area}\n`;
@@ -829,7 +826,7 @@ _Digite o número da opção desejada_`;
 
     for (let index = 0; index < atribuicoes.length; index++) {
       const atrib = atribuicoes[index];
-      const concluido = await this._isAtribuicaoConcluida(atrib);
+      const concluido = !isPercentualPendente(atrib.percentual);
       const flag = concluido ? ' ✅' : '';
       mensagem += `${index + 1}️⃣ *${atrib.codigo}* - ${atrib.cliente}${flag}\n`;
       mensagem += `   Área: ${atrib.area}\n`;
@@ -1304,7 +1301,7 @@ _Digite o número da opção desejada_`;
 
     for (let idx = 0; idx < atribuicoes.length; idx++) {
       const proj = atribuicoes[idx];
-      const concluido = await this._isAtribuicaoConcluida(proj);
+      const concluido = !isPercentualPendente(proj.percentual);
       const flag = concluido ? ' ✅' : '';
       mensagem += `${idx + 1}️⃣ *${proj.codigo}* - ${proj.cliente}${flag}\n`;
       mensagem += `   📦 Área: ${proj.area}\n`;

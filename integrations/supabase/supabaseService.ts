@@ -642,6 +642,46 @@ export class SupabaseService {
     }
   }
 
+  /**
+   * Projetos ativos de varios IDs numa consulta so (listas de atribuicoes).
+   * Projeto inativo ou inexistente fica fora do Map, como em buscarProjetoPorId.
+   * Falha em vez de devolver vazio: uma lista sem codigos seria dado errado.
+   */
+  async buscarProjetosPorIdsOuFalha(ids: string[]): Promise<Map<string, Projeto>> {
+    if (!this.connected) throw new SupabaseUnavailableError('buscarProjetosPorIds');
+    const unicos = [...new Set(ids.filter(Boolean))];
+    if (unicos.length === 0) return new Map();
+    const { data, error } = await this.supabase
+      .from('projetos')
+      .select('*')
+      .in('projeto_id', unicos)
+      .eq('ativo', true);
+    if (error) {
+      logSupabaseError('buscarProjetosPorIds', error);
+      throw new SupabaseUnavailableError('buscarProjetosPorIds');
+    }
+    return new Map((data ?? []).map((p: Projeto) => [p.projeto_id, p]));
+  }
+
+  /**
+   * Areas ativas de varios IDs numa consulta so. Mesmas regras de buscarProjetosPorIdsOuFalha.
+   */
+  async buscarAreasPorIdsOuFalha(ids: Array<string | number>): Promise<Map<string, Area>> {
+    if (!this.connected) throw new SupabaseUnavailableError('buscarAreasPorIds');
+    const unicos = [...new Set(ids.filter((id) => id !== null && id !== undefined && id !== '').map(String))];
+    if (unicos.length === 0) return new Map();
+    const { data, error } = await this.supabase
+      .from('areas')
+      .select('*')
+      .in('area_id', unicos)
+      .eq('ativo', true);
+    if (error) {
+      logSupabaseError('buscarAreasPorIds', error);
+      throw new SupabaseUnavailableError('buscarAreasPorIds');
+    }
+    return new Map((data ?? []).map((a: Area) => [String(a.area_id), a]));
+  }
+
   // =====================================================
   // ATRIBUIÇÕES (engenheiros_projetos)
   // =====================================================

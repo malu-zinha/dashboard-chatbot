@@ -28,13 +28,14 @@ const svc = getSupabaseService() as any
 const PCT: Record<string, number> = { concluida: 100, globaisPendentes: 60, semEtapas: 0 }
 
 function preparar() {
-  svc.listarAtribuicoesEngenheiroOuFalha = async () => [
-    { id: 'concluida', projeto_id: 'p1', area_id: 'a' },
-    { id: 'globaisPendentes', projeto_id: 'p2', area_id: 'a' },
-    { id: 'semEtapas', projeto_id: 'p3', area_id: 'a' },
-  ]
-  svc.buscarProjetoPorId = async (id: string) => ({ codigo_projeto: id.toUpperCase(), cliente: 'C' })
-  svc.buscarAreaPorId = async () => ({ codigo: 'ELE', descricao: 'Eletrico' })
+  // O percentual ponderado vem na propria linha de engenheiros_projetos.
+  svc.listarAtribuicoesEngenheiroOuFalha = async () =>
+    ['concluida', 'globaisPendentes', 'semEtapas'].map((id, i) => ({
+      id, projeto_id: `p${i + 1}`, area_id: 'a', percentual_ponderado: PCT[id],
+    }))
+  svc.buscarProjetosPorIdsOuFalha = async (ids: string[]) =>
+    new Map(ids.map((id) => [id, { codigo_projeto: id.toUpperCase(), cliente: 'C' }]))
+  svc.buscarAreasPorIdsOuFalha = async () => new Map([['a', { codigo: 'ELE', descricao: 'Eletrico' }]])
   svc.buscarProgressoAreaOuFalha = async (_p: string, _a: string, atribId: string) => PCT[atribId]
   // Pela regra antiga, todos os pavimentos prontos = "concluida" — inclusive a de globais pendentes.
   svc.buscarPavimentosComEtapas = async () => [{ ativo: true, etapas: [{ concluida: true, ativo: true }] }]
