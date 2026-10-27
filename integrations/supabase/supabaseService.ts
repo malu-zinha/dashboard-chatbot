@@ -642,27 +642,6 @@ export class SupabaseService {
     }
   }
 
-  /**
-   * Gera próximo código de projeto automaticamente
-   */
-  async getUltimoCodigoProjeto(): Promise<string | null> {
-    if (!this.connected) return null;
-
-    try {
-      const { data, error } = await this.supabase.rpc('gerar_proximo_codigo_projeto');
-
-      if (error) {
-        console.error('❌ Erro ao gerar código:', error);
-        return null;
-      }
-
-      return data;
-    } catch (error: any) {
-      console.error('❌ Erro ao gerar código:', error.message);
-      return null;
-    }
-  }
-
   // =====================================================
   // ATRIBUIÇÕES (engenheiros_projetos)
   // =====================================================
