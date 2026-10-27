@@ -291,17 +291,6 @@ export class WhatsAppService {
   }
 
   /**
-   * Envia múltiplas mensagens com delay entre elas
-   */
-  async sendMessages(messages: Array<{ to: string; message: string }>): Promise<void> {
-    for (const msg of messages) {
-      await this.sendMessage(msg.to, msg.message);
-      // Delay de 1 segundo entre mensagens para não sobrecarregar
-      await this.sleep(1000);
-    }
-  }
-
-  /**
    * Retorna o nome do provider atual
    */
   getProviderName(): string {

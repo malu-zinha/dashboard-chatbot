@@ -182,63 +182,6 @@ export class NotificationWorker {
   }
 
   /**
-   * Limpa notificações antigas já enviadas (manutenção)
-   * Remove notificações enviadas com mais de 30 dias
-   */
-  async limparNotificacoesAntigas(): Promise<void> {
-    const supabase = this.supabaseService.getClient();
-
-    try {
-      const dataLimite = new Date();
-      dataLimite.setDate(dataLimite.getDate() - 30);
-
-      const { data, error } = await supabase
-        .from('notificacoes_whatsapp')
-        .delete()
-        .eq('enviada', true)
-        .lt('data_envio', dataLimite.toISOString());
-
-      if (error) {
-        console.error('❌ Erro ao limpar notificações antigas:', error);
-        return;
-      }
-
-      if (data && data.length > 0) {
-        console.log(`🧹 Limpeza: ${data.length} notificação(ões) antiga(s) removida(s)`);
-      }
-
-    } catch (error: any) {
-      console.error('❌ Erro ao limpar notificações antigas:', error.message);
-    }
-  }
-
-  /**
-   * Retentar notificações falhadas (após correção de problemas)
-   */
-  async retentarFalhadas(): Promise<void> {
-    const supabase = this.supabaseService.getClient();
-
-    try {
-      // Resetar contador de tentativas de notificações não enviadas
-      const { error } = await supabase
-        .from('notificacoes_whatsapp')
-        .update({ tentativas: 0 })
-        .eq('enviada', false)
-        .gte('tentativas', this.maxTentativas);
-
-      if (error) {
-        console.error('❌ Erro ao resetar tentativas:', error);
-        return;
-      }
-
-      console.log('🔄 Notificações falhadas resetadas para nova tentativa');
-
-    } catch (error: any) {
-      console.error('❌ Erro ao retentar falhadas:', error.message);
-    }
-  }
-
-  /**
    * Retorna estatísticas das notificações
    */
   async obterEstatisticas(): Promise<any> {

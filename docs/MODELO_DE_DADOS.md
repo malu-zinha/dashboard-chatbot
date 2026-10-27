@@ -213,9 +213,8 @@ Várias foram **redefinidas múltiplas vezes** em migrations diferentes; só a m
 | `vw_relatorio_projeto_pdf` | `20260717_status_historico_paralisacao.sql` |
 | `vw_bloco2_atrasos_engenheiro`, `vw_bloco2_atrasos_area` | baseline (antes só em `supabase/_arquivo/CRIAR_VIEWS.sql`, fora de `migrations/`) |
 
-Duas views consultadas por código são definidas fora de `migrations/` (última linha da tabela), e uma
-— `view_dashboard_ceo`, usada por `integrations/sheets/ceo_sync.ts` — **não é criada por nenhum SQL do
-repositório**. Esse caminho está morto.
+Duas views consultadas por código eram definidas fora de `migrations/` (última linha da tabela); hoje
+estão no baseline.
 
 Resíduos conhecidos: `vw_retrabalho_taxa_area_projeto` ainda expõe `dias_com_registro` fixo em `0` e
 `taxa_retrabalho_por_dia` como alias do percentual, colunas mantidas só para não quebrar o front.
