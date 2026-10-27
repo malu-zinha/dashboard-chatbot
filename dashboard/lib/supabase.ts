@@ -71,15 +71,6 @@ export interface AtrasosEngenheiro {
   atraso_maximo_dias: number
 }
 
-export interface AtrasosArea {
-  area_id: string
-  area_codigo: string
-  area: string
-  qtde_atrasados: number
-  dias_medio_atraso: number
-  total_projetos_area: number
-}
-
 export interface CargaTrabalho {
   eng_id: string
   engenheiro: string
@@ -278,20 +269,6 @@ export async function fetchAtrasosEngenheiro(): Promise<AtrasosEngenheiro[]> {
   return data || []
 }
 
-export async function fetchAtrasosArea(): Promise<AtrasosArea[]> {
-  const { data, error } = await supabase
-    .from('vw_bloco2_atrasos_area')
-    .select('*')
-    .order('dias_medio_atraso', { ascending: false })
-
-  if (error) {
-    registrarFalha('atrasos por área', error)
-    return []
-  }
-
-  return data || []
-}
-
 export async function fetchCargaTrabalho(): Promise<CargaTrabalho[]> {
   const { data, error } = await supabase
     .from('vw_bloco3_carga_trabalho')
@@ -334,27 +311,6 @@ export async function fetchRetrabalhoGeral(): Promise<RetrabalhoGeral | null> {
   return data as RetrabalhoGeral
 }
 
-async function fetchRetrabalhoGeralLegado(): Promise<RetrabalhoGeral | null> {
-  // View vw_retrabalho_geral não existe — calcular a partir das tabelas base
-  const [retRes, projRes] = await Promise.all([
-    supabase.from('retrabalho_projetos').select('id'),
-    supabase.from('projetos').select('projeto_id').eq('ativo', true),
-  ])
-
-  const totalRetrabalhos = retRes.data?.length ?? 0
-  const totalProjetos = projRes.data?.length ?? 0
-
-  return {
-    total_retrabalhos_geral: totalRetrabalhos,
-    total_projetos_ativos: totalProjetos,
-    horas_trabalhadas_total: 0,
-    horas_retrabalho_total: 0,
-    percentual_geral_retrabalho: totalProjetos > 0
-      ? (totalRetrabalhos / totalProjetos) * 100
-      : 0,
-  }
-}
-
 export async function fetchRetrabalhoPorProjeto(): Promise<RetrabalhoPorProjeto[]> {
   const { data, error } = await supabase
     .from('vw_retrabalho_por_projeto')
@@ -367,54 +323,6 @@ export async function fetchRetrabalhoPorProjeto(): Promise<RetrabalhoPorProjeto[
   }
 
   return (data as RetrabalhoPorProjeto[]) || []
-}
-
-async function fetchRetrabalhoPorProjetoLegado(): Promise<RetrabalhoPorProjeto[]> {
-  // View vw_retrabalho_por_projeto não existe — calcular a partir das tabelas base
-  const [retRes, projRes, epRes] = await Promise.all([
-    supabase.from('retrabalho_projetos').select('projeto_id'),
-    supabase.from('projetos').select('projeto_id, codigo_projeto, cliente').eq('ativo', true),
-    supabase.from('engenheiros_projetos').select('projeto_id, eng_id').eq('ativo', true),
-  ])
-
-  if (projRes.error || retRes.error) {
-    registrarFalha('retrabalho por projeto', projRes.error || retRes.error)
-    return []
-  }
-
-  // Contar retrabalhos por projeto
-  const retByProj = new Map<string, number>()
-  for (const r of (retRes.data || [])) {
-    retByProj.set(r.projeto_id, (retByProj.get(r.projeto_id) || 0) + 1)
-  }
-
-  // Contar engenheiros distintos por projeto
-  const engByProj = new Map<string, Set<string>>()
-  for (const ep of (epRes.data || [])) {
-    if (!engByProj.has(ep.projeto_id)) engByProj.set(ep.projeto_id, new Set())
-    engByProj.get(ep.projeto_id)!.add(ep.eng_id)
-  }
-
-  // Construir resultado — somente projetos com retrabalho
-  const result: RetrabalhoPorProjeto[] = (projRes.data || [])
-    .filter(p => retByProj.has(p.projeto_id))
-    .map(p => {
-      const totalRet = retByProj.get(p.projeto_id) || 0
-      const totalEng = engByProj.get(p.projeto_id)?.size || 1
-      return {
-        projeto_id: p.projeto_id,
-        codigo_projeto: p.codigo_projeto,
-        cliente: p.cliente,
-        total_retrabalhos_projeto: totalRet,
-        total_engenheiros_projeto: totalEng,
-        horas_trabalhadas_total: 0,
-        horas_retrabalho_total: 0,
-        percentual_retrabalho_projeto: (totalRet / totalEng) * 100,
-      }
-    })
-    .sort((a, b) => b.percentual_retrabalho_projeto - a.percentual_retrabalho_projeto)
-
-  return result
 }
 
 export async function fetchRetrabalhoDetalhesPorProjeto(
@@ -602,67 +510,6 @@ export async function fetchProducaoEngenheiroPeriodo(
       horas_retrabalho_total: v.retrabalho,
     }))
     .sort((a, b) => a.engenheiro.localeCompare(b.engenheiro, 'pt-BR'))
-}
-
-async function fetchRetrabalhoTaxaPorAreaLegado(): Promise<RetrabalhoTaxaArea[]> {
-  const [retRes, epRes, projRes, areaRes] = await Promise.all([
-    supabase.from('retrabalho_projetos').select('projeto_id, eng_projeto_id, data_retrabalho'),
-    supabase.from('engenheiros_projetos').select('id, projeto_id, area_id'),
-    supabase.from('projetos').select('projeto_id, codigo_projeto, cliente'),
-    supabase.from('areas').select('area_id, codigo, descricao'),
-  ])
-
-  if (retRes.error || epRes.error || projRes.error || areaRes.error) {
-    registrarFalha('taxa de retrabalho por área', retRes.error || epRes.error || projRes.error || areaRes.error)
-    return []
-  }
-
-  const retrabalhos = retRes.data || []
-  const engProjetos = epRes.data || []
-  const projetos = projRes.data || []
-  const areas = areaRes.data || []
-
-  const projetoMap = new Map(projetos.map(p => [p.projeto_id, p]))
-  const areaMap = new Map(areas.map(a => [a.area_id, a]))
-  const epMap = new Map(engProjetos.map(ep => [ep.id, ep]))
-
-  // Group retrabalhos by projeto_id + area_id
-  const grupoMap = new Map<string, { projeto_id: string; area_id: string; total: number; datas: Set<string> }>()
-
-  for (const ret of retrabalhos) {
-    const ep = epMap.get(ret.eng_projeto_id)
-    const area_id = ep?.area_id
-    if (!area_id) continue
-
-    const key = `${ret.projeto_id}|${area_id}`
-    if (!grupoMap.has(key)) {
-      grupoMap.set(key, { projeto_id: ret.projeto_id, area_id, total: 0, datas: new Set() })
-    }
-    const g = grupoMap.get(key)!
-    g.total++
-    if (ret.data_retrabalho) g.datas.add(ret.data_retrabalho)
-  }
-
-  const result: RetrabalhoTaxaArea[] = []
-  for (const g of grupoMap.values()) {
-    const proj = projetoMap.get(g.projeto_id)
-    const area = areaMap.get(g.area_id)
-    const diasComRegistro = g.datas.size || 1
-    result.push({
-      projeto_id: g.projeto_id,
-      codigo_projeto: proj?.codigo_projeto ?? 'N/A',
-      cliente: proj?.cliente ?? 'N/A',
-      area_id: g.area_id,
-      area_codigo: area?.codigo ?? 'N/A',
-      area: area?.descricao ?? 'N/A',
-      total_retrabalhos_area: g.total,
-      horas_trabalhadas_total: 0,
-      horas_retrabalho_total: 0,
-      percentual_retrabalho_disciplina: g.total / diasComRegistro,
-    })
-  }
-
-  return result.sort((a, b) => b.percentual_retrabalho_disciplina - a.percentual_retrabalho_disciplina)
 }
 
 export async function fetchProjetosStatus(): Promise<ProjetosStatus[]> {

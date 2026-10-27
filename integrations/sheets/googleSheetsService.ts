@@ -159,45 +159,6 @@ export class GoogleSheetsService {
   }
 
   /**
-   * Busca simples por texto em qualquer campo
-   */
-  searchInSheet(data: any[], searchTerm: string): any[] {
-    const term = searchTerm.toLowerCase();
-    return data.filter(row => 
-      Object.values(row).some(value => 
-        String(value).toLowerCase().includes(term)
-      )
-    );
-  }
-
-  /**
-   * Lê múltiplas abas de uma planilha
-   * @param spreadsheetId - ID da planilha
-   * @param sheetNames - Array com nomes das abas
-   * @param range - Range padrão (ex: 'A1:Z1000')
-   */
-  async readMultipleSheets(
-    spreadsheetId: string, 
-    sheetNames: string[], 
-    range: string = 'A1:Z1000'
-  ): Promise<Map<string, any[]>> {
-    const result = new Map<string, any[]>();
-    
-    for (const sheetName of sheetNames) {
-      try {
-        const fullRange = `${sheetName}!${range}`;
-        const data = await this.readSheetAsObjects(spreadsheetId, fullRange);
-        result.set(sheetName, data);
-      } catch (error: any) {
-        console.error(`Erro ao ler aba ${sheetName}:`, error.message);
-        result.set(sheetName, []);
-      }
-    }
-    
-    return result;
-  }
-
-  /**
    * Busca linha pelo ID (campo Nº ou Código do Projeto)
    * @param spreadsheetId - ID da planilha
    * @param sheetName - Nome da aba
@@ -255,41 +216,6 @@ export class GoogleSheetsService {
     } catch (error: any) {
       console.error('Erro ao buscar linha por ID:', error.message);
       return null;
-    }
-  }
-
-  /**
-   * Atualiza uma célula específica
-   * @param spreadsheetId - ID da planilha
-   * @param sheetName - Nome da aba
-   * @param row - Número da linha (começa em 1)
-   * @param column - Letra da coluna (ex: 'A', 'B', 'C')
-   * @param value - Novo valor
-   */
-  async updateCell(
-    spreadsheetId: string,
-    sheetName: string,
-    row: number,
-    column: string,
-    value: any
-  ): Promise<boolean> {
-    try {
-      const range = `${sheetName}!${column}${row}`;
-      
-      await this.sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-          values: [[value]]
-        }
-      });
-      
-      console.log(`✅ Célula ${range} atualizada: ${value}`);
-      return true;
-    } catch (error: any) {
-      console.error('Erro ao atualizar célula:', error.message);
-      return false;
     }
   }
 
@@ -525,24 +451,6 @@ export class GoogleSheetsService {
     }
   }
 
-  /**
-   * Escrever múltiplas linhas (append mode)
-   */
-  async appendSheet(spreadsheetId: string, range: string, values: any[][]): Promise<void> {
-    try {
-      await this.sheets.spreadsheets.values.append({
-        spreadsheetId,
-        range,
-        valueInputOption: 'RAW',
-        requestBody: {
-          values,
-        },
-      });
-    } catch (error: any) {
-      console.error('Erro ao adicionar linhas na planilha:', error.message);
-      throw error;
-    }
-  }
 }
 
 // Singleton para reutilizar instância

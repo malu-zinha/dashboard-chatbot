@@ -62,18 +62,18 @@ function flowCom(supabase: Record<string, any>) {
   ok('falha ao listar atribuicoes nao vira "nenhum projeto"')
 }
 
-// 3. Progresso indisponivel na listagem
-{
+// 3. Projetos ou areas indisponiveis na listagem (o percentual vem na propria atribuicao)
+for (const quebrado of ['buscarProjetosPorIdsOuFalha', 'buscarAreasPorIdsOuFalha']) {
   const { flow } = flowCom({
     buscarEngenheiroPorTelefone: async () => ({ eng_id: 'e1', nome: 'Maria' }),
-    listarAtribuicoesEngenheiroOuFalha: async () => [{ id: 'a1', projeto_id: 'p1', area_id: 'x' }],
-    buscarProjetoPorId: async () => ({ codigo_projeto: 'PRJ-1' }),
-    buscarAreaPorId: async () => ({ descricao: 'Eletrico' }),
-    buscarProgressoAreaOuFalha: async () => { throw new SupabaseUnavailableError('teste') },
+    listarAtribuicoesEngenheiroOuFalha: async () => [{ id: 'a1', projeto_id: 'p1', area_id: 'x', percentual_ponderado: 40 }],
+    buscarProjetosPorIdsOuFalha: async () => new Map([['p1', { codigo_projeto: 'PRJ-1' }]]),
+    buscarAreasPorIdsOuFalha: async () => new Map([['x', { descricao: 'Eletrico' }]]),
+    [quebrado]: async () => { throw new SupabaseUnavailableError('teste') },
   })
   await assert.rejects(() => flow.buscarAtribuicoesEngenheiro(), SupabaseUnavailableError)
-  ok('falha ao ler o percentual nao vira 0%')
 }
+ok('falha ao buscar projetos ou areas da lista nao vira lista sem codigos')
 
 // 4. Servico: variantes OuFalha lancam; as antigas mantem o valor de reserva
 {

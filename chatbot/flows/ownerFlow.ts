@@ -2002,16 +2002,19 @@ export class OwnerFlow {
       return { mensagem: `❌ ${engOrigem.nome} não tem tarefas atribuídas.\n\n_Digite "menu"_`, finalizado: true };
     }
 
-    // Enriquecer com dados de projeto e área (e filtrar 100% concluídas)
+    // Enriquecer com dados de projeto e área (e filtrar 100% concluídas). Projetos e areas em uma
+    // consulta cada, para a lista inteira (antes: 3 consultas por atribuicao).
+    const projetos = await getSupabase().buscarProjetosPorIdsOuFalha(atribuicoes.map((a) => a.projeto_id));
+    const areas = await getSupabase().buscarAreasPorIdsOuFalha(atribuicoes.map((a) => a.area_id));
     const atribsEnriquecidas = [];
     for (const atrib of atribuicoes) {
-      const projeto = await getSupabase().buscarProjetoPorId(atrib.projeto_id);
-      const area = await getSupabase().buscarAreaPorId(atrib.area_id);
       // Pular as 100% concluidas. Mesma regra do fluxo do engenheiro e do dashboard: o
-      // percentual ponderado. A regra antiga olhava so os pavimentos e escondia atribuicoes
-      // com todos os pavimentos prontos e etapas globais pendentes.
-      const pct = await getSupabase().buscarProgressoAreaOuFalha(atrib.projeto_id, String(atrib.area_id), atrib.id);
-      if (!isPercentualPendente(pct)) continue;
+      // percentual ponderado, que ja vem na propria linha de engenheiros_projetos. A regra antiga
+      // olhava so os pavimentos e escondia atribuicoes com todos os pavimentos prontos e etapas
+      // globais pendentes.
+      if (!isPercentualPendente(Number(atrib.percentual_ponderado ?? 0))) continue;
+      const projeto = projetos.get(atrib.projeto_id);
+      const area = areas.get(String(atrib.area_id));
       atribsEnriquecidas.push({
         ...atrib,
         codigo_projeto: projeto?.codigo_projeto || '?',

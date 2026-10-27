@@ -105,8 +105,6 @@ Duas consequências operacionais:
 
 - **Reiniciar o processo derruba todas as conversas em andamento.** Um deploy no meio da notificação
   noturna faz o engenheiro recomeçar. Não há persistência.
-- Existe um `SessionService` com Redis em `integrations/session/sessionService.ts`, **não integrado**
-  a nada — e `ioredis` não está nem declarado no `package.json`. Não confie nele.
 
 Quando um fluxo termina (`finalizado: true`), o handler descarta a instância e limpa
 `fluxo_ativo`, para a próxima mensagem começar do menu.

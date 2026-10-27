@@ -62,7 +62,9 @@ ok('rollback devolve todas, menos as duas que ja eram so service_role', () => {
 
 ok('nenhuma funcao de leitura usada pelo codigo foi revogada', () => {
   const leitura = [...chamadas].filter((f) => /^(listar|buscar|calcular|verificar|dono_consultar|dono_recomendar)_/.test(f))
-  assert.ok(leitura.length >= 8, 'achou poucas funcoes de leitura no codigo')
+  // Guarda contra a busca de .rpc() parar de casar. Eram 8; caiu para 3 quando a
+  // Onda 5 removeu metodos sem uso que chamavam listar_*/buscar_*.
+  assert.ok(leitura.length >= 3, 'achou poucas funcoes de leitura no codigo')
   for (const f of leitura) assert.ok(!listaRevogacao.has(f), `${f} e leitura e foi revogada`)
 })
 

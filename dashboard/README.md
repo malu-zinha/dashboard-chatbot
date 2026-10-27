@@ -136,17 +136,16 @@ Railway é o único deploy. O health check do deploy é `/api/health` (público)
 
 - **`lib/secrets.ts` é cópia deliberada** de `logic/security/redactSecrets.ts` e
   `logic/security/envSecret.ts` da raiz, porque o `tsconfig` do Next não alcança pastas fora de
-  `dashboard/`. Se corrigir um, corrija o outro.
+  `dashboard/`. Se corrigir um, corrija o outro: `tests/test-segredos-bot-e-dashboard-iguais.ts`
+  falha se a máscara de segredos divergir.
 - **O card "Média por Horas"** do retrabalho é média aritmética simples dos percentuais por
   engenheiro, **não ponderada por horas** — então ele diverge do "% Geral TecPred", que é ponderado.
   Não é bug de dado.
 - **O "valor da hora"** da produção por período é digitado na tela e **não é persistido**.
-- **Componentes não referenciados:** `MemoriaisDescritivosTab.tsx` (tela planejada, nunca ligada) e
-  `RetrabalhoPorProjetoTable.tsx` (absorvido pelo `RetrabalhoCard`).
-- **Funções não chamadas** em `lib/supabase.ts`: `fetchRetrabalhoGeralLegado`,
-  `fetchRetrabalhoPorProjetoLegado`, `fetchRetrabalhoTaxaPorAreaLegado` e
-  `fetchProducaoEngenheiroPeriodo`. As três "legado" recalculavam métricas quando as views não
-  existiam e devolvem horas zeradas — não use como referência.
+- **Componentes não referenciados, mantidos de propósito:** `MemoriaisDescritivosTab.tsx` (tela
+  planejada, nunca ligada) e `RetrabalhoPorProjetoTable.tsx` (absorvido pelo `RetrabalhoCard`, ainda
+  lido por um teste). `fetchProducaoEngenheiroPeriodo`, em `lib/supabase.ts`, também não é chamada
+  pela tela, mas tem teste.
 - **Os testes do dashboard ficam na raiz**, em `tests/test-dashboard-*.ts`, e validam o código
   **lendo os arquivos como texto** com regex, não importando os módulos. Rodam com
   `npx tsx tests/<arquivo>.ts`.
