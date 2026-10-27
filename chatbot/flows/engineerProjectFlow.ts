@@ -25,6 +25,9 @@ import {
 } from '../../logic/execucao/filtros.ts';
 import { parseMultiSelection, MultiSelectionError } from '../../logic/execucao/parseMultiSelection.ts';
 
+// Passos que so desenham a lista de projetos (ver o tratamento de 0/voltar).
+const PASSOS_QUE_SO_DESENHAM_LISTA = new Set<string>(['escolher_projeto_manha', 'escolher_projeto_noite']);
+
 // =====================================================
 // TIPOS E INTERFACES
 // =====================================================
@@ -385,6 +388,10 @@ export class EngineerProjectFlow {
           };
         }
         if (this.popStep()) {
+          // Os passos escolher_projeto_* so desenham a lista de projetos e ja avancam para o
+          // passo que recebe a escolha. Voltar para eles redesenharia a mesma lista para sempre;
+          // volta mais um (ao menu, quando a lista foi aberta por ele).
+          if (PASSOS_QUE_SO_DESENHAM_LISTA.has(this.state.step)) this.popStep();
           // Se voltou à raiz, mostrar o menu do engenheiro inline
           if (this.state.step === 'escolher_acao' || this.state.step === 'inicio') {
             this.resetToMenu();
@@ -575,6 +582,9 @@ export class EngineerProjectFlow {
   // =====================================================
 
   private goToStep(step: FlowStep): void {
+    // Ir para o proprio passo (re-desenhar a lista depois de um 0) nao e um passo novo:
+    // empilhar de novo obrigava a apertar 0 duas vezes para sair dali.
+    if (step === this.state.step) return;
     if (this.state.step !== 'inicio') {
       this.state.stepHistory.push(this.state.step);
       // Snapshot: deep clone do state (para conseguir restaurar ao voltar)

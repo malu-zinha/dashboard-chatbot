@@ -580,8 +580,8 @@ Coisas em que você vai tropeçar. Estão aqui de propósito — um README que e
 
 **Ferramental**
 
-- `ioredis` (em `SessionService`, que ninguém usa) e `xlsx` (em `scripts/extract-xlsx-templates.ts`)
-  não estão declarados no `package.json`. O script do `xlsx` fica fora do typecheck.
+- `xlsx` (em `scripts/extract-xlsx-templates.ts`) não está declarado no `package.json`; o script
+  fica fora do typecheck.
 - `whatsapp-web.js` (caminho legado) puxa um Chromium no `npm ci`; o CI pula esse download com
   `PUPPETEER_SKIP_DOWNLOAD`, o deploy do Railway ainda baixa.
 
@@ -590,16 +590,7 @@ Coisas em que você vai tropeçar. Estão aqui de propósito — um README que e
 - **Áudio não funciona em produção.** O Whisper só é chamado no caminho legado
   (`npm run dev:whatsapp-web`). No servidor Twilio, um áudio chega sem `Body` e devolve
   `400 Bad Request`.
-- **`0`/Voltar não sobe ao menu nas telas de lista.** Nas listas de projeto, o `0` re-renderiza a
-  mesma lista indefinidamente — o rodapé anuncia "Voltar" e nada acontece. Como consequência, o
-  trecho que renderiza o menu no voltar é código inalcançável.
-- **Seis passos mortos** no fluxo do engenheiro: `progresso_escolher_pavimento`,
-  `progresso_escolher_etapa`, `progresso_continuar`, `noite_etapa_pavimento`,
-  `noite_etapa_escolher`, `noite_etapa_mais`. Os três últimos formam um ciclo fechado cujos únicos
-  `goToStep` estão dentro dele mesmo — nada leva o engenheiro até lá.
 - Sessões em memória: reiniciar o processo perde as conversas em andamento.
-- `integrations/sheets/ceo_sync.ts` consulta uma view `view_dashboard_ceo` que **não é criada por
-  nenhum SQL do repo**, e o arquivo não é importado por ninguém. Caminho morto.
 
 **Banco**
 
@@ -616,7 +607,7 @@ Coisas em que você vai tropeçar. Estão aqui de propósito — um README que e
   UUID e falha sempre; `gerar_proximo_codigo_projeto()` junta todos os dígitos do código (`PRJ-2025-001`
   vira 2025001). Nenhum código chama as duas — os projetos recebem o código digitado no dashboard.
 - Os triggers `trg_calcular_percentual_status` e `trg_auto_conclusao` **não são resíduo**: o bot ainda
-  muda `status_id` (`atualizar_status_projeto`, `registrar_retrabalho_dia`) e várias telas leem
+  muda `status_id` (pela função do banco `registrar_retrabalho_dia`) e várias telas leem
   `percentual_andamento`, que o primeiro preenche. O par `trg_sync_datas_para_prazos` /
   `trg_sync_datas_de_prazos` é uma sincronização nos dois sentidos, protegida contra laço.
 - **Os 5 níveis de `complexidade_tarefas` são provisórios.** O seed traz 1/3/7/15/30 dias com o
