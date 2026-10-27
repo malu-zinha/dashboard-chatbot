@@ -136,7 +136,8 @@ Railway é o único deploy. O health check do deploy é `/api/health` (público)
 
 - **`lib/secrets.ts` é cópia deliberada** de `logic/security/redactSecrets.ts` e
   `logic/security/envSecret.ts` da raiz, porque o `tsconfig` do Next não alcança pastas fora de
-  `dashboard/`. Se corrigir um, corrija o outro.
+  `dashboard/`. Se corrigir um, corrija o outro: `tests/test-segredos-bot-e-dashboard-iguais.ts`
+  falha se a máscara de segredos divergir.
 - **O card "Média por Horas"** do retrabalho é média aritmética simples dos percentuais por
   engenheiro, **não ponderada por horas** — então ele diverge do "% Geral TecPred", que é ponderado.
   Não é bug de dado.

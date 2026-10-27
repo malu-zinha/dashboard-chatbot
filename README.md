@@ -61,7 +61,8 @@ tests/                    68 testes automaticos (npm test); tests/manual/ para s
 
 > Uma nota sobre `logic/`: o dashboard tem uma **cópia deliberada** de
 > `logic/security/redactSecrets.ts` em `dashboard/lib/secrets.ts`, porque o `tsconfig` do Next não
-> alcança pastas fora de `dashboard/`. Se mexer em um, mexa no outro.
+> alcança pastas fora de `dashboard/`. Se mexer em um, mexa no outro —
+> `tests/test-segredos-bot-e-dashboard-iguais.ts` falha se os dois divergirem.
 
 ---
 
