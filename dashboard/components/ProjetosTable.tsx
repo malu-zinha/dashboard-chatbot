@@ -269,7 +269,9 @@ export default function ProjetosTable({
     setPrazoProjeto(null)
     setDeleteProjeto(item)
     setActionError(null)
-    setIsUltimaDisciplina(false)
+    // Projeto sem nenhuma tarefa ativa: nao ha tarefa para excluir, a lixeira
+    // exclui (desativa) o projeto direto.
+    setIsUltimaDisciplina(!item.atribuicao_id)
 
     if (!item.atribuicao_id) return
 
@@ -790,10 +792,10 @@ export default function ProjetosTable({
                             <button
                               type="button"
                               onClick={() => abrirExclusao(item)}
-                              disabled={!item.atribuicao_id}
+                              disabled={!item.atribuicao_id && !onExcluirProjeto}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
-                              title="Excluir tarefa"
-                              aria-label="Excluir tarefa"
+                              title={item.atribuicao_id ? 'Excluir tarefa' : 'Excluir projeto'}
+                              aria-label={item.atribuicao_id ? 'Excluir tarefa' : 'Excluir projeto'}
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -1029,7 +1031,9 @@ export default function ProjetosTable({
                 </div>
 
                 <p className="text-sm text-gray-700">
-                  {isUltimaDisciplina
+                  {!deleteProjeto.atribuicao_id
+                    ? 'Este projeto nao tem tarefas atribuidas. Ao excluir, ele sera desativado e deixara de aparecer no dashboard e no chatbot.'
+                    : isUltimaDisciplina
                     ? 'Este projeto possui apenas esta disciplina. Ao excluir, o projeto inteiro sera desativado e deixara de aparecer no dashboard e no chatbot.'
                     : 'Esta tarefa deixara de aparecer no dashboard e no chatbot, mas permanecera no historico do banco.'}
                 </p>
