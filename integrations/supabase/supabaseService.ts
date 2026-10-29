@@ -299,17 +299,25 @@ export class SupabaseService {
   }
 
   /**
-   * Grava o resultado da entrega; lanca em erro do banco.
+   * Grava o resultado da entrega com compare-and-set: so atualiza se o status
+   * ainda e o que foi lido (statusAnterior). Devolve false quando outro
+   * callback avancou antes (nada gravado). Lanca em erro do banco.
    */
   async gravarStatusEntrega(
     notificacaoId: string,
     campos: { status_entrega: string; erro_codigo: string | null; twilio_sid?: string },
-  ): Promise<void> {
-    const { error } = await this.supabase
+    statusAnterior: string | null,
+  ): Promise<boolean> {
+    let consulta = this.supabase
       .from('notificacoes_whatsapp')
       .update({ ...campos, status_atualizado_em: new Date().toISOString() })
       .eq('notificacao_id', notificacaoId);
+    consulta = statusAnterior === null
+      ? consulta.is('status_entrega', null)
+      : consulta.eq('status_entrega', statusAnterior);
+    const { data, error } = await consulta.select('notificacao_id');
     if (error) throw new Error(error.message);
+    return (data?.length ?? 0) > 0;
   }
 
   // =====================================================

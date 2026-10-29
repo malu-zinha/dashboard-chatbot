@@ -165,7 +165,7 @@ app.post('/webhook/whatsapp', validarAssinaturaTwilio, webhookWhatsapp);
 // Webhook Twilio - Status de mensagens enviadas
 app.post('/webhook/status', validarAssinaturaTwilio, criarWebhookStatus({
   buscar: (r) => getSupabaseService().buscarStatusEntrega(r),
-  gravar: (id, c) => getSupabaseService().gravarStatusEntrega(id, c),
+  gravar: (id, c, anterior) => getSupabaseService().gravarStatusEntrega(id, c, anterior),
 }));
 
 // =====================================================

@@ -335,16 +335,24 @@ async function rodar(w: NotificationWorker, vezes = 1) {
   type Linha = { notificacao_id: string; status_entrega: string | null; erro_codigo: string | null; twilio_sid: string | null }
   const montar = (linha: Linha, falhar = false) => {
     const gravacoes: Array<Record<string, unknown>> = []
+    const buscas: Array<Record<string, unknown>> = []
     const buscar = async (ref: { notificacaoId?: string; sid?: string }) =>
       (ref.notificacaoId === linha.notificacao_id || (ref.sid && ref.sid === linha.twilio_sid))
         ? { notificacao_id: linha.notificacao_id, status_entrega: linha.status_entrega }
         : null
-    const gravar = async (id: string, c: { status_entrega: string; erro_codigo: string | null; twilio_sid?: string }) => {
+    const gravar = async (
+      id: string,
+      c: { status_entrega: string; erro_codigo: string | null; twilio_sid?: string },
+      anterior: string | null,
+    ) => {
       if (falhar) throw new Error('banco fora')
-      gravacoes.push({ id, ...c })
+      gravacoes.push({ id, ...c, anterior })
+      if (linha.status_entrega !== anterior) return false // compare-and-set
       Object.assign(linha, c)
+      return true
     }
-    return { gravacoes, webhook: criarWebhookStatus({ buscar, gravar }) }
+    const buscarContado = (ref: { notificacaoId?: string; sid?: string }) => { buscas.push(ref); return buscar(ref) }
+    return { gravacoes, buscas, linha, buscar, gravar, webhook: criarWebhookStatus({ buscar: buscarContado, gravar }) }
   }
   const chamar = async (webhook: ReturnType<typeof criarWebhookStatus>, query: Record<string, unknown>, body: Record<string, unknown>) => {
     const codigos: number[] = []
@@ -429,6 +437,73 @@ async function rodar(w: NotificationWorker, vezes = 1) {
     assert.ok(logs.some((l) => l.includes('banco fora')))
     assert.ok(logs.every((l) => !l.includes('5581999990000')))
     ok('webhook: erro do banco vira log, nao 500')
+  }
+
+  {
+    const linha: Linha = { notificacao_id: ID, status_entrega: 'enviado', erro_codigo: null, twilio_sid: null }
+    const { webhook, gravacoes } = montar(linha)
+    const rest = silenciar()
+    await chamar(webhook, { notificacao: ID }, { MessageSid: 'SM1', MessageStatus: 'delivered', To: 'whatsapp:+5581999990000' })
+    rest()
+    assert.equal(gravacoes[0].anterior, 'enviado')
+    const l2: Linha = { notificacao_id: ID, status_entrega: null, erro_codigo: null, twilio_sid: null }
+    const m2 = montar(l2)
+    const rest2 = silenciar()
+    await chamar(m2.webhook, { notificacao: ID }, { MessageSid: 'SM1', MessageStatus: 'sent', To: 'whatsapp:+5581999990000' })
+    rest2()
+    assert.equal(m2.gravacoes[0].anterior, null)
+    ok('webhook: gravar recebe o status lido como anterior')
+  }
+
+  {
+    // Corrida: entre buscar e gravar outro callback gravou 'delivered'; 'sent' nao pode rebaixar.
+    const linha: Linha = { notificacao_id: ID, status_entrega: 'enviado', erro_codigo: null, twilio_sid: null }
+    const m = montar(linha)
+    const webhook = criarWebhookStatus({
+      buscar: async (ref) => { const r = await m.buscar(ref); linha.status_entrega = 'delivered'; return r },
+      gravar: m.gravar,
+    })
+    const rest = silenciar()
+    const codigos = await chamar(webhook, { notificacao: ID }, { MessageSid: 'SM1', MessageStatus: 'sent', To: 'whatsapp:+5581999990000' })
+    rest()
+    assert.deepEqual(codigos, [200])
+    assert.equal(linha.status_entrega, 'delivered')
+    ok('webhook: status mudou entre buscar e gravar, nao rebaixa')
+  }
+
+  {
+    const linha: Linha = { notificacao_id: ID, status_entrega: 'enviado', erro_codigo: null, twilio_sid: null }
+    const { webhook, gravacoes } = montar(linha)
+    const rest = silenciar()
+    const c1 = await chamar(webhook, { notificacao: ID }, { MessageSid: 'SM1', MessageStatus: 'queued', To: 'whatsapp:+5581999990000' })
+    const c2 = await chamar(webhook, { notificacao: ID }, { MessageSid: 'SM1', MessageStatus: 'accepted', To: 'whatsapp:+5581999990000' })
+    rest()
+    assert.deepEqual([c1, c2], [[200], [200]])
+    assert.equal(gravacoes.length, 0)
+    ok('webhook: status desconhecido nao grava')
+  }
+
+  {
+    const linha: Linha = { notificacao_id: ID, status_entrega: 'enviado', erro_codigo: null, twilio_sid: null }
+    const { webhook, gravacoes } = montar(linha)
+    const rest = silenciar()
+    await chamar(webhook, { notificacao: ID }, { MessageStatus: 'delivered', To: 'whatsapp:+5581999990000' })
+    rest()
+    assert.equal(gravacoes.length, 1)
+    assert.ok(!('twilio_sid' in gravacoes[0]))
+    ok('webhook: sem MessageSid grava sem twilio_sid')
+  }
+
+  {
+    const linha: Linha = { notificacao_id: ID, status_entrega: 'enviado', erro_codigo: null, twilio_sid: null }
+    const { webhook, buscas, gravacoes } = montar(linha)
+    const rest = silenciar()
+    const codigos = await chamar(webhook, {}, { MessageStatus: 'delivered', To: 'whatsapp:+5581999990000' })
+    rest()
+    assert.deepEqual(codigos, [200])
+    assert.equal(buscas.length, 0)
+    assert.equal(gravacoes.length, 0)
+    ok('webhook: sem query nem SID nao consulta o banco')
   }
 }
 

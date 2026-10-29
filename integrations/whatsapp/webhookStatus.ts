@@ -35,11 +35,16 @@ export function criarWebhookStatus(deps: DependenciasWebhookStatus) {
         if (linha) {
           const novo = proximoStatusEntrega(linha.status_entrega, MessageStatus);
           if (novo) {
-            await deps.gravar(linha.notificacao_id, {
-              status_entrega: novo,
-              erro_codigo: ErrorCode ? String(ErrorCode) : null,
-              ...(sid ? { twilio_sid: sid } : {}),
-            });
+            const gravou = await deps.gravar(
+              linha.notificacao_id,
+              {
+                status_entrega: novo,
+                erro_codigo: ErrorCode ? String(ErrorCode) : null,
+                ...(sid ? { twilio_sid: sid } : {}),
+              },
+              linha.status_entrega,
+            );
+            if (!gravou) console.log(`↩️  Status ${novo} ignorado: outro callback ja avancou a notificacao`);
           }
         }
       }
