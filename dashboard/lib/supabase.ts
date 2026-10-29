@@ -1,6 +1,7 @@
 import { createBrowserClient } from '@supabase/ssr'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { buscarTodasAsPaginas } from '@/lib/paginacao'
+import type { AvisoPrazoLinha } from '@/lib/avisoPrazo'
 
 // Erro de consulta virava [] ou null e a tela mostrava zeros como se fossem dados. Cada falha
 // fica registrada aqui; o painel consulta depois de carregar e avisa que os numeros podem
@@ -727,6 +728,39 @@ export async function transferirResponsavelAtribuicao(
   }
 
   return { success: true, data }
+}
+
+export async function alterarPrazoAtribuicao(
+  atribuicaoId: string,
+  novoPrazo: string
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  const response = await fetch(`/api/admin/atribuicoes/${atribuicaoId}/prazo`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ novo_prazo: novoPrazo }),
+  })
+
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    return {
+      success: false,
+      data,
+      error: data?.error || 'Erro ao alterar prazo da tarefa.',
+    }
+  }
+
+  return { success: true, data }
+}
+
+export async function buscarAvisosPrazo(): Promise<AvisoPrazoLinha[]> {
+  try {
+    const response = await fetch('/api/admin/atribuicoes/avisos-prazo', { cache: 'no-store' })
+    if (!response.ok) return []
+    const json = await response.json().catch(() => null)
+    return Array.isArray(json?.avisos) ? (json.avisos as AvisoPrazoLinha[]) : []
+  } catch {
+    return []
+  }
 }
 
 export async function excluirAtribuicao(

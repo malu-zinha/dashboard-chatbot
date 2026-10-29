@@ -5,6 +5,7 @@
 // =====================================================
 
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import * as atribNs from '../dashboard/lib/adminAtribuicoes.ts'
 import * as avisoNs from '../dashboard/lib/avisoPrazo.ts'
 
@@ -42,3 +43,19 @@ assert.equal(temAvisoEnviando([{ ...base, enviada: true, status_entrega: 'delive
 assert.equal(temAvisoEnviando([base], t11), false)
 
 console.log('   ✅ alterar prazo: regras puras')
+
+const lerRota = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
+
+const rotaPrazo = lerRota('dashboard/app/api/admin/atribuicoes/[id]/prazo/route.ts')
+for (const trecho of ['guardOwnerRoute()', 'isUuid(params.id)', 'validateAlterarPrazoBody', "rpc('alterar_prazo_atribuicao'", 'p_actor_user_id: guard.owner.id', 'sanitizeAtribuicaoActionResult'])
+  assert.ok(rotaPrazo.includes(trecho), `rota de prazo sem ${trecho}`)
+console.log('   ✅ rota de prazo exige dono e chama a RPC')
+
+const rotaAvisos = lerRota('dashboard/app/api/admin/atribuicoes/avisos-prazo/route.ts')
+assert.ok(rotaAvisos.includes('guardOwnerRoute()'))
+assert.ok(rotaAvisos.includes(".eq('tipo', 'prazo_alterado')"))
+const selectArg = /\.select\(\s*(['"`])([^]*?)\1/.exec(rotaAvisos)?.[2] ?? ''
+assert.ok(selectArg.length > 0, 'select nao encontrado')
+for (const proibido of ['telefone', 'mensagem', '*'])
+  assert.ok(!selectArg.includes(proibido), `select expoe ${proibido}`)
+console.log('   ✅ rota de avisos exige dono e nao expoe telefone nem mensagem')
