@@ -505,6 +505,43 @@ async function rodar(w: NotificationWorker, vezes = 1) {
     assert.equal(gravacoes.length, 0)
     ok('webhook: sem query nem SID nao consulta o banco')
   }
+
+  {
+    // Corrida do worker: o callback leu NULL, o worker gravou 'enviado'; o CAS erra e o 'undelivered' entra na 2a tentativa.
+    const linha: Linha = { notificacao_id: ID, status_entrega: null, erro_codigo: null, twilio_sid: null }
+    const m = montar(linha)
+    let leituras = 0
+    const webhook = criarWebhookStatus({
+      buscar: async (ref) => { const r = await m.buscar(ref); if (++leituras === 1) linha.status_entrega = 'enviado'; return r },
+      gravar: m.gravar,
+    })
+    const rest = silenciar()
+    const codigos = await chamar(webhook, { notificacao: ID }, corpo)
+    rest()
+    assert.deepEqual(codigos, [200])
+    assert.equal(leituras, 2)
+    assert.equal(m.gravacoes.length, 2)
+    assert.equal(m.gravacoes[1].anterior, 'enviado')
+    assert.equal(linha.status_entrega, 'undelivered')
+    assert.equal(linha.erro_codigo, '63016')
+    ok('webhook: CAS perdido releitura e grava o status final por cima de enviado')
+  }
+
+  {
+    // Perde sempre: para em 3 tentativas, 200, sem laco infinito.
+    const linha: Linha = { notificacao_id: ID, status_entrega: 'enviado', erro_codigo: null, twilio_sid: null }
+    let leituras = 0
+    const webhook = criarWebhookStatus({
+      buscar: async () => { leituras++; return { notificacao_id: ID, status_entrega: 'enviado' } },
+      gravar: async () => false,
+    })
+    const rest = silenciar()
+    const codigos = await chamar(webhook, { notificacao: ID }, corpo)
+    rest()
+    assert.deepEqual(codigos, [200])
+    assert.equal(leituras, 3)
+    ok('webhook: CAS sempre perdido para em 3 tentativas')
+  }
 }
 
 console.log(`\n${passou} casos passaram\n`)

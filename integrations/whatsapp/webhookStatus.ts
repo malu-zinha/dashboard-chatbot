@@ -15,6 +15,9 @@ import { mascararTelefone } from '../../logic/security/mascararPII.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Leituras+gravacoes por callback quando o compare-and-set perde a corrida.
+const MAX_TENTATIVAS = 3;
+
 export interface DependenciasWebhookStatus {
   buscar: SupabaseService['buscarStatusEntrega'];
   gravar: SupabaseService['gravarStatusEntrega'];
@@ -31,20 +34,26 @@ export function criarWebhookStatus(deps: DependenciasWebhookStatus) {
       const sid = typeof MessageSid === 'string' && MessageSid ? MessageSid : undefined;
 
       if ((notificacaoId || sid) && typeof MessageStatus === 'string') {
-        const linha = await deps.buscar({ notificacaoId, sid });
-        if (linha) {
+        // Compare-and-set: se outro escritor avancou a linha entre a leitura e a
+        // gravacao, le de novo e decide de novo (ex.: o worker gravou 'enviado'
+        // e o 'undelivered' ainda precisa entrar por cima).
+        for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+          const linha = await deps.buscar({ notificacaoId, sid });
+          if (!linha) break;
           const novo = proximoStatusEntrega(linha.status_entrega, MessageStatus);
-          if (novo) {
-            const gravou = await deps.gravar(
-              linha.notificacao_id,
-              {
-                status_entrega: novo,
-                erro_codigo: ErrorCode ? String(ErrorCode) : null,
-                ...(sid ? { twilio_sid: sid } : {}),
-              },
-              linha.status_entrega,
-            );
-            if (!gravou) console.log(`↩️  Status ${novo} ignorado: outro callback ja avancou a notificacao`);
+          if (!novo) break;
+          const gravou = await deps.gravar(
+            linha.notificacao_id,
+            {
+              status_entrega: novo,
+              erro_codigo: ErrorCode ? String(ErrorCode) : null,
+              ...(sid ? { twilio_sid: sid } : {}),
+            },
+            linha.status_entrega,
+          );
+          if (gravou) break;
+          if (tentativa === MAX_TENTATIVAS) {
+            console.warn(`⚠️  Status ${novo} nao gravado apos ${MAX_TENTATIVAS} tentativas: a notificacao mudou a cada leitura`);
           }
         }
       }
