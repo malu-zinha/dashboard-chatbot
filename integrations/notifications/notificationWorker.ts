@@ -181,8 +181,10 @@ export class NotificationWorker {
         );
       }
 
-      if (resultado.sid) {
+      if (resultado.sid && !error) {
         // Falhar aqui nunca pode levar a reenvio: a linha ja esta enviada.
+        // So grava se o callback ainda nao chegou (status_entrega nulo): o
+        // webhook pode vencer a corrida e guardar um status final.
         const { error: erroSid } = await supabase
           .from('notificacoes_whatsapp')
           .update({
@@ -190,7 +192,8 @@ export class NotificationWorker {
             status_entrega: 'enviado',
             status_atualizado_em: new Date().toISOString(),
           })
-          .eq('notificacao_id', notif.notificacao_id);
+          .eq('notificacao_id', notif.notificacao_id)
+          .is('status_entrega', null);
 
         if (erroSid) {
           console.error(
