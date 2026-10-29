@@ -62,6 +62,14 @@ No console, em *Messaging → Senders* (ou no Sandbox), configure:
 Método `POST` nos dois. São **essas** as rotas — guias antigos deste repositório citavam
 `/webhook/twilio`, que nunca existiu e responde 404.
 
+Os avisos enviados pelo worker (como "Prazo alterado") pedem o status callback por mensagem, em
+`<base>/webhook/status?notificacao=<id>`. A `<base>` é `TWILIO_WEBHOOK_BASE_URL` ou, se faltar,
+`https://${RAILWAY_PUBLIC_DOMAIN}` — o Railway define essa variável sozinho quando o serviço tem
+domínio público. Sem nenhuma das duas, o bot não pede callback por mensagem; se o *Status callback
+URL* do sender estiver configurado no console (tabela acima), o webhook ainda grava o status pelo
+SID da mensagem. Sem nenhum dos dois, a mensagem sai, mas o ícone no dashboard fica em ⏳ por 10
+minutos e depois vira ✓ cinza (sem confirmação).
+
 ### Sandbox: o `join` e as 72 horas
 
 Para testar sem número próprio, use o Sandbox (*Messaging → Try it out → Send a WhatsApp message*).
@@ -103,6 +111,17 @@ produção**, porque o redirect pós-login é rejeitado.
 `projetos` e `retrabalho_projetos`. Sem isso o dashboard não atualiza sozinho. Detalhes em
 [dashboard/README.md](../dashboard/README.md#habilitar-realtime-no-supabase).
 
+### Alterar prazo: migration antes do deploy
+
+A migration `supabase/migrations/20261029_alterar_prazo_atribuicao.sql` tem de ser aplicada no
+*SQL Editor* **antes** do deploy do código: o bot passa a gravar `twilio_sid` e `status_entrega`, e
+o dashboard chama a função `alterar_prazo_atribuicao`. Depois de aplicar, rode as consultas de
+conferência da seção 4 do próprio arquivo e confirme: as 5 colunas novas existem, `authenticated`
+**não** executa a função e `service_role` executa.
+
+Rollback: `supabase/rollbacks/20261029_alterar_prazo_atribuicao.rollback.sql` — reverta o código
+primeiro, senão o bot tenta gravar colunas que deixaram de existir.
+
 ## Diagnóstico: notificação não chegou
 
 As notificações proativas passam por uma fila, então há três lugares onde podem parar:
@@ -115,6 +134,8 @@ As notificações proativas passam por uma fila, então há três lugares onde p
    verifique se o serviço está de pé.
 3. **O envio foi rejeitado?** Se a linha está marcada como enviada mas nada chegou, o problema é do
    lado do WhatsApp: janela de 24 horas sem template aprovado, ou sessão de Sandbox expirada.
+   Em `notificacoes_whatsapp`, `status_entrega` e `erro_codigo` mostram o que o Twilio respondeu
+   (erro 63016 = janela de 24 horas); é o mesmo dado que o ícone do dashboard exibe.
 
 ## O que não existe
 

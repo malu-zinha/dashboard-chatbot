@@ -10,6 +10,10 @@ export type TransferirResponsavelValidation =
   | { ok: true; novoEngId: string }
   | { ok: false; error: string }
 
+export type AlterarPrazoValidation =
+  | { ok: true; novoPrazo: string }
+  | { ok: false; error: string }
+
 const uuidRegex =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -32,6 +36,25 @@ export function validateTransferirResponsavelBody(
   return { ok: true, novoEngId }
 }
 
+// Data real no formato AAAA-MM-DD (rejeita 2026-02-30 por ida e volta em UTC)
+export function validateAlterarPrazoBody(body: unknown): AlterarPrazoValidation {
+  const novoPrazo =
+    body && typeof body === 'object' ? (body as { novo_prazo?: unknown }).novo_prazo : undefined
+  if (typeof novoPrazo !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(novoPrazo)) {
+    return { ok: false, error: 'Informe o novo prazo no formato AAAA-MM-DD.' }
+  }
+
+  const [ano, mes, dia] = novoPrazo.split('-').map(Number)
+  const data = new Date(Date.UTC(ano, mes - 1, dia))
+  const confere =
+    data.getUTCFullYear() === ano && data.getUTCMonth() === mes - 1 && data.getUTCDate() === dia
+  if (!confere) {
+    return { ok: false, error: 'Novo prazo invalido.' }
+  }
+
+  return { ok: true, novoPrazo }
+}
+
 export function isAtribuicaoActionSuccess(result: AtribuicaoActionResult | null | undefined) {
   return Boolean(result?.ok === true || result?.sucesso === true)
 }
@@ -47,6 +70,8 @@ export function getAtribuicaoActionStatus(
     case 'duplicata':
     case 'ultima_area':
     case 'mesmo_engenheiro':
+    case 'concluida':
+    case 'sem_mudanca':
       return 409
     case 'destino_invalido':
     case 'parametro_invalido':

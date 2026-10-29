@@ -7,7 +7,7 @@
     "dev": "nodemon --exec tsx src/server-twilio.ts",
     "dev:whatsapp-web": "nodemon --exec tsx src/index.ts",
     "test": "tsx scripts/rodar-testes.ts",
-    "test:seguranca": "npx tsx tests/test-redact-secrets.ts && npx tsx tests/test-auth-erro-vs-nao-cadastrado.ts && npx tsx tests/test-mensagem-indisponivel.ts && npx tsx tests/test-cliente-supabase-indisponivel.ts && npx tsx tests/test-telefone-nono-digito.ts && npx tsx tests/test-twilio-assinatura.ts && npx tsx tests/test-fechar-acesso-anon-migration.ts && npx tsx tests/test-dashboard-middleware-acesso.ts && npx tsx tests/test-dashboard-admin-projetos.ts && npx tsx tests/test-authenticated-somente-leitura-migration.ts",
+    "test:seguranca": "npx tsx tests/test-redact-secrets.ts && npx tsx tests/test-auth-erro-vs-nao-cadastrado.ts && npx tsx tests/test-mensagem-indisponivel.ts && npx tsx tests/test-cliente-supabase-indisponivel.ts && npx tsx tests/test-telefone-nono-digito.ts && npx tsx tests/test-twilio-assinatura.ts && npx tsx tests/test-fechar-acesso-anon-migration.ts && npx tsx tests/test-dashboard-middleware-acesso.ts && npx tsx tests/test-dashboard-admin-projetos.ts && npx tsx tests/test-authenticated-somente-leitura-migration.ts && npx tsx tests/test-alterar-prazo-migration.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
     "sondar:anon": "tsx scripts/sondar-acesso-anon.ts",

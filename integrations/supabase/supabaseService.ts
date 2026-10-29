@@ -280,6 +280,46 @@ export class SupabaseService {
     return this.supabase;
   }
 
+  /**
+   * Acha a notificacao pelo id ou pelo SID da Twilio (status de entrega).
+   */
+  async buscarStatusEntrega(
+    ref: { notificacaoId?: string; sid?: string },
+  ): Promise<{ notificacao_id: string; status_entrega: string | null } | null> {
+    if (!ref.notificacaoId && !ref.sid) return null;
+    let consulta = this.supabase
+      .from('notificacoes_whatsapp')
+      .select('notificacao_id, status_entrega');
+    consulta = ref.notificacaoId
+      ? consulta.eq('notificacao_id', ref.notificacaoId)
+      : consulta.eq('twilio_sid', ref.sid as string);
+    const { data, error } = await consulta.limit(1).maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ?? null;
+  }
+
+  /**
+   * Grava o resultado da entrega com compare-and-set: so atualiza se o status
+   * ainda e o que foi lido (statusAnterior). Devolve false quando outro
+   * callback avancou antes (nada gravado). Lanca em erro do banco.
+   */
+  async gravarStatusEntrega(
+    notificacaoId: string,
+    campos: { status_entrega: string; erro_codigo: string | null; twilio_sid?: string },
+    statusAnterior: string | null,
+  ): Promise<boolean> {
+    let consulta = this.supabase
+      .from('notificacoes_whatsapp')
+      .update({ ...campos, status_atualizado_em: new Date().toISOString() })
+      .eq('notificacao_id', notificacaoId);
+    consulta = statusAnterior === null
+      ? consulta.is('status_entrega', null)
+      : consulta.eq('status_entrega', statusAnterior);
+    const { data, error } = await consulta.select('notificacao_id');
+    if (error) throw new Error(error.message);
+    return (data?.length ?? 0) > 0;
+  }
+
   // =====================================================
   // AUTENTICAÇÃO VIA WHATSAPP
   // =====================================================
