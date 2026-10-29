@@ -11,6 +11,7 @@
 import assert from 'node:assert/strict'
 import { proximoStatusEntrega, motivoFalha } from '../integrations/whatsapp/statusEntrega.ts'
 import { urlCallbackStatus, WhatsAppService } from '../integrations/whatsapp/whatsappService.ts'
+import { criarWebhookStatus } from '../integrations/whatsapp/webhookStatus.ts'
 import { NotificationWorker } from '../integrations/notifications/notificationWorker.ts'
 
 let passou = 0
@@ -326,6 +327,109 @@ async function rodar(w: NotificationWorker, vezes = 1) {
   await rodar(criarWorker(client, async () => ({ ok: true, sid: 'SM1' })))
   assert.ok(banco.updates.every((u) => !('twilio_sid' in u)))
   ok('falha ao marcar enviada: nao tenta gravar o SID')
+}
+
+// ---- webhook de status (Task 4) ----
+{
+  const ID = '11111111-1111-4111-8111-111111111111'
+  type Linha = { notificacao_id: string; status_entrega: string | null; erro_codigo: string | null; twilio_sid: string | null }
+  const montar = (linha: Linha, falhar = false) => {
+    const gravacoes: Array<Record<string, unknown>> = []
+    const buscar = async (ref: { notificacaoId?: string; sid?: string }) =>
+      (ref.notificacaoId === linha.notificacao_id || (ref.sid && ref.sid === linha.twilio_sid))
+        ? { notificacao_id: linha.notificacao_id, status_entrega: linha.status_entrega }
+        : null
+    const gravar = async (id: string, c: { status_entrega: string; erro_codigo: string | null; twilio_sid?: string }) => {
+      if (falhar) throw new Error('banco fora')
+      gravacoes.push({ id, ...c })
+      Object.assign(linha, c)
+    }
+    return { gravacoes, webhook: criarWebhookStatus({ buscar, gravar }) }
+  }
+  const chamar = async (webhook: ReturnType<typeof criarWebhookStatus>, query: Record<string, unknown>, body: Record<string, unknown>) => {
+    const codigos: number[] = []
+    const res = { sendStatus: (c: number) => { codigos.push(c); return res } }
+    await webhook({ query, body } as any, res as any)
+    return codigos
+  }
+  const corpo = { MessageSid: 'SM1', MessageStatus: 'undelivered', ErrorCode: '63016', To: 'whatsapp:+5581999990000' }
+
+  {
+    const linha: Linha = { notificacao_id: ID, status_entrega: 'enviado', erro_codigo: null, twilio_sid: null }
+    const { webhook } = montar(linha)
+    const rest = silenciar()
+    const codigos = await chamar(webhook, { notificacao: ID }, corpo)
+    rest()
+    assert.deepEqual(codigos, [200])
+    assert.equal(linha.status_entrega, 'undelivered')
+    assert.equal(linha.erro_codigo, '63016')
+    assert.equal(linha.twilio_sid, 'SM1')
+    ok('webhook: callback com notificacao na query atualiza por ela')
+  }
+
+  {
+    const linha: Linha = { notificacao_id: ID, status_entrega: null, erro_codigo: null, twilio_sid: null }
+    const { webhook } = montar(linha)
+    const rest = silenciar()
+    await chamar(webhook, { notificacao: ID }, corpo)
+    rest()
+    assert.equal(linha.status_entrega, 'undelivered')
+    assert.equal(linha.twilio_sid, 'SM1')
+    ok('webhook: callback antes do SID ser gravado funciona')
+  }
+
+  {
+    const linha: Linha = { notificacao_id: ID, status_entrega: 'sent', erro_codigo: null, twilio_sid: 'SM1' }
+    const { webhook, gravacoes } = montar(linha)
+    const rest = silenciar()
+    const codigos = await chamar(webhook, {}, { MessageSid: 'SM1', MessageStatus: 'delivered', To: 'whatsapp:+5581999990000' })
+    rest()
+    assert.deepEqual(codigos, [200])
+    assert.equal(gravacoes.length, 1)
+    assert.equal(linha.status_entrega, 'delivered')
+    assert.equal(linha.erro_codigo, null)
+    ok('webhook: sem query, acha pelo SID')
+  }
+
+  {
+    const linha: Linha = { notificacao_id: ID, status_entrega: 'delivered', erro_codigo: null, twilio_sid: 'SM1' }
+    const { webhook, gravacoes } = montar(linha)
+    const rest = silenciar()
+    const codigos = await chamar(webhook, { notificacao: ID }, { MessageSid: 'SM1', MessageStatus: 'sent', To: 'whatsapp:+5581999990000' })
+    rest()
+    assert.deepEqual(codigos, [200])
+    assert.equal(gravacoes.length, 0)
+    ok('webhook: status que nao avanca nao grava')
+  }
+
+  {
+    const linha: Linha = { notificacao_id: ID, status_entrega: 'enviado', erro_codigo: null, twilio_sid: null }
+    const { webhook, gravacoes } = montar(linha)
+    const rest = silenciar()
+    const c1 = await chamar(webhook, { notificacao: 'abc' }, corpo)
+    const c2 = await chamar(webhook, { notificacao: '22222222-2222-4222-8222-222222222222' }, corpo)
+    const c3 = await chamar(webhook, { notificacao: ['x'] }, undefined as any)
+    rest()
+    assert.deepEqual([c1, c2, c3], [[200], [200], [200]])
+    assert.equal(gravacoes.length, 0)
+    ok('webhook: notificacao inexistente ou query invalida nao grava')
+  }
+
+  {
+    const linha: Linha = { notificacao_id: ID, status_entrega: 'enviado', erro_codigo: null, twilio_sid: null }
+    const { webhook } = montar(linha, true)
+    const logs: string[] = []
+    const antes = { log: console.log, error: console.error, warn: console.warn }
+    console.log = (...a: unknown[]) => { logs.push(a.join(' ')) }
+    console.error = (...a: unknown[]) => { logs.push(a.join(' ')) }
+    console.warn = (...a: unknown[]) => { logs.push(a.join(' ')) }
+    let codigos: number[] = []
+    try { codigos = await chamar(webhook, { notificacao: ID }, corpo) } finally { Object.assign(console, antes) }
+    assert.deepEqual(codigos, [200])
+    assert.ok(logs.some((l) => l.includes('banco fora')))
+    assert.ok(logs.every((l) => !l.includes('5581999990000')))
+    ok('webhook: erro do banco vira log, nao 500')
+  }
 }
 
 console.log(`\n${passou} casos passaram\n`)

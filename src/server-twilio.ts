@@ -12,6 +12,7 @@ import { getCronJobManager } from '../integrations/cron/cronJobs.ts';
 import { iniciarSincronizacaoAutomatica } from '../integrations/cron/syncDatabaseToSheets.ts';
 import { getWhatsAppService, problemaConfigProvider } from '../integrations/whatsapp/whatsappService.ts';
 import { criarWebhookWhatsapp } from '../integrations/whatsapp/webhookWhatsapp.ts';
+import { criarWebhookStatus } from '../integrations/whatsapp/webhookStatus.ts';
 import { getSupabaseService } from '../integrations/supabase/supabaseService.ts';
 import { verificarSaude } from '../integrations/saude/healthcheck.ts';
 import { sincronizacaoSheetsAtiva, variaveisObrigatoriasBoot } from '../integrations/cron/configSincronizacao.ts';
@@ -163,13 +164,10 @@ const webhookWhatsapp = criarWebhookWhatsapp({
 app.post('/webhook/whatsapp', validarAssinaturaTwilio, webhookWhatsapp);
 
 // Webhook Twilio - Status de mensagens enviadas
-app.post('/webhook/status', validarAssinaturaTwilio, (req, res) => {
-  const { MessageSid, MessageStatus, To } = req.body;
-
-  console.log(`📬 Status da mensagem ${MessageSid} para ${mascararTelefone(To)}: ${MessageStatus}`);
-
-  res.sendStatus(200);
-});
+app.post('/webhook/status', validarAssinaturaTwilio, criarWebhookStatus({
+  buscar: (r) => getSupabaseService().buscarStatusEntrega(r),
+  gravar: (id, c) => getSupabaseService().gravarStatusEntrega(id, c),
+}));
 
 // =====================================================
 // INICIALIZAÇÃO
