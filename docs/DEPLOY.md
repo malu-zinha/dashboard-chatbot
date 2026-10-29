@@ -59,14 +59,16 @@ No console, em *Messaging → Senders* (ou no Sandbox), configure:
 | When a message comes in | `https://<seu-app>.up.railway.app/webhook/whatsapp` |
 | Status callback URL | `https://<seu-app>.up.railway.app/webhook/status` |
 
-Método `POST` nos dois.
+Método `POST` nos dois. São **essas** as rotas — guias antigos deste repositório citavam
+`/webhook/twilio`, que nunca existiu e responde 404.
 
 Os avisos enviados pelo worker (como "Prazo alterado") pedem o status callback por mensagem, em
 `<base>/webhook/status?notificacao=<id>`. A `<base>` é `TWILIO_WEBHOOK_BASE_URL` ou, se faltar,
 `https://${RAILWAY_PUBLIC_DOMAIN}` — o Railway define essa variável sozinho quando o serviço tem
-domínio público. Sem nenhuma das duas, não há callback: a mensagem sai, mas o ícone no dashboard
-fica em ✓ cinza (sem confirmação). São **essas** as rotas — guias antigos deste repositório citavam
-`/webhook/twilio`, que nunca existiu e responde 404.
+domínio público. Sem nenhuma das duas, o bot não pede callback por mensagem; se o *Status callback
+URL* do sender estiver configurado no console (tabela acima), o webhook ainda grava o status pelo
+SID da mensagem. Sem nenhum dos dois, a mensagem sai, mas o ícone no dashboard fica em ⏳ por 10
+minutos e depois vira ✓ cinza (sem confirmação).
 
 ### Sandbox: o `join` e as 72 horas
 

@@ -147,7 +147,7 @@ Copie `.env.example` para `.env` na raiz. O dashboard usa um `.env.local` própr
 | `GOOGLE_SHEETS_ENGINEER_RANGE` | Intervalo lido | Não | `A1:AE1000` |
 | `WHATSAPP_PROVIDER` | `development` \| `twilio` \| `meta` | **Em produção** (`NODE_ENV=production` ou Railway): o boot recusa sem `twilio`/`meta`, porque o modo `development` só imprime no log e dava as notificações como enviadas | `development` |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` | Credenciais Twilio | Se `WHATSAPP_PROVIDER=twilio` (a falta só gera warning no boot) | `''` |
-| `TWILIO_WEBHOOK_BASE_URL` | URL pública exatamente como no console do Twilio, usada para conferir `X-Twilio-Signature` quando o host encaminhado pelo proxy não bate (domínio próprio) e como base do status callback das notificações (`<base>/webhook/status?notificacao=<id>`). Sem ela, usa `https://${RAILWAY_PUBLIC_DOMAIN}`; sem nenhuma das duas não há callback e o ícone fica em ✓ cinza | Não | host do request |
+| `TWILIO_WEBHOOK_BASE_URL` | URL pública exatamente como no console do Twilio, usada para conferir `X-Twilio-Signature` quando o host encaminhado pelo proxy não bate (domínio próprio) e como base do status callback das notificações (`<base>/webhook/status?notificacao=<id>`). Sem ela, usa `https://${RAILWAY_PUBLIC_DOMAIN}`; sem nenhuma das duas o bot não pede callback por mensagem — o status só é gravado (pelo SID) se o *Status callback URL* do sender estiver configurado no console do Twilio; senão o ícone fica em ⏳ por 10 min e depois vira ✓ cinza | Não | host do request |
 | `META_ACCESS_TOKEN` / `META_PHONE_NUMBER_ID` / `META_API_VERSION` | Credenciais Meta | Se `WHATSAPP_PROVIDER=meta` | `''` / `''` / `v18.0` |
 | `PORT` | Porta do Express | Não | `3000` |
 | `OPENAI_API_KEY` | Whisper (áudio, caminho legado) | Não | — |
@@ -469,9 +469,11 @@ Ao lado do prazo, um ícone mostra o destino do último aviso daquela tarefa (ú
 | ⚠ | Não entregue; o motivo aparece no tooltip |
 
 Motivos do ⚠: "não fala com o bot há mais de 24h" (erro Twilio 63016, janela de 24h do WhatsApp),
-engenheiro sem telefone, ainda na fila após 10 minutos, ou outro código de erro. A migration
-`20261029_alterar_prazo_atribuicao.sql` adiciona `twilio_sid`, `status_entrega`, `erro_codigo` e
-`status_atualizado_em` à fila; o worker pede ao Twilio um status callback em
+engenheiro sem telefone, ainda na fila após 10 minutos, o envio falhou após várias tentativas, ou
+outro código de erro. O ícone só aparece enquanto o prazo da tarefa é o que o aviso levou
+(`prazo_avisado`): se o prazo mudar por outro caminho (retrabalho, fluxo do dono no WhatsApp), ele
+some. A migration `20261029_alterar_prazo_atribuicao.sql` adiciona `twilio_sid`, `status_entrega`,
+`erro_codigo`, `status_atualizado_em` e `prazo_avisado` à fila; o worker pede ao Twilio um status callback em
 `/webhook/status?notificacao=<id>`, e a rota valida a assinatura e grava o resultado.
 
 O dashboard assina Realtime em `engenheiros_projetos`, `projetos` e `retrabalho_projetos`, e
