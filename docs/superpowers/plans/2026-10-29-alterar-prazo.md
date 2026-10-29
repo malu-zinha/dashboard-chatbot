@@ -79,7 +79,7 @@
     _Digite "menu" para ver seus projetos_
     ```
   - Aviso pendente da mesma atribuição: `SELECT notificacao_id, substring(mensagem from 'Prazo anterior: (\d{2}/\d{2}/\d{4})') … WHERE eng_projeto_id = p_atribuicao_id AND tipo = 'prazo_alterado' AND enviada = false AND tentativas = 0 ORDER BY created_at DESC LIMIT 1 FOR UPDATE SKIP LOCKED`.
-    - Se existir, o "Prazo anterior" da mensagem nova é o extraído, ou seja, o que o engenheiro ainda conhece. Em seguida, `UPDATE … SET mensagem, telefone, status_entrega WHERE notificacao_id = … AND enviada = false AND tentativas = 0`.
+    - Se existir, o "Prazo anterior" da mensagem nova é o extraído, ou seja, o que o engenheiro ainda conhece. Em seguida, `UPDATE … SET mensagem, telefone, status_entrega WHERE notificacao_id = … AND enviada = false AND tentativas = 0`. Com telefone, `status_entrega` volta para `NULL`; sem telefone, fica `'sem_telefone'`. Se a linha pendente era `sem_telefone`, não há prazo anterior a extrair dela: usar o `data_prevista` antigo.
     - Se o update não mudar nenhuma linha, porque o worker reservou a linha no meio, o prazo anterior volta a ser o `data_prevista` antigo e a função faz o `INSERT`.
   - Sem telefone: `telefone NULL` e `status_entrega = 'sem_telefone'`.
   - `EXCEPTION WHEN OTHERS` devolve `erro_interno` com a mensagem fixa "Não foi possível alterar o prazo." e um `RAISE WARNING` com `SQLSTATE`.
@@ -241,8 +241,8 @@ assert.equal(motivoFalha(null), 'não entregue')
   - `getAtribuicaoActionStatus`: `concluida` → 409 e `sem_mudanca` → 409, somados aos existentes.
   - `export interface AvisoPrazoLinha { eng_projeto_id: string; created_at: string; enviada: boolean; tentativas: number; status_entrega: string | null; erro_codigo: string | null }`
   - `export type EstadoAvisoPrazo = { icone: 'enviando' | 'entregue' | 'enviado' | 'falhou'; texto: string }`
-  - `export function estadoAvisoPrazo(linha: AvisoPrazoLinha): EstadoAvisoPrazo`
-  - `export function temAvisoEnviando(linhas: AvisoPrazoLinha[], agoraMs: number): boolean` (algum `enviando` com menos de 10 minutos).
+  - `export function estadoAvisoPrazo(linha: AvisoPrazoLinha, agoraMs: number): EstadoAvisoPrazo`. `enviado` (o worker já mandou) e `sent` contam como `enviando` até 10 minutos depois de `created_at`; depois disso, sem `delivered`/`read`/falha, viram `enviado` (✓ cinza). Assim o polling não para antes do callback chegar e o ícone não pisca ⏳→✓→⏳.
+  - `export function temAvisoEnviando(linhas: AvisoPrazoLinha[], agoraMs: number): boolean` (algum com `estadoAvisoPrazo(l, agoraMs).icone === 'enviando'`).
 
 - [ ] **Step 1: Write the failing test.** Importa os módulos com `import * as modNs` + `.default ?? modNs`, como em `tests/test-dashboard-admin-projetos.ts`.
 ```ts
@@ -252,18 +252,22 @@ for (const ruim of [null, {}, { novo_prazo: '' }, { novo_prazo: '20/11/2026' }, 
 assert.equal(getAtribuicaoActionStatus({ ok: false, codigo: 'concluida' }), 409)
 assert.equal(getAtribuicaoActionStatus({ ok: false, codigo: 'sem_mudanca' }), 409)
 const base = { eng_projeto_id: 'a', created_at: '2026-10-29T12:00:00Z', enviada: false, tentativas: 0, status_entrega: null, erro_codigo: null }
-assert.equal(estadoAvisoPrazo(base).icone, 'enviando')
-assert.equal(estadoAvisoPrazo({ ...base, enviada: true, status_entrega: 'enviado' }).icone, 'enviado')
-assert.equal(estadoAvisoPrazo({ ...base, enviada: true, status_entrega: 'sent' }).icone, 'enviando')
-assert.equal(estadoAvisoPrazo({ ...base, enviada: true, status_entrega: 'delivered' }).icone, 'entregue')
-assert.equal(estadoAvisoPrazo({ ...base, enviada: true, status_entrega: 'read' }).icone, 'entregue')
-assert.deepEqual(estadoAvisoPrazo({ ...base, enviada: true, status_entrega: 'undelivered', erro_codigo: '63016' }),
+const t1 = Date.parse('2026-10-29T12:01:00Z'), t11 = Date.parse('2026-10-29T12:11:00Z')
+assert.equal(estadoAvisoPrazo(base, t1).icone, 'enviando')
+assert.equal(estadoAvisoPrazo({ ...base, enviada: true, status_entrega: 'enviado' }, t1).icone, 'enviando')
+assert.equal(estadoAvisoPrazo({ ...base, enviada: true, status_entrega: 'sent' }, t1).icone, 'enviando')
+assert.equal(estadoAvisoPrazo({ ...base, enviada: true, status_entrega: 'enviado' }, t11).icone, 'enviado')
+assert.equal(estadoAvisoPrazo({ ...base, enviada: true, status_entrega: 'sent' }, t11).icone, 'enviado')
+assert.equal(estadoAvisoPrazo({ ...base, enviada: true, status_entrega: 'delivered' }, t1).icone, 'entregue')
+assert.equal(estadoAvisoPrazo({ ...base, enviada: true, status_entrega: 'read' }, t1).icone, 'entregue')
+assert.deepEqual(estadoAvisoPrazo({ ...base, enviada: true, status_entrega: 'undelivered', erro_codigo: '63016' }, t1),
   { icone: 'falhou', texto: 'Aviso não entregue: o engenheiro não fala com o bot há mais de 24h' })
-assert.deepEqual(estadoAvisoPrazo({ ...base, status_entrega: 'sem_telefone' }),
+assert.deepEqual(estadoAvisoPrazo({ ...base, status_entrega: 'sem_telefone' }, t1),
   { icone: 'falhou', texto: 'Aviso não enviado: engenheiro sem telefone cadastrado' })
-assert.equal(estadoAvisoPrazo({ ...base, tentativas: 5 }).icone, 'falhou')
-assert.equal(temAvisoEnviando([base], Date.parse('2026-10-29T12:05:00Z')), true)
-assert.equal(temAvisoEnviando([base], Date.parse('2026-10-29T12:11:00Z')), false)
+assert.equal(estadoAvisoPrazo({ ...base, tentativas: 5 }, t1).icone, 'falhou')
+assert.equal(temAvisoEnviando([base], t1), true)
+assert.equal(temAvisoEnviando([{ ...base, enviada: true, status_entrega: 'delivered' }], t1), false)
+assert.equal(temAvisoEnviando([base], t11), false)
 ```
 Textos de ✓: `entregue` → "Aviso entregue ao engenheiro"; `enviado` → "Aviso enviado, sem confirmação de entrega"; `enviando` → "Enviando aviso ao engenheiro…".
 
@@ -318,7 +322,7 @@ Textos de ✓: `entregue` → "Aviso entregue ao engenheiro"; `enviado` → "Avi
 - [ ] **Step 1: Implement `ProjetosTable`:**
   - Botão `CalendarClock` (lucide) entre o Eye e o UserRoundCog, só se `onAlterarPrazo` vier, com `title`/`aria-label` "Alterar prazo". Fica `disabled` sem `atribuicao_id` ou com `item.percentual_andamento >= 100`.
   - Modal inline no padrão do de transferência: título "Alterar prazo — <codigo> / <engenheiro>"; linhas "Início: dd/mm/aaaa" e "Prazo atual: dd/mm/aaaa", com `formatarDataBR`; `<input type="date" min={toDataISO(data_inicio) ?? undefined} value=...>`, que já vem com o prazo atual; botões Cancelar e Salvar, com Salvar desabilitado enquanto envia ou se a data for igual à atual; Escape fecha; o erro do servidor aparece em `actionError`. No sucesso fecha e, se o retorno não for `null`, mostra a mensagem extra pelo mesmo mecanismo de aviso que a tabela já usa (sem `alert()`).
-  - Na célula do prazo, se `avisosPrazo?.[item.atribuicao_id]` existir, ao lado da data aparece um ícone com `estadoAvisoPrazo`: `Loader2` animado (enviando), `CheckCircle` verde (entregue), `CheckCircle` cinza (enviado) ou `AlertTriangle` laranja (falhou). Todos levam `title={texto}` e `aria-label={texto}`.
+  - Na célula do prazo, se `avisosPrazo?.[item.atribuicao_id]` existir, ao lado da data aparece um ícone com `estadoAvisoPrazo(aviso, Date.now())`: `Loader2` animado (enviando), `CheckCircle` verde (entregue), `CheckCircle` cinza (enviado) ou `AlertTriangle` laranja (falhou). Todos levam `title={texto}` e `aria-label={texto}`.
 
 - [ ] **Step 2: Implement `DashboardClient`:**
   - `handleAlterarPrazo(projeto, novoPrazo)` no modelo de `handleTransferirResponsavel`. Chama `alterarPrazoAtribuicao` e lança em falha. Depois roda `await loadData()`. Devolve `"Prazo do cliente ajustado para " + formatarDataBR(result.prazo_cliente)` quando `cliente_ajustado > 0`; senão, `null`.
@@ -328,7 +332,7 @@ Textos de ✓: `entregue` → "Aviso entregue ao engenheiro"; `enviado` → "Avi
 
 - [ ] **Step 3: Run** `cd dashboard && npm run lint && npm run build`. Expected: lint sem erros e build ok. Depois, **run** `npm test && npm run typecheck` na raiz. Expected: tudo passa.
 
-- [ ] **Step 4: Run the app locally** (`cd dashboard && npm run dev`, logado como dono, apontando para o banco de produção só em leitura): o botão aparece, o modal abre com o prazo atual, o `min` bloqueia datas antes do início e a concluída aparece com o botão desabilitado. **Não salvar contra produção** antes de a migration estar aplicada; o salvar é verificado na Task 8.
+- [ ] **Step 4:** não rodar o app contra produção nesta tarefa. A tela é verificada ao vivo na Task 8, depois de a migration estar aplicada.
 
 - [ ] **Step 5: Commit** `feat(dashboard): alterar prazo na tabela de projetos e mostrar se o aviso chegou`.
 
