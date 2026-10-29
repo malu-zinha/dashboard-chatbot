@@ -2,7 +2,7 @@ import React from 'react'
 import { X, Search, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, Trash2, UserRoundCog, Eye, FileDown, CalendarClock } from 'lucide-react'
 import { buildCompletedDisciplineKey, getProjetoAreaDisplayName } from '@/lib/compatibilizacao'
 import { formatarDataBR, toDataISO } from '@/lib/datas'
-import { estadoAvisoPrazo, type AvisoPrazoLinha } from '@/lib/avisoPrazo'
+import { avisoValeParaPrazo, estadoAvisoPrazo, type AvisoPrazoLinha } from '@/lib/avisoPrazo'
 import {
   isProjetoConcluido,
   particionarPorPeriodoConclusao,
@@ -357,7 +357,8 @@ export default function ProjetosTable({
 
   const renderIconeAviso = (item: Projeto) => {
     const aviso = item.atribuicao_id ? avisosPrazo?.[item.atribuicao_id] : undefined
-    if (!aviso) return null
+    // Prazo mudou por outro caminho depois do aviso: o icone nao vale mais.
+    if (!aviso || !avisoValeParaPrazo(aviso, item.data_prevista)) return null
 
     const { icone, texto } = estadoAvisoPrazo(aviso, Date.now())
     return (

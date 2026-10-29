@@ -44,6 +44,7 @@ ok('transacao e rollback', () => {
     'rollback nao remove a funcao'
   )
   assert.ok(rollback.includes('DROP COLUMN IF EXISTS twilio_sid'), 'rollback nao remove twilio_sid')
+  assert.ok(rollback.includes('DROP COLUMN IF EXISTS prazo_avisado'), 'rollback nao remove prazo_avisado')
 })
 
 ok('sem current_date e sem SQLERRM', () => {
@@ -68,6 +69,7 @@ ok('colunas novas sem data_agendamento', () => {
   assert.match(codigo, /ADD COLUMN IF NOT EXISTS status_entrega text/)
   assert.match(codigo, /ADD COLUMN IF NOT EXISTS erro_codigo text/)
   assert.match(codigo, /ADD COLUMN IF NOT EXISTS status_atualizado_em timestamptz/)
+  assert.match(codigo, /ADD COLUMN IF NOT EXISTS prazo_avisado date/)
   assert.doesNotMatch(codigo, /data_agendamento/)
 })
 
@@ -92,6 +94,27 @@ ok('substitui aviso pendente antes de inserir', () => {
   const update = corpo.slice(iUpdate, corpo.indexOf(';', iUpdate))
   assert.match(update, /enviada = false/)
   assert.match(update, /tentativas = 0/)
+})
+
+ok('aviso reescrito volta a contar do zero e leva o prazo novo', () => {
+  const iUpdate = corpo.indexOf('UPDATE public.notificacoes_whatsapp')
+  const update = corpo.slice(iUpdate, corpo.indexOf(';', iUpdate))
+  assert.match(update, /prazo_avisado = p_novo_prazo/)
+  assert.match(update, /created_at = now\(\)/)
+})
+
+ok('aviso novo grava o prazo avisado', () => {
+  const iInsert = corpo.indexOf('INSERT INTO public.notificacoes_whatsapp')
+  const insert = corpo.slice(iInsert, corpo.indexOf(';', iInsert))
+  const colunas = /\(([^)]*)\)\s*VALUES/.exec(insert)?.[1].split(',').map((c) => c.trim()) ?? []
+  const valores = /VALUES\s*\(([\s\S]*)\)\s*$/.exec(insert)?.[1].split(/,(?![^(]*\))/).map((v) => v.trim()) ?? []
+  assert.equal(colunas.length, valores.length, 'INSERT com colunas e valores desalinhados')
+  assert.equal(valores[colunas.indexOf('prazo_avisado')], 'p_novo_prazo')
+})
+
+ok('prazo anterior do pendente vem da linha inteira (inclui "não definido")', () => {
+  assert.ok(corpo.includes("'Prazo anterior: ([^\\n]+)'"), 'regex do prazo anterior nao pega o resto da linha')
+  assert.doesNotMatch(corpo, /Prazo anterior: \(\\d/)
 })
 
 ok('sem telefone', () => {

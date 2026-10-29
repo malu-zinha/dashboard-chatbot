@@ -1,6 +1,8 @@
 // Estado do aviso de WhatsApp enviado ao engenheiro quando o prazo muda.
 // Funcoes puras: a tabela mostra o icone e o polling usa temAvisoEnviando.
 
+import { toDataISO } from './datas'
+
 export interface AvisoPrazoLinha {
   eng_projeto_id: string
   created_at: string
@@ -8,6 +10,8 @@ export interface AvisoPrazoLinha {
   tentativas: number
   status_entrega: string | null
   erro_codigo: string | null
+  // Prazo que o aviso levou ao engenheiro (nulo em avisos antigos).
+  prazo_avisado: string | null
 }
 
 export type EstadoAvisoPrazo = {
@@ -66,4 +70,15 @@ export function estadoAvisoPrazo(linha: AvisoPrazoLinha, agoraMs: number): Estad
 
 export function temAvisoEnviando(linhas: AvisoPrazoLinha[], agoraMs: number): boolean {
   return linhas.some((l) => estadoAvisoPrazo(l, agoraMs).icone === 'enviando')
+}
+
+// O aviso so vale enquanto a tarefa esta no prazo que ele levou. Se o prazo
+// mudou por outro caminho (retrabalho, fluxo do dono no WhatsApp), o icone
+// some para nao parecer que o engenheiro recebeu a data atual.
+export function avisoValeParaPrazo(
+  aviso: Pick<AvisoPrazoLinha, 'prazo_avisado'>,
+  dataPrevista: string | null | undefined
+): boolean {
+  const avisado = toDataISO(aviso.prazo_avisado)
+  return avisado !== null && avisado === toDataISO(dataPrevista)
 }

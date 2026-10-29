@@ -6,13 +6,16 @@
 -- quebra nada.
 --
 -- O que muda:
---   1. notificacoes_whatsapp ganha 5 colunas, todas nulas nas linhas antigas:
+--   1. notificacoes_whatsapp ganha 6 colunas, todas nulas nas linhas antigas:
 --        - eng_projeto_id: de qual atribuicao e o aviso (ON DELETE SET NULL,
 --          para nao travar a limpeza de projetos antigos);
 --        - twilio_sid, status_entrega, erro_codigo, status_atualizado_em:
 --          o que aconteceu com o envio (o worker e o webhook do Twilio
 --          preenchem depois). 'sem_telefone' marca aviso que nao tem para
 --          onde ir.
+--        - prazo_avisado: o prazo que o aviso leva ao engenheiro. O dashboard
+--          so mostra o icone do aviso enquanto o prazo da tarefa e esse (se
+--          o prazo mudar por outro caminho, o icone some).
 --      Nao cria data_agendamento: o trigger antigo notificar_novo_projeto
 --      (quebrado, hoje falha em silencio por falta dela) voltaria a gerar
 --      avisos duplicados.
@@ -29,7 +32,9 @@
 --          um aviso desta atribuicao que o worker ainda nao pegou, ele e
 --          reescrito (um aviso so, com o prazo que o engenheiro conhecia e o
 --          prazo novo final). Sem telefone: grava com status_entrega
---          'sem_telefone' e o prazo muda do mesmo jeito.
+--          'sem_telefone' e o prazo muda do mesmo jeito. O aviso reescrito
+--          volta a contar do zero (created_at = now()) e mantem o "Prazo
+--          anterior" que ele ja levava, inclusive "não definido".
 --      Erro inesperado volta com mensagem fixa (sem o texto do erro do banco)
 --      e deixa um WARNING com o SQLSTATE no log do Postgres.
 --   3. So o service_role executa a funcao (o dashboard chama pela rota do
@@ -50,7 +55,8 @@ ALTER TABLE public.notificacoes_whatsapp
   ADD COLUMN IF NOT EXISTS twilio_sid text,
   ADD COLUMN IF NOT EXISTS status_entrega text,
   ADD COLUMN IF NOT EXISTS erro_codigo text,
-  ADD COLUMN IF NOT EXISTS status_atualizado_em timestamptz;
+  ADD COLUMN IF NOT EXISTS status_atualizado_em timestamptz,
+  ADD COLUMN IF NOT EXISTS prazo_avisado date;
 
 CREATE INDEX IF NOT EXISTS idx_notif_twilio_sid
   ON public.notificacoes_whatsapp (twilio_sid);
@@ -189,7 +195,7 @@ BEGIN
     SELECT
         notificacao_id,
         status_entrega,
-        substring(mensagem from 'Prazo anterior: (\d{2}/\d{2}/\d{4})')
+        substring(mensagem from 'Prazo anterior: ([^\n]+)')
     INTO v_pendente_id, v_pendente_status, v_pendente_prazo
     FROM public.notificacoes_whatsapp
     WHERE eng_projeto_id = p_atribuicao_id
@@ -211,7 +217,9 @@ BEGIN
         UPDATE public.notificacoes_whatsapp
         SET mensagem = v_msg_inicio || v_prazo_anterior_txt || v_msg_fim,
             telefone = v_telefone,
-            status_entrega = v_status_entrega
+            status_entrega = v_status_entrega,
+            prazo_avisado = p_novo_prazo,
+            created_at = now()
         WHERE notificacao_id = v_pendente_id
           AND enviada = false
           AND tentativas = 0;
@@ -233,7 +241,8 @@ BEGIN
             mensagem,
             projeto_id,
             eng_projeto_id,
-            status_entrega
+            status_entrega,
+            prazo_avisado
         ) VALUES (
             v_eng_id,
             v_telefone,
@@ -242,7 +251,8 @@ BEGIN
             v_msg_inicio || v_prazo_anterior_txt || v_msg_fim,
             v_projeto_id,
             p_atribuicao_id,
-            v_status_entrega
+            v_status_entrega,
+            p_novo_prazo
         );
     END IF;
 
@@ -279,12 +289,12 @@ COMMIT;
 -- -----------------------------------------------------
 -- 4. Conferencia (so leitura, rodar depois do COMMIT)
 -- -----------------------------------------------------
--- Colunas novas (deve voltar 5 linhas):
+-- Colunas novas (deve voltar 6 linhas):
 --   SELECT column_name, data_type
 --   FROM information_schema.columns
 --   WHERE table_schema = 'public' AND table_name = 'notificacoes_whatsapp'
 --     AND column_name IN ('eng_projeto_id', 'twilio_sid', 'status_entrega',
---                         'erro_codigo', 'status_atualizado_em')
+--                         'erro_codigo', 'status_atualizado_em', 'prazo_avisado')
 --   ORDER BY column_name;
 --
 -- Permissoes (deve voltar false, true):

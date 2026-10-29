@@ -22,7 +22,7 @@ export async function GET() {
     const desde = new Date(Date.now() - JANELA_DIAS * 24 * 60 * 60 * 1000).toISOString()
     const { data, error } = await admin
       .from('notificacoes_whatsapp')
-      .select('eng_projeto_id, created_at, enviada, tentativas, status_entrega, erro_codigo')
+      .select('eng_projeto_id, created_at, enviada, tentativas, status_entrega, erro_codigo, prazo_avisado')
       .eq('tipo', 'prazo_alterado')
       .not('eng_projeto_id', 'is', null)
       .gte('created_at', desde)
