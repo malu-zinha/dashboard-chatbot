@@ -51,6 +51,7 @@ function criarBanco(linhas: Linha[], opts: { falharMarcarEnviada?: boolean } = {
         update: (v: Partial<Linha>) => ((op = 'update'), (valores = v), q),
         eq: (c: keyof Linha, v: unknown) => (filtros.push((l) => l[c] === v), q),
         lt: (c: keyof Linha, v: any) => (filtros.push((l) => (l[c] as any) < v), q),
+        not: (c: keyof Linha, _op: string, v: unknown) => (filtros.push((l) => l[c] !== v), q),
         order: () => q,
         limit: (n: number) => ((limite = n), q),
         then(resolve: (r: unknown) => void) {
@@ -85,7 +86,7 @@ function linha(id: string, tentativas = 0): Linha {
 }
 
 function criarWorker(client: unknown, enviar: (to: string, msg: string) => Promise<boolean>) {
-  const w: any = new NotificationWorker({ sendMessage: enviar } as any)
+  const w: any = new NotificationWorker({ sendMessageRastreado: async (to: string, msg: string) => ({ ok: await enviar(to, msg) }) } as any)
   w.supabaseService = { getClient: () => client }
   w.sleep = async () => {}
   return w as NotificationWorker

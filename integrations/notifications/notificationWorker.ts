@@ -104,6 +104,7 @@ export class NotificationWorker {
       .from('notificacoes_whatsapp')
       .select('*')
       .eq('enviada', false)
+      .not('telefone', 'is', null)
       .lt('tentativas', this.maxTentativas)
       .order('created_at', { ascending: true })
       .limit(this.loteSize);
@@ -121,9 +122,11 @@ export class NotificationWorker {
    * ainda estiver pendente e com o mesmo numero de tentativas que foi lido.
    * Se outra rodada (ou outra instancia, na troca de container do deploy) ja
    * reservou, nenhuma linha muda e esta desiste. Assim cada tentativa sai
-   * uma vez so.
+   * uma vez so. Devolve a mensagem atual da linha (a do UPDATE, nao a do
+   * SELECT: um prazo alterado de novo pode ter reescrito o texto no meio),
+   * ou null se nao reservou.
    */
-  private async reservar(notif: NotificacaoPendente): Promise<boolean> {
+  private async reservar(notif: NotificacaoPendente): Promise<string | null> {
     const supabase = this.supabaseService.getClient();
     const { data, error } = await supabase
       .from('notificacoes_whatsapp')
@@ -131,13 +134,14 @@ export class NotificationWorker {
       .eq('notificacao_id', notif.notificacao_id)
       .eq('enviada', false)
       .eq('tentativas', notif.tentativas)
-      .select('notificacao_id');
+      .select('notificacao_id, mensagem');
 
     if (error) {
       console.error(`   ❌ Erro ao reservar notificação ${notif.notificacao_id}:`, redactSecrets(error));
-      return false;
+      return null;
     }
-    return (data?.length ?? 0) > 0;
+    if (!data || data.length === 0) return null;
+    return data[0].mensagem;
   }
 
   /**
@@ -148,12 +152,17 @@ export class NotificationWorker {
     const tel = mascararTelefone(notif.telefone);
     const tentativa = notif.tentativas + 1;
 
-    if (!(await this.reservar(notif))) return false;
+    const mensagem = await this.reservar(notif);
+    if (mensagem === null) return false;
 
     try {
-      const sucesso = await this.whatsappService.sendMessage(notif.telefone, notif.mensagem);
+      const resultado = await this.whatsappService.sendMessageRastreado(
+        notif.telefone,
+        mensagem,
+        notif.notificacao_id,
+      );
 
-      if (!sucesso) {
+      if (!resultado.ok) {
         console.log(`   ❌ Falha no envio (tentativa ${tentativa}/${this.maxTentativas}): ${tel}`);
         return false;
       }
@@ -170,6 +179,25 @@ export class NotificationWorker {
           `   ❌ Notificação ${notif.notificacao_id} enviada, mas não foi marcada como enviada:`,
           redactSecrets(error),
         );
+      }
+
+      if (resultado.sid) {
+        // Falhar aqui nunca pode levar a reenvio: a linha ja esta enviada.
+        const { error: erroSid } = await supabase
+          .from('notificacoes_whatsapp')
+          .update({
+            twilio_sid: resultado.sid,
+            status_entrega: 'enviado',
+            status_atualizado_em: new Date().toISOString(),
+          })
+          .eq('notificacao_id', notif.notificacao_id);
+
+        if (erroSid) {
+          console.error(
+            `   ⚠️ Notificação ${notif.notificacao_id} enviada, mas o SID não foi gravado:`,
+            redactSecrets(erroSid),
+          );
+        }
       }
 
       console.log(`   ✅ Notificação enviada: ${notif.tipo} - ${tel}`);

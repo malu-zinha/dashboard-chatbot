@@ -36,8 +36,36 @@ export function problemaConfigProvider(env: Record<string, string | undefined>):
 // INTERFACE: WhatsAppProvider
 // =====================================================
 
+export interface ResultadoEnvio {
+  ok: boolean;
+  sid?: string;
+}
+
+/**
+ * URL que a Twilio chama a cada mudanca de status da mensagem. O id da
+ * notificacao vai na query para o webhook saber qual linha atualizar.
+ * Sem base publica configurada devolve null (nao pede callback).
+ */
+export function urlCallbackStatus(
+  env: Record<string, string | undefined>,
+  notificacaoId: string,
+): string | null {
+  let base: string | undefined;
+  if (env.TWILIO_WEBHOOK_BASE_URL) {
+    base = env.TWILIO_WEBHOOK_BASE_URL.replace(/\/+$/, '');
+  } else if (env.RAILWAY_PUBLIC_DOMAIN) {
+    base = `https://${env.RAILWAY_PUBLIC_DOMAIN}`;
+  }
+  if (!base) return null;
+  return `${base}/webhook/status?notificacao=${encodeURIComponent(notificacaoId)}`;
+}
+
 export interface WhatsAppProvider {
-  sendMessage(to: string, message: string): Promise<boolean>;
+  sendMessage(
+    to: string,
+    message: string,
+    opcoes?: { statusCallback?: string },
+  ): Promise<ResultadoEnvio | boolean>;
   getProviderName(): string;
 }
 
@@ -157,10 +185,14 @@ class TwilioWhatsAppProvider implements WhatsAppProvider {
     }
   }
 
-  async sendMessage(to: string, message: string): Promise<boolean> {
+  async sendMessage(
+    to: string,
+    message: string,
+    opcoes?: { statusCallback?: string },
+  ): Promise<ResultadoEnvio> {
     if (!this.accountSid || !this.authToken || !this.fromNumber) {
       console.error('❌ Twilio API não configurada. Mensagem não enviada.');
-      return false;
+      return { ok: false };
     }
 
     try {
@@ -190,6 +222,7 @@ class TwilioWhatsAppProvider implements WhatsAppProvider {
       formData.append('From', fromNumber);
       formData.append('To', toNumber);
       formData.append('Body', message);
+      if (opcoes?.statusCallback) formData.append('StatusCallback', opcoes.statusCallback);
 
       const response = await fetch(this.baseUrl, {
         method: 'POST',
@@ -205,17 +238,17 @@ class TwilioWhatsAppProvider implements WhatsAppProvider {
         const errorData = await response.json();
         // Idem: a resposta do Twilio pode carregar o Auth Token no eco do request.
         console.error('❌ Erro ao enviar mensagem via Twilio:', redactSecrets(errorData));
-        return false;
+        return { ok: false };
       }
 
       const data = await response.json();
       console.log(`✅ Mensagem enviada via Twilio para ${mascararTelefone(to)}`);
       console.log(`   Message SID: ${data.sid || 'N/A'}`);
-      return true;
+      return { ok: true, sid: data.sid };
 
     } catch (error: any) {
       console.error('❌ Erro ao enviar mensagem via Twilio:', redactSecrets(error?.message ?? error));
-      return false;
+      return { ok: false };
     }
   }
 
@@ -253,20 +286,40 @@ export class WhatsAppService {
    * Mensagens acima de 1600 caracteres são divididas automaticamente.
    */
   async sendMessage(to: string, message: string): Promise<boolean> {
+    return (await this.sendMessageRastreado(to, message)).ok;
+  }
+
+  /**
+   * Igual a sendMessage, mas devolve o SID da Twilio e, com notificacaoId,
+   * pede o callback de status identificando a notificacao. Para mensagem
+   * dividida, o SID e o da ultima parte.
+   */
+  async sendMessageRastreado(
+    to: string,
+    message: string,
+    notificacaoId?: string,
+  ): Promise<ResultadoEnvio> {
     const MAX_LENGTH = 1600;
+    const url = notificacaoId ? urlCallbackStatus(process.env, notificacaoId) : null;
+    const opcoes = url ? { statusCallback: url } : undefined;
 
     if (message.length <= MAX_LENGTH) {
-      return await this.provider.sendMessage(to, message);
+      return this.normalizar(await this.provider.sendMessage(to, message, opcoes));
     }
 
     const parts = this.splitMessage(message, MAX_LENGTH);
+    let ultimo: ResultadoEnvio = { ok: true };
     for (let i = 0; i < parts.length; i++) {
       const partLabel = `[${i + 1}/${parts.length}]\n`;
-      const success = await this.provider.sendMessage(to, partLabel + parts[i]);
-      if (!success) return false;
+      ultimo = this.normalizar(await this.provider.sendMessage(to, partLabel + parts[i], opcoes));
+      if (!ultimo.ok) return { ok: false };
       if (i < parts.length - 1) await this.sleep(1000);
     }
-    return true;
+    return ultimo;
+  }
+
+  private normalizar(r: ResultadoEnvio | boolean): ResultadoEnvio {
+    return typeof r === 'boolean' ? { ok: r } : r;
   }
 
   /**
