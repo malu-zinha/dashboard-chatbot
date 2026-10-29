@@ -16,7 +16,6 @@ import { criarWebhookStatus } from '../integrations/whatsapp/webhookStatus.ts';
 import { getSupabaseService } from '../integrations/supabase/supabaseService.ts';
 import { verificarSaude } from '../integrations/saude/healthcheck.ts';
 import { sincronizacaoSheetsAtiva, variaveisObrigatoriasBoot } from '../integrations/cron/configSincronizacao.ts';
-import { mascararTelefone } from '../logic/security/mascararPII.ts';
 import { getNotificationService } from '../integrations/notifications/notificationService.ts';
 import { getNotificationWorker } from '../integrations/notifications/notificationWorker.ts';
 import { redactSecrets } from '../logic/security/redactSecrets.ts';
