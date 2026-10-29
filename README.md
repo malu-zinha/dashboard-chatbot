@@ -147,7 +147,7 @@ Copie `.env.example` para `.env` na raiz. O dashboard usa um `.env.local` própr
 | `GOOGLE_SHEETS_ENGINEER_RANGE` | Intervalo lido | Não | `A1:AE1000` |
 | `WHATSAPP_PROVIDER` | `development` \| `twilio` \| `meta` | **Em produção** (`NODE_ENV=production` ou Railway): o boot recusa sem `twilio`/`meta`, porque o modo `development` só imprime no log e dava as notificações como enviadas | `development` |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` | Credenciais Twilio | Se `WHATSAPP_PROVIDER=twilio` (a falta só gera warning no boot) | `''` |
-| `TWILIO_WEBHOOK_BASE_URL` | URL pública exatamente como no console do Twilio, usada para conferir `X-Twilio-Signature` quando o host encaminhado pelo proxy não bate (domínio próprio) | Não | host do request |
+| `TWILIO_WEBHOOK_BASE_URL` | URL pública exatamente como no console do Twilio, usada para conferir `X-Twilio-Signature` quando o host encaminhado pelo proxy não bate (domínio próprio) e como base do status callback das notificações (`<base>/webhook/status?notificacao=<id>`). Sem ela, usa `https://${RAILWAY_PUBLIC_DOMAIN}`; sem nenhuma das duas não há callback e o ícone fica em ✓ cinza | Não | host do request |
 | `META_ACCESS_TOKEN` / `META_PHONE_NUMBER_ID` / `META_API_VERSION` | Credenciais Meta | Se `WHATSAPP_PROVIDER=meta` | `''` / `''` / `v18.0` |
 | `PORT` | Porta do Express | Não | `3000` |
 | `OPENAI_API_KEY` | Whisper (áudio, caminho legado) | Não | — |
@@ -443,6 +443,36 @@ Next.js 14 em `dashboard/`. Quatro rotas:
 Cada KPI abre um modal com a tabela detalhada, e os modais têm modo tela cheia. A tabela de projetos
 permite busca, transferir responsável, excluir atribuição ou projeto, ver detalhes e **gerar
 relatório PDF** (`vw_relatorio_projeto_pdf` + jsPDF, via `/api/admin/projetos/[id]/relatorio`).
+
+### Alterar prazo
+
+Só o **owner** vê o botão de calendário ("Alterar prazo") na tabela de projetos; ele fica
+desativado em tarefas concluídas. O modal mostra o prazo atual e a data de início, e rejeita data
+anterior ao início ou igual ao prazo atual. Engenheiro não altera prazo pelo dashboard.
+
+Ao salvar, a função `alterar_prazo_atribuicao` (service role, via `/api/admin/*`):
+
+- atualiza `engenheiros_projetos.data_prevista` (o trigger sincroniza `prazos.prazo_final_eng`);
+- se o prazo do cliente (`prazos.prazo_final_cliente`) ficaria **antes** do novo prazo, empurra-o
+  para a mesma data — o dashboard avisa "Prazo do cliente ajustado para dd/mm/aaaa";
+- atualiza a cópia em `evandro_distribuicao_tasks`;
+- enfileira em `notificacoes_whatsapp` o aviso `prazo_alterado` ("📅 Prazo alterado", com prazo
+  anterior e novo). Duas alterações antes do envio geram **um** aviso, com a data final.
+
+Ao lado do prazo, um ícone mostra o destino do último aviso daquela tarefa (últimos 60 dias):
+
+| Ícone | Significado |
+|---|---|
+| ⏳ | Enviando |
+| ✓ verde | Entregue ou lido |
+| ✓ cinza | Enviado, sem confirmação de entrega (passaram 10 min sem callback) |
+| ⚠ | Não entregue; o motivo aparece no tooltip |
+
+Motivos do ⚠: "não fala com o bot há mais de 24h" (erro Twilio 63016, janela de 24h do WhatsApp),
+engenheiro sem telefone, ainda na fila após 10 minutos, ou outro código de erro. A migration
+`20261029_alterar_prazo_atribuicao.sql` adiciona `twilio_sid`, `status_entrega`, `erro_codigo` e
+`status_atualizado_em` à fila; o worker pede ao Twilio um status callback em
+`/webhook/status?notificacao=<id>`, e a rota valida a assinatura e grava o resultado.
 
 O dashboard assina Realtime em `engenheiros_projetos`, `projetos` e `retrabalho_projetos`, e
 recarrega quando algo muda — então um apontamento feito no WhatsApp aparece sem refresh.
