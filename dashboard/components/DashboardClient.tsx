@@ -50,6 +50,8 @@ import {
   consumirFalhasDeCarga,
   atribuirProjetoComPavimentos,
   transferirResponsavelAtribuicao,
+  alterarPrazoAtribuicao,
+  buscarAvisosPrazo,
   excluirAtribuicao,
   excluirProjeto,
   subscribeToChanges,
@@ -72,6 +74,17 @@ import {
 import { buildEngenheirosExecucao } from '@/lib/engenheirosExecucao'
 import { criarRecargaAgrupada } from '@/lib/recargaAgrupada'
 import { useIsOwnerActive } from '@/hooks/useIsOwnerActive'
+import { temAvisoEnviando, type AvisoPrazoLinha } from '@/lib/avisoPrazo'
+import { formatarDataBR } from '@/lib/datas'
+
+// Enquanto algum aviso de prazo esta sendo enviado, a tabela reconsulta so os avisos.
+const INTERVALO_POLLING_AVISOS_MS = 20_000
+
+function indexarAvisos(linhas: AvisoPrazoLinha[]): Record<string, AvisoPrazoLinha> {
+  const porAtribuicao: Record<string, AvisoPrazoLinha> = {}
+  for (const linha of linhas) porAtribuicao[linha.eng_projeto_id] = linha
+  return porAtribuicao
+}
 
 const ProjetosStatusChart = dynamic(() => import('@/components/ProjetosStatusChart'), {
   ssr: false,
@@ -116,6 +129,11 @@ export default function DashboardClient() {
     Object.values(canaisConectados).every(Boolean)
   const [isLoading, setIsLoading] = useState(true)
   const isOwner = useIsOwnerActive()
+  // loadData e capturado pelo efeito de montagem (e pelo Realtime) antes de o perfil
+  // carregar; o ref deixa a recarga saber se o usuario e dono sem refazer as assinaturas.
+  const isOwnerRef = useRef(false)
+  // Ultimo aviso de prazo por atribuicao_id; so e buscado para o dono.
+  const [avisosPrazo, setAvisosPrazo] = useState<Record<string, AvisoPrazoLinha>>({})
   
   const [showProjetosModal, setShowProjetosModal] = useState(false)
   const [showProjetosConcluidosModal, setShowProjetosConcluidosModal] = useState(false)
@@ -175,6 +193,7 @@ export default function DashboardClient() {
         projetosData,
         engenheirosData,
         areasData,
+        avisosData,
       ] = await Promise.all([
         fetchVisaoGeral(),
         fetchAtrasosEngenheiro(),
@@ -188,6 +207,7 @@ export default function DashboardClient() {
         fetchProjetos(),
         fetchEngenheiros(),
         fetchAreas(),
+        isOwnerRef.current ? buscarAvisosPrazo() : Promise.resolve(null),
       ])
 
       if (minhaCarga !== cargaAtual.current) return
@@ -204,6 +224,7 @@ export default function DashboardClient() {
       setProjetos(projetosData)
       setEngenheiros(engenheirosData)
       setAreas(areasData)
+      if (avisosData) setAvisosPrazo(indexarAvisos(avisosData))
       setLastUpdate(new Date())
     } catch (error) {
       console.error('Erro ao carregar dados:', error)
@@ -246,6 +267,39 @@ export default function DashboardClient() {
     }
   }, [])
 
+  // O perfil de dono chega depois da primeira carga: quando confirmar, busca os avisos.
+  useEffect(() => {
+    isOwnerRef.current = isOwner
+    if (!isOwner || !isSupabaseConfigured) return
+
+    let cancelado = false
+    buscarAvisosPrazo().then((linhas) => {
+      if (!cancelado) setAvisosPrazo(indexarAvisos(linhas))
+    })
+    return () => {
+      cancelado = true
+    }
+  }, [isOwner])
+
+  // Polling so enquanto ha aviso "enviando" e so com a aba visivel. Cada resposta
+  // troca o objeto de avisos, o efeito reavalia e para quando nenhum estiver enviando.
+  useEffect(() => {
+    if (!isOwner || !temAvisoEnviando(Object.values(avisosPrazo), Date.now())) return
+
+    let cancelado = false
+    const intervalo = setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      buscarAvisosPrazo().then((linhas) => {
+        if (!cancelado) setAvisosPrazo(indexarAvisos(linhas))
+      })
+    }, INTERVALO_POLLING_AVISOS_MS)
+
+    return () => {
+      cancelado = true
+      clearInterval(intervalo)
+    }
+  }, [isOwner, avisosPrazo])
+
   const handleAtribuirTask = async (data: TaskData) => {
     if (!isSupabaseConfigured) {
       alert('Supabase não está configurado. Não é possível salvar o projeto.')
@@ -285,6 +339,27 @@ export default function DashboardClient() {
     }
 
     await loadData()
+  }
+
+  const handleAlterarPrazo = async (projeto: Projeto, novoPrazo: string): Promise<string | null> => {
+    if (!isSupabaseConfigured) {
+      throw new Error('Supabase nao esta configurado.')
+    }
+    if (!projeto.atribuicao_id) {
+      throw new Error('Tarefa sem identificador de atribuicao.')
+    }
+
+    const result = await alterarPrazoAtribuicao(projeto.atribuicao_id, novoPrazo)
+    if (!result.success) {
+      throw new Error(result.error || 'Nao foi possivel alterar o prazo.')
+    }
+
+    await loadData()
+
+    const resultado = result.data?.result
+    return resultado?.cliente_ajustado > 0
+      ? 'Prazo do cliente ajustado para ' + formatarDataBR(resultado.prazo_cliente)
+      : null
   }
 
   const handleExcluirTarefa = async (projeto: Projeto) => {
@@ -504,6 +579,8 @@ export default function DashboardClient() {
           onTransferirResponsavel={handleTransferirResponsavel}
           onExcluirTarefa={handleExcluirTarefa}
           onExcluirProjeto={handleExcluirProjeto}
+          onAlterarPrazo={isOwner ? handleAlterarPrazo : undefined}
+          avisosPrazo={isOwner ? avisosPrazo : undefined}
           fullscreen={modalFullscreen}
           onToggleFullscreen={() => setModalFullscreen((v) => !v)}
         />
@@ -519,6 +596,8 @@ export default function DashboardClient() {
           onTransferirResponsavel={handleTransferirResponsavel}
           onExcluirTarefa={handleExcluirTarefa}
           onExcluirProjeto={handleExcluirProjeto}
+          onAlterarPrazo={isOwner ? handleAlterarPrazo : undefined}
+          avisosPrazo={isOwner ? avisosPrazo : undefined}
           fullscreen={modalFullscreen}
           onToggleFullscreen={() => setModalFullscreen((v) => !v)}
         />
@@ -534,6 +613,8 @@ export default function DashboardClient() {
           onTransferirResponsavel={handleTransferirResponsavel}
           onExcluirTarefa={handleExcluirTarefa}
           onExcluirProjeto={handleExcluirProjeto}
+          onAlterarPrazo={isOwner ? handleAlterarPrazo : undefined}
+          avisosPrazo={isOwner ? avisosPrazo : undefined}
           fullscreen={modalFullscreen}
           onToggleFullscreen={() => setModalFullscreen((v) => !v)}
         />
@@ -549,6 +630,8 @@ export default function DashboardClient() {
           onTransferirResponsavel={handleTransferirResponsavel}
           onExcluirTarefa={handleExcluirTarefa}
           onExcluirProjeto={handleExcluirProjeto}
+          onAlterarPrazo={isOwner ? handleAlterarPrazo : undefined}
+          avisosPrazo={isOwner ? avisosPrazo : undefined}
           fullscreen={modalFullscreen}
           onToggleFullscreen={() => setModalFullscreen((v) => !v)}
         />

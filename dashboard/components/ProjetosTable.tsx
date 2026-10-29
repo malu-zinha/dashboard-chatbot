@@ -1,7 +1,8 @@
 import React from 'react'
-import { X, Search, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, Trash2, UserRoundCog, Eye, FileDown } from 'lucide-react'
+import { X, Search, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, Trash2, UserRoundCog, Eye, FileDown, CalendarClock } from 'lucide-react'
 import { buildCompletedDisciplineKey, getProjetoAreaDisplayName } from '@/lib/compatibilizacao'
-import { formatarDataBR } from '@/lib/datas'
+import { formatarDataBR, toDataISO } from '@/lib/datas'
+import { estadoAvisoPrazo, type AvisoPrazoLinha } from '@/lib/avisoPrazo'
 import {
   isProjetoConcluido,
   particionarPorPeriodoConclusao,
@@ -51,6 +52,10 @@ interface ProjetosTableProps {
   onTransferirResponsavel?: (projeto: Projeto, novoEngId: string) => Promise<void>
   onExcluirTarefa?: (projeto: Projeto) => Promise<void>
   onExcluirProjeto?: (projeto: Projeto) => Promise<void>
+  // Devolve a mensagem extra de sucesso (prazo do cliente ajustado) ou null; lanca Error na falha.
+  onAlterarPrazo?: (projeto: Projeto, novoPrazo: string) => Promise<string | null>
+  // Ultimo aviso de prazo por atribuicao_id (so o dono recebe).
+  avisosPrazo?: Record<string, AvisoPrazoLinha>
   fullscreen: boolean
   onToggleFullscreen: () => void
 }
@@ -67,6 +72,8 @@ export default function ProjetosTable({
   onTransferirResponsavel,
   onExcluirTarefa,
   onExcluirProjeto,
+  onAlterarPrazo,
+  avisosPrazo,
   fullscreen,
   onToggleFullscreen,
 }: ProjetosTableProps) {
@@ -76,6 +83,9 @@ export default function ProjetosTable({
   const [expandedConcluidas, setExpandedConcluidas] = React.useState<Set<string>>(new Set())
   const [transferProjeto, setTransferProjeto] = React.useState<Projeto | null>(null)
   const [deleteProjeto, setDeleteProjeto] = React.useState<Projeto | null>(null)
+  const [prazoProjeto, setPrazoProjeto] = React.useState<Projeto | null>(null)
+  const [novoPrazo, setNovoPrazo] = React.useState('')
+  const [avisoSucesso, setAvisoSucesso] = React.useState<string | null>(null)
   const [novoResponsavelId, setNovoResponsavelId] = React.useState('')
   const [actionError, setActionError] = React.useState<string | null>(null)
   const [isActionSubmitting, setIsActionSubmitting] = React.useState(false)
@@ -97,6 +107,7 @@ export default function ProjetosTable({
       setExpandedConcluidas(new Set())
       setDataConclusaoInicio('')
       setDataConclusaoFim('')
+      setAvisoSucesso(null)
     }
   }, [isOpen, initialFilter])
 
@@ -238,13 +249,24 @@ export default function ProjetosTable({
 
   const abrirTransferencia = (item: Projeto) => {
     setDeleteProjeto(null)
+    setPrazoProjeto(null)
     setTransferProjeto(item)
     setNovoResponsavelId('')
     setActionError(null)
   }
 
+  const abrirAlterarPrazo = (item: Projeto) => {
+    setTransferProjeto(null)
+    setDeleteProjeto(null)
+    setPrazoProjeto(item)
+    setNovoPrazo(toDataISO(item.data_prevista) ?? '')
+    setAvisoSucesso(null)
+    setActionError(null)
+  }
+
   const abrirExclusao = async (item: Projeto) => {
     setTransferProjeto(null)
+    setPrazoProjeto(null)
     setDeleteProjeto(item)
     setActionError(null)
     setIsUltimaDisciplina(false)
@@ -268,7 +290,9 @@ export default function ProjetosTable({
     if (isActionSubmitting || isCheckingInfo) return
     setTransferProjeto(null)
     setDeleteProjeto(null)
+    setPrazoProjeto(null)
     setNovoResponsavelId('')
+    setNovoPrazo('')
     setActionError(null)
     setIsUltimaDisciplina(false)
   }, [isActionSubmitting, isCheckingInfo])
@@ -278,7 +302,7 @@ export default function ProjetosTable({
   // sem este listener a tecla nao faria nada. O ProjetoDetalhesModal ja tem o seu.
   // fecharAcao ignora a chamada durante uma requisicao em voo.
   React.useEffect(() => {
-    if (!transferProjeto && !deleteProjeto) return
+    if (!transferProjeto && !deleteProjeto && !prazoProjeto) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') fecharAcao()
@@ -286,7 +310,7 @@ export default function ProjetosTable({
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [transferProjeto, deleteProjeto, fecharAcao])
+  }, [transferProjeto, deleteProjeto, prazoProjeto, fecharAcao])
 
   const confirmarTransferencia = async () => {
     if (!transferProjeto || !onTransferirResponsavel) return
@@ -306,6 +330,44 @@ export default function ProjetosTable({
     } finally {
       setIsActionSubmitting(false)
     }
+  }
+
+  const prazoAtualISO = toDataISO(prazoProjeto?.data_prevista)
+
+  const confirmarAlterarPrazo = async () => {
+    if (!prazoProjeto || !onAlterarPrazo) return
+    if (!novoPrazo) {
+      setActionError('Informe o novo prazo.')
+      return
+    }
+
+    setIsActionSubmitting(true)
+    setActionError(null)
+    try {
+      const mensagemExtra = await onAlterarPrazo(prazoProjeto, novoPrazo)
+      setPrazoProjeto(null)
+      setNovoPrazo('')
+      if (mensagemExtra) setAvisoSucesso(mensagemExtra)
+    } catch (error: any) {
+      setActionError(error?.message || 'Não foi possível alterar o prazo.')
+    } finally {
+      setIsActionSubmitting(false)
+    }
+  }
+
+  const renderIconeAviso = (item: Projeto) => {
+    const aviso = item.atribuicao_id ? avisosPrazo?.[item.atribuicao_id] : undefined
+    if (!aviso) return null
+
+    const { icone, texto } = estadoAvisoPrazo(aviso, Date.now())
+    return (
+      <span title={texto} aria-label={texto} role="img" className="inline-flex">
+        {icone === 'enviando' && <Loader2 className="h-4 w-4 animate-spin text-gray-400" aria-hidden="true" />}
+        {icone === 'entregue' && <CheckCircle className="h-4 w-4 text-green-600" aria-hidden="true" />}
+        {icone === 'enviado' && <CheckCircle className="h-4 w-4 text-gray-400" aria-hidden="true" />}
+        {icone === 'falhou' && <AlertTriangle className="h-4 w-4 text-orange-500" aria-hidden="true" />}
+      </span>
+    )
   }
 
   const confirmarExclusao = async () => {
@@ -359,10 +421,24 @@ export default function ProjetosTable({
       subtitle={`${filteredData.length} projeto(s) encontrado(s)`}
       headerGradientClass={colorClasses[color]}
       // Com uma confirmacao aberta por cima, o Escape nao pode fechar a tabela por baixo
-      closeOnEscape={!transferProjeto && !deleteProjeto && !detalheProjeto}
+      closeOnEscape={!transferProjeto && !deleteProjeto && !prazoProjeto && !detalheProjeto}
     >
         {/* Busca */}
         <div className="p-4 border-b border-gray-200 bg-gray-50">
+          {avisoSucesso && (
+            <div className="mb-3 flex items-start justify-between gap-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+              <span>{avisoSucesso}</span>
+              <button
+                type="button"
+                onClick={() => setAvisoSucesso(null)}
+                className="rounded p-0.5 text-green-700 transition-colors hover:bg-green-100"
+                title="Fechar aviso"
+                aria-label="Fechar aviso"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
@@ -630,8 +706,9 @@ export default function ProjetosTable({
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <div className="text-sm text-gray-900">
+                      <div className="inline-flex items-center gap-1.5 text-sm text-gray-900">
                         {formatarDataBR(item.data_prevista)}
+                        {renderIconeAviso(item)}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -668,6 +745,18 @@ export default function ProjetosTable({
                           >
                             <Eye className="h-4 w-4" />
                           </button>
+                          {onAlterarPrazo && (
+                            <button
+                              type="button"
+                              onClick={() => abrirAlterarPrazo(item)}
+                              disabled={!item.atribuicao_id || item.percentual_andamento >= 100}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
+                              title="Alterar prazo"
+                              aria-label="Alterar prazo"
+                            >
+                              <CalendarClock className="h-4 w-4" />
+                            </button>
+                          )}
                           {isDisciplinaConcluida(item) && (
                             <button
                               type="button"
@@ -825,6 +914,79 @@ export default function ProjetosTable({
                   type="button"
                   onClick={confirmarTransferencia}
                   disabled={isActionSubmitting || !novoResponsavelId}
+                  className="inline-flex items-center gap-2 rounded-lg bg-tecpred-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-tecpred-secondary disabled:cursor-not-allowed disabled:bg-gray-300"
+                >
+                  {isActionSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {prazoProjeto && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-40 p-4"
+          onClick={(e) => {
+            e.stopPropagation()
+            fecharAcao()
+          }}
+        >
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <h3 className="text-lg font-bold text-gray-900">
+                Alterar prazo — {prazoProjeto.codigo_projeto} / {prazoProjeto.engenheiro_nome}
+              </h3>
+              <button
+                type="button"
+                onClick={fecharAcao}
+                disabled={isActionSubmitting}
+                className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed"
+                aria-label="Fechar"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                <p>Início: {formatarDataBR(prazoProjeto.data_inicio)}</p>
+                <p>Prazo atual: {formatarDataBR(prazoProjeto.data_prevista)}</p>
+              </div>
+
+              <div>
+                <label htmlFor="novo-prazo" className="mb-1 block text-sm font-medium text-gray-700">Novo prazo</label>
+                <input
+                  id="novo-prazo"
+                  type="date"
+                  min={toDataISO(prazoProjeto.data_inicio) ?? undefined}
+                  value={novoPrazo}
+                  onChange={(e) => setNovoPrazo(e.target.value)}
+                  disabled={isActionSubmitting}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-tecpred-primary disabled:bg-gray-50"
+                />
+              </div>
+
+              {actionError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {actionError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={fecharAcao}
+                  disabled={isActionSubmitting}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmarAlterarPrazo}
+                  disabled={isActionSubmitting || !novoPrazo || novoPrazo === prazoAtualISO}
                   className="inline-flex items-center gap-2 rounded-lg bg-tecpred-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-tecpred-secondary disabled:cursor-not-allowed disabled:bg-gray-300"
                 >
                   {isActionSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
