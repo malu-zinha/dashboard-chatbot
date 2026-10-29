@@ -45,6 +45,18 @@ function rpcsChamadas(dir: string, acc = new Set<string>()): Set<string> {
 const chamadas = new Set<string>()
 for (const d of ['chatbot', 'integrations', 'src', 'dashboard']) rpcsChamadas(resolve(d), chamadas)
 
+// Funcoes de escrita criadas depois desta migration ja nascem fechadas para
+// authenticated, cada uma na propria migration.
+const protegidasDepois = new Set<string>()
+for (const nome of readdirSync(resolve('supabase/migrations'))) {
+  const data = nome.match(/^(\d{8})_/)?.[1]
+  if (!data || data <= '20261022') continue
+  const texto = readFileSync(resolve('supabase/migrations', nome), 'utf8').replace(/--.*$/gm, '')
+  for (const m of texto.matchAll(/REVOKE ALL ON FUNCTION public\.([a-z_]+)\([^)]*\) FROM PUBLIC, anon, authenticated/g)) {
+    protegidasDepois.add(m[1])
+  }
+}
+
 console.log('\n📖 Migration 20261022_authenticated_somente_leitura\n')
 
 ok('28 funcoes na lista de revogacao', () => {
@@ -70,7 +82,9 @@ ok('nenhuma funcao de leitura usada pelo codigo foi revogada', () => {
 
 ok('toda funcao de escrita chamada pelo codigo esta na lista', () => {
   const escrita = [...chamadas].filter((f) => !/^(listar|buscar|calcular|verificar|dono_consultar|dono_recomendar)_/.test(f))
-  for (const f of escrita) assert.ok(listaRevogacao.has(f), `${f} escreve e nao foi revogada`)
+  for (const f of escrita) {
+    assert.ok(listaRevogacao.has(f) || protegidasDepois.has(f), `${f} escreve e nao foi revogada de authenticated`)
+  }
 })
 
 ok('trava aborta se alguma view usar funcao da lista', () => {
