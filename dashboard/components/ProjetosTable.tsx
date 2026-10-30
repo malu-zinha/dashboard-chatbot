@@ -369,8 +369,12 @@ export default function ProjetosTable({
 
   const confirmarAlterarDadosProjeto = async () => {
     if (!dadosProjeto || !onAlterarDadosProjeto) return
-    if (!clienteNormalizado) {
-      setActionError('Informe o cliente.')
+    if (clienteNormalizado.length < 2) {
+      setActionError('O cliente deve ter pelo menos 2 caracteres.')
+      return
+    }
+    if (descricaoNormalizada && descricaoNormalizada.length < 3) {
+      setActionError('A descrição deve ter pelo menos 3 caracteres.')
       return
     }
 
@@ -832,6 +836,7 @@ export default function ProjetosTable({
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100"
                               title="Alterar dados"
                               aria-label="Alterar dados"
+                              aria-haspopup="dialog"
                             >
                               <PencilLine className="h-4 w-4" />
                             </button>
@@ -1000,10 +1005,16 @@ export default function ProjetosTable({
             fecharAcao()
           }}
         >
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="menu-alterar-dados-titulo"
+            className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg font-bold text-gray-900">Alterar dados</h3>
+                <h3 id="menu-alterar-dados-titulo" className="text-lg font-bold text-gray-900">Alterar dados</h3>
                 <p className="mt-1 text-sm text-gray-600">
                   {menuProjeto.codigo_projeto} - {getProjetoAreaDisplayName(menuProjeto)}
                 </p>
@@ -1044,10 +1055,12 @@ export default function ProjetosTable({
                   motivo: motivoSemEngenheiro(menuProjeto),
                   abrir: () => abrirTransferencia(menuProjeto),
                 },
-              ].map((opcao) => (
+              ].map((opcao, i, opcoes) => (
                 <button
                   key={opcao.chave}
                   type="button"
+                  // Foco na primeira opcao disponivel, para o teclado comecar no menu.
+                  autoFocus={i === opcoes.findIndex((o) => !o.motivo)}
                   onClick={opcao.abrir}
                   disabled={Boolean(opcao.motivo)}
                   className="flex w-full items-center gap-3 rounded-lg border border-gray-200 px-4 py-3 text-left transition-colors hover:border-tecpred-primary hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-gray-200 disabled:hover:bg-transparent"
@@ -1074,10 +1087,16 @@ export default function ProjetosTable({
             fecharAcao()
           }}
         >
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dados-projeto-titulo"
+            className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg font-bold text-gray-900">
+                <h3 id="dados-projeto-titulo" className="text-lg font-bold text-gray-900">
                   Cliente e descrição — {dadosProjeto.codigo_projeto}
                 </h3>
                 <p className="mt-1 text-sm text-gray-600">Vale para todas as disciplinas deste projeto.</p>
@@ -1099,6 +1118,7 @@ export default function ProjetosTable({
                 <input
                   id="novo-cliente"
                   type="text"
+                  autoFocus
                   maxLength={200}
                   value={novoCliente}
                   onChange={(e) => setNovoCliente(e.target.value)}
@@ -1140,7 +1160,7 @@ export default function ProjetosTable({
                 <button
                   type="button"
                   onClick={confirmarAlterarDadosProjeto}
-                  disabled={isActionSubmitting || !clienteNormalizado || !dadosMudaram}
+                  disabled={isActionSubmitting || clienteNormalizado.length < 2 || !dadosMudaram}
                   className="inline-flex items-center gap-2 rounded-lg bg-tecpred-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-tecpred-secondary disabled:cursor-not-allowed disabled:bg-gray-300"
                 >
                   {isActionSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}

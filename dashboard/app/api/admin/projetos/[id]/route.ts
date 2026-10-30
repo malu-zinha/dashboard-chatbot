@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabaseAdmin'
 import { guardOwnerRoute } from '@/lib/apiGuard'
 import { handleApiError } from '@/lib/apiError'
-import { validarAlterarDadosProjeto } from '@/lib/adminProjetos'
+import { camposAtualizacaoProjeto, validarAlterarDadosProjeto } from '@/lib/adminProjetos'
 import {
   getAtribuicaoActionMessage,
   getAtribuicaoActionStatus,
@@ -74,7 +74,8 @@ export async function DELETE(
 /**
  * PATCH /api/admin/projetos/[id]
  * Body: { cliente, descricao? } — vale para o projeto inteiro (todas as
- * disciplinas). O codigo do projeto nao muda por aqui.
+ * disciplinas). Sem descricao no corpo, ela nao muda; null apaga. O codigo do
+ * projeto nao muda por aqui.
  */
 export async function PATCH(
   request: Request,
@@ -105,11 +106,7 @@ export async function PATCH(
     const admin = createAdminClient()
     const { data, error } = await admin
       .from('projetos')
-      .update({
-        cliente: validation.dados.cliente,
-        descricao: validation.dados.descricao,
-        updated_at: new Date().toISOString(),
-      })
+      .update(camposAtualizacaoProjeto(validation.dados, new Date().toISOString()))
       .eq('projeto_id', params.id)
       .eq('ativo', true)
       .select('projeto_id, cliente, descricao')

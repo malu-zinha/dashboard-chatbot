@@ -18,7 +18,7 @@ import * as modNs from '../dashboard/lib/adminProjetos.ts'
 const mod = ((modNs as any).default ?? modNs)
 
 // dashboard/ e CommonJS; daqui do ESM o modulo chega como default.
-const { validarAlterarDadosProjeto } = mod as typeof import('../dashboard/lib/adminProjetos.ts')
+const { validarAlterarDadosProjeto, camposAtualizacaoProjeto } = mod as typeof import('../dashboard/lib/adminProjetos.ts')
 
 let passou = 0
 function ok(nome: string, fn: () => void) {
@@ -38,28 +38,53 @@ ok('apara o cliente e a descricao; descricao vazia vira null', () => {
     ok: true,
     dados: { cliente: 'Cliente X', descricao: null },
   })
-  assert.deepEqual(validarAlterarDadosProjeto({ cliente: 'Cliente X' }), {
+  assert.deepEqual(validarAlterarDadosProjeto({ cliente: 'Cliente X', descricao: null }), {
     ok: true,
     dados: { cliente: 'Cliente X', descricao: null },
   })
 })
 
-ok('cliente obrigatorio e com no maximo 200 caracteres', () => {
-  assert.deepEqual(validarAlterarDadosProjeto({ cliente: '  ', descricao: 'x' }), { ok: false, error: 'Informe o cliente.' })
+ok('sem o campo descricao, a descricao nao muda (nao vira null)', () => {
+  const r = validarAlterarDadosProjeto({ cliente: 'Cliente X' })
+  assert.deepEqual(r, { ok: true, dados: { cliente: 'Cliente X' } })
+  assert.ok(r.ok && !('descricao' in r.dados))
+})
+
+ok('cliente obrigatorio, com 2 a 200 caracteres (como no criar projeto)', () => {
+  assert.deepEqual(validarAlterarDadosProjeto({ cliente: '  ', descricao: 'xyz' }), { ok: false, error: 'Informe o cliente.' })
+  assert.deepEqual(validarAlterarDadosProjeto({ cliente: ' A ' }), {
+    ok: false,
+    error: 'O cliente deve ter pelo menos 2 caracteres.',
+  })
+  assert.equal(validarAlterarDadosProjeto({ cliente: 'AB' }).ok, true)
   assert.equal(validarAlterarDadosProjeto({ cliente: 'a'.repeat(200) }).ok, true)
   assert.equal(validarAlterarDadosProjeto({ cliente: 'a'.repeat(201) }).ok, false)
 })
 
-ok('descricao com no maximo 1000 caracteres', () => {
-  assert.equal(validarAlterarDadosProjeto({ cliente: 'C', descricao: 'a'.repeat(1000) }).ok, true)
-  assert.deepEqual(validarAlterarDadosProjeto({ cliente: 'C', descricao: 'a'.repeat(1001) }), {
+ok('descricao opcional; se preenchida, de 3 a 1000 caracteres (como no criar projeto)', () => {
+  assert.deepEqual(validarAlterarDadosProjeto({ cliente: 'CC', descricao: 'ab' }), {
+    ok: false,
+    error: 'A descricao deve ter pelo menos 3 caracteres.',
+  })
+  assert.equal(validarAlterarDadosProjeto({ cliente: 'CC', descricao: 'abc' }).ok, true)
+  assert.equal(validarAlterarDadosProjeto({ cliente: 'CC', descricao: 'a'.repeat(1000) }).ok, true)
+  assert.deepEqual(validarAlterarDadosProjeto({ cliente: 'CC', descricao: 'a'.repeat(1001) }), {
     ok: false,
     error: 'Descricao muito longa (max. 1000 caracteres).',
   })
 })
 
+ok('campos gravados: exatamente cliente, descricao (se veio) e updated_at', () => {
+  const agora = '2026-10-30T12:00:00.000Z'
+  assert.deepEqual(
+    Object.keys(camposAtualizacaoProjeto({ cliente: 'CC', descricao: null }, agora)).sort(),
+    ['cliente', 'descricao', 'updated_at'],
+  )
+  assert.deepEqual(camposAtualizacaoProjeto({ cliente: 'CC' }, agora), { cliente: 'CC', updated_at: agora })
+})
+
 ok('recusa corpo invalido e tipos errados', () => {
-  for (const ruim of [null, 'x', [], {}, { cliente: 123 }, { cliente: 'C', descricao: 5 }]) {
+  for (const ruim of [null, 'x', [], {}, { cliente: 123 }, { cliente: 'CC', descricao: 5 }]) {
     assert.equal(validarAlterarDadosProjeto(ruim).ok, false, JSON.stringify(ruim))
   }
 })
@@ -73,10 +98,8 @@ ok('rota PATCH: so dono, so projeto ativo, so cliente/descricao/updated_at', () 
   assert.ok(guarda >= 0 && escrita > guarda, 'guardOwnerRoute antes da escrita')
   assert.ok(patch.indexOf('validarAlterarDadosProjeto') < escrita, 'valida antes de gravar')
   assert.match(patch, /\.eq\('ativo', true\)/)
-  const campos = patch.slice(escrita, patch.indexOf(')', patch.indexOf('}', escrita)))
-  assert.match(campos, /cliente/)
-  assert.match(campos, /descricao/)
-  assert.match(campos, /updated_at/)
+  // A escrita usa so o montador testado acima, nunca o corpo da requisicao.
+  assert.match(patch, /\.update\(camposAtualizacaoProjeto\(validation\.dados, /)
   assert.doesNotMatch(patch, /codigo_projeto/)
 })
 

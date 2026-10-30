@@ -451,7 +451,8 @@ três opções, e cada uma abre a janela só daquele campo:
 
 - **Cliente e descrição**: vale para o **projeto inteiro** (todas as disciplinas). Grava em
   `projetos` via `PATCH /api/admin/projetos/[id]` (service role, só projeto ativo). Cliente é
-  obrigatório (até 200 caracteres) e descrição é opcional (até 1000). O código do projeto não muda.
+  obrigatório (2 a 200 caracteres) e descrição é opcional (se preenchida, 3 a 1000), os mesmos
+  mínimos do formulário de criar projeto. O código do projeto não muda.
 - **Prazo**: descrito abaixo. Indisponível em tarefa concluída ou em projeto sem tarefa.
 - **Engenheiro**: transfere a tarefa para outro engenheiro (`transferir_atribuicao`). Indisponível
   em projeto sem tarefa.
