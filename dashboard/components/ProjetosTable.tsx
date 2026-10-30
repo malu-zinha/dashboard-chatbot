@@ -1,5 +1,5 @@
 import React from 'react'
-import { X, Search, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, Trash2, UserRoundCog, Eye, FileDown, CalendarClock } from 'lucide-react'
+import { X, Search, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, Trash2, UserRoundCog, Eye, FileDown, CalendarClock, PencilLine, Building2 } from 'lucide-react'
 import { buildCompletedDisciplineKey, getProjetoAreaDisplayName } from '@/lib/compatibilizacao'
 import { formatarDataBR, toDataISO } from '@/lib/datas'
 import { avisoValeParaPrazo, estadoAvisoPrazo, type AvisoPrazoLinha } from '@/lib/avisoPrazo'
@@ -56,6 +56,8 @@ interface ProjetosTableProps {
   onAlterarPrazo?: (projeto: Projeto, novoPrazo: string) => Promise<string | null>
   // Ultimo aviso de prazo por atribuicao_id (so o dono recebe).
   avisosPrazo?: Record<string, AvisoPrazoLinha>
+  // Cliente e descricao valem para o projeto inteiro; lanca Error na falha.
+  onAlterarDadosProjeto?: (projeto: Projeto, dados: { cliente: string; descricao: string | null }) => Promise<void>
   fullscreen: boolean
   onToggleFullscreen: () => void
 }
@@ -74,6 +76,7 @@ export default function ProjetosTable({
   onExcluirProjeto,
   onAlterarPrazo,
   avisosPrazo,
+  onAlterarDadosProjeto,
   fullscreen,
   onToggleFullscreen,
 }: ProjetosTableProps) {
@@ -85,6 +88,11 @@ export default function ProjetosTable({
   const [deleteProjeto, setDeleteProjeto] = React.useState<Projeto | null>(null)
   const [prazoProjeto, setPrazoProjeto] = React.useState<Projeto | null>(null)
   const [novoPrazo, setNovoPrazo] = React.useState('')
+  // Botao "Alterar dados": menu com as opcoes e a janela de cliente/descricao.
+  const [menuProjeto, setMenuProjeto] = React.useState<Projeto | null>(null)
+  const [dadosProjeto, setDadosProjeto] = React.useState<Projeto | null>(null)
+  const [novoCliente, setNovoCliente] = React.useState('')
+  const [novaDescricao, setNovaDescricao] = React.useState('')
   const [avisoSucesso, setAvisoSucesso] = React.useState<string | null>(null)
   const [novoResponsavelId, setNovoResponsavelId] = React.useState('')
   const [actionError, setActionError] = React.useState<string | null>(null)
@@ -248,6 +256,7 @@ export default function ProjetosTable({
   )
 
   const abrirTransferencia = (item: Projeto) => {
+    setMenuProjeto(null)
     setDeleteProjeto(null)
     setPrazoProjeto(null)
     setTransferProjeto(item)
@@ -256,6 +265,7 @@ export default function ProjetosTable({
   }
 
   const abrirAlterarPrazo = (item: Projeto) => {
+    setMenuProjeto(null)
     setTransferProjeto(null)
     setDeleteProjeto(null)
     setPrazoProjeto(item)
@@ -264,7 +274,36 @@ export default function ProjetosTable({
     setActionError(null)
   }
 
+  const abrirMenuAlterarDados = (item: Projeto) => {
+    setTransferProjeto(null)
+    setDeleteProjeto(null)
+    setPrazoProjeto(null)
+    setDadosProjeto(null)
+    setActionError(null)
+    setMenuProjeto(item)
+  }
+
+  const abrirAlterarDadosProjeto = (item: Projeto) => {
+    setMenuProjeto(null)
+    setDadosProjeto(item)
+    setNovoCliente(item.cliente ?? '')
+    setNovaDescricao(item.descricao ?? '')
+    setActionError(null)
+  }
+
+  // Motivo de cada opcao do menu estar desligada (null = disponivel).
+  const motivoSemPrazo = (item: Projeto) =>
+    !onAlterarPrazo ? 'sem permissão' :
+    !item.atribuicao_id ? 'projeto sem tarefa' :
+    item.percentual_andamento >= 100 ? 'tarefa concluída' : null
+  const motivoSemEngenheiro = (item: Projeto) =>
+    !onTransferirResponsavel ? 'sem permissão' :
+    !item.atribuicao_id ? 'projeto sem tarefa' :
+    !item.eng_id ? 'tarefa sem engenheiro' : null
+
   const abrirExclusao = async (item: Projeto) => {
+    setMenuProjeto(null)
+    setDadosProjeto(null)
     setTransferProjeto(null)
     setPrazoProjeto(null)
     setDeleteProjeto(item)
@@ -293,18 +332,24 @@ export default function ProjetosTable({
     setTransferProjeto(null)
     setDeleteProjeto(null)
     setPrazoProjeto(null)
+    setMenuProjeto(null)
+    setDadosProjeto(null)
     setNovoResponsavelId('')
     setNovoPrazo('')
+    setNovoCliente('')
+    setNovaDescricao('')
     setActionError(null)
     setIsUltimaDisciplina(false)
   }, [isActionSubmitting, isCheckingInfo])
+
+  const algumaAcaoAberta = Boolean(transferProjeto || deleteProjeto || prazoProjeto || menuProjeto || dadosProjeto)
 
   // Escape fecha a confirmacao do topo. O ModalShell fica com closeOnEscape
   // desligado enquanto ela existe — para nao derrubar a tabela por baixo —, entao
   // sem este listener a tecla nao faria nada. O ProjetoDetalhesModal ja tem o seu.
   // fecharAcao ignora a chamada durante uma requisicao em voo.
   React.useEffect(() => {
-    if (!transferProjeto && !deleteProjeto && !prazoProjeto) return
+    if (!algumaAcaoAberta) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') fecharAcao()
@@ -312,7 +357,39 @@ export default function ProjetosTable({
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [transferProjeto, deleteProjeto, prazoProjeto, fecharAcao])
+  }, [algumaAcaoAberta, fecharAcao])
+
+  const clienteNormalizado = novoCliente.trim()
+  const descricaoNormalizada = novaDescricao.trim()
+  const dadosMudaram = Boolean(
+    dadosProjeto &&
+      (clienteNormalizado !== (dadosProjeto.cliente ?? '').trim() ||
+        descricaoNormalizada !== (dadosProjeto.descricao ?? '').trim())
+  )
+
+  const confirmarAlterarDadosProjeto = async () => {
+    if (!dadosProjeto || !onAlterarDadosProjeto) return
+    if (!clienteNormalizado) {
+      setActionError('Informe o cliente.')
+      return
+    }
+
+    setIsActionSubmitting(true)
+    setActionError(null)
+    try {
+      await onAlterarDadosProjeto(dadosProjeto, {
+        cliente: clienteNormalizado,
+        descricao: descricaoNormalizada || null,
+      })
+      setDadosProjeto(null)
+      setNovoCliente('')
+      setNovaDescricao('')
+    } catch (error: any) {
+      setActionError(error?.message || 'Não foi possível alterar os dados do projeto.')
+    } finally {
+      setIsActionSubmitting(false)
+    }
+  }
 
   const confirmarTransferencia = async () => {
     if (!transferProjeto || !onTransferirResponsavel) return
@@ -424,7 +501,7 @@ export default function ProjetosTable({
       subtitle={`${filteredData.length} projeto(s) encontrado(s)`}
       headerGradientClass={colorClasses[color]}
       // Com uma confirmacao aberta por cima, o Escape nao pode fechar a tabela por baixo
-      closeOnEscape={!transferProjeto && !deleteProjeto && !prazoProjeto && !detalheProjeto}
+      closeOnEscape={!algumaAcaoAberta && !detalheProjeto}
     >
         {/* Busca */}
         <div className="p-4 border-b border-gray-200 bg-gray-50">
@@ -748,16 +825,15 @@ export default function ProjetosTable({
                           >
                             <Eye className="h-4 w-4" />
                           </button>
-                          {onAlterarPrazo && (
+                          {(onAlterarDadosProjeto || onAlterarPrazo || onTransferirResponsavel) && (
                             <button
                               type="button"
-                              onClick={() => abrirAlterarPrazo(item)}
-                              disabled={!item.atribuicao_id || item.percentual_andamento >= 100}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
-                              title="Alterar prazo"
-                              aria-label="Alterar prazo"
+                              onClick={() => abrirMenuAlterarDados(item)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100"
+                              title="Alterar dados"
+                              aria-label="Alterar dados"
                             >
-                              <CalendarClock className="h-4 w-4" />
+                              <PencilLine className="h-4 w-4" />
                             </button>
                           )}
                           {isDisciplinaConcluida(item) && (
@@ -774,18 +850,6 @@ export default function ProjetosTable({
                               ) : (
                                 <FileDown className="h-4 w-4" />
                               )}
-                            </button>
-                          )}
-                          {onTransferirResponsavel && (
-                            <button
-                              type="button"
-                              onClick={() => abrirTransferencia(item)}
-                              disabled={!item.atribuicao_id || !item.eng_id}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
-                              title="Alterar responsavel"
-                              aria-label="Alterar responsavel"
-                            >
-                              <UserRoundCog className="h-4 w-4" />
                             </button>
                           )}
                           {onExcluirTarefa && (
@@ -917,6 +981,166 @@ export default function ProjetosTable({
                   type="button"
                   onClick={confirmarTransferencia}
                   disabled={isActionSubmitting || !novoResponsavelId}
+                  className="inline-flex items-center gap-2 rounded-lg bg-tecpred-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-tecpred-secondary disabled:cursor-not-allowed disabled:bg-gray-300"
+                >
+                  {isActionSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {menuProjeto && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-40 p-4"
+          onClick={(e) => {
+            e.stopPropagation()
+            fecharAcao()
+          }}
+        >
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Alterar dados</h3>
+                <p className="mt-1 text-sm text-gray-600">
+                  {menuProjeto.codigo_projeto} - {getProjetoAreaDisplayName(menuProjeto)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={fecharAcao}
+                className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                aria-label="Fechar"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {[
+                {
+                  chave: 'dados',
+                  icone: <Building2 className="h-5 w-5" />,
+                  titulo: 'Cliente e descrição',
+                  detalhe: 'Vale para o projeto inteiro (todas as disciplinas)',
+                  motivo: onAlterarDadosProjeto ? null : 'sem permissão',
+                  abrir: () => abrirAlterarDadosProjeto(menuProjeto),
+                },
+                {
+                  chave: 'prazo',
+                  icone: <CalendarClock className="h-5 w-5" />,
+                  titulo: 'Prazo',
+                  detalhe: `Prazo atual: ${formatarDataBR(menuProjeto.data_prevista)}`,
+                  motivo: motivoSemPrazo(menuProjeto),
+                  abrir: () => abrirAlterarPrazo(menuProjeto),
+                },
+                {
+                  chave: 'engenheiro',
+                  icone: <UserRoundCog className="h-5 w-5" />,
+                  titulo: 'Engenheiro',
+                  detalhe: `Responsável atual: ${menuProjeto.engenheiro_nome}`,
+                  motivo: motivoSemEngenheiro(menuProjeto),
+                  abrir: () => abrirTransferencia(menuProjeto),
+                },
+              ].map((opcao) => (
+                <button
+                  key={opcao.chave}
+                  type="button"
+                  onClick={opcao.abrir}
+                  disabled={Boolean(opcao.motivo)}
+                  className="flex w-full items-center gap-3 rounded-lg border border-gray-200 px-4 py-3 text-left transition-colors hover:border-tecpred-primary hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-gray-200 disabled:hover:bg-transparent"
+                >
+                  <span className="text-tecpred-primary">{opcao.icone}</span>
+                  <span className="flex-1">
+                    <span className="block text-sm font-semibold text-gray-900">{opcao.titulo}</span>
+                    <span className="block text-xs text-gray-500">
+                      {opcao.motivo ? `Indisponível: ${opcao.motivo}` : opcao.detalhe}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {dadosProjeto && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-40 p-4"
+          onClick={(e) => {
+            e.stopPropagation()
+            fecharAcao()
+          }}
+        >
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">
+                  Cliente e descrição — {dadosProjeto.codigo_projeto}
+                </h3>
+                <p className="mt-1 text-sm text-gray-600">Vale para todas as disciplinas deste projeto.</p>
+              </div>
+              <button
+                type="button"
+                onClick={fecharAcao}
+                disabled={isActionSubmitting}
+                className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed"
+                aria-label="Fechar"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="novo-cliente" className="mb-1 block text-sm font-medium text-gray-700">Cliente</label>
+                <input
+                  id="novo-cliente"
+                  type="text"
+                  maxLength={200}
+                  value={novoCliente}
+                  onChange={(e) => setNovoCliente(e.target.value)}
+                  disabled={isActionSubmitting}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-tecpred-primary disabled:bg-gray-50"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="nova-descricao" className="mb-1 block text-sm font-medium text-gray-700">
+                  Descrição <span className="font-normal text-gray-400">(opcional)</span>
+                </label>
+                <textarea
+                  id="nova-descricao"
+                  rows={3}
+                  maxLength={1000}
+                  value={novaDescricao}
+                  onChange={(e) => setNovaDescricao(e.target.value)}
+                  disabled={isActionSubmitting}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-tecpred-primary disabled:bg-gray-50"
+                />
+              </div>
+
+              {actionError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {actionError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={fecharAcao}
+                  disabled={isActionSubmitting}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmarAlterarDadosProjeto}
+                  disabled={isActionSubmitting || !clienteNormalizado || !dadosMudaram}
                   className="inline-flex items-center gap-2 rounded-lg bg-tecpred-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-tecpred-secondary disabled:cursor-not-allowed disabled:bg-gray-300"
                 >
                   {isActionSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}

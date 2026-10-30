@@ -33,6 +33,37 @@ export function validarCriarProjeto(body: unknown): Resultado<ArgsCriarProjeto> 
   return { ok: true, args: { p_codigo: codigo, p_cliente: cliente, p_descricao: texto(b.descricao) } }
 }
 
+export interface DadosProjeto {
+  cliente: string
+  descricao: string | null
+}
+
+const MAX_CLIENTE = 200
+const MAX_DESCRICAO = 1000
+
+// Cliente e descricao valem para o projeto inteiro (todas as disciplinas).
+// O codigo nao muda por aqui.
+export function validarAlterarDadosProjeto(
+  body: unknown
+): { ok: true; dados: DadosProjeto } | { ok: false; error: string } {
+  const b = objeto(body)
+  if (!b) return { ok: false, error: 'Dados invalidos.' }
+  if (typeof b.cliente !== 'string') return { ok: false, error: 'Informe o cliente.' }
+  if (b.descricao !== undefined && b.descricao !== null && typeof b.descricao !== 'string') {
+    return { ok: false, error: 'Descricao invalida.' }
+  }
+
+  const cliente = texto(b.cliente)
+  const descricao = texto(b.descricao)
+  if (!cliente) return { ok: false, error: 'Informe o cliente.' }
+  if (cliente.length > MAX_CLIENTE) return { ok: false, error: `Cliente muito longo (max. ${MAX_CLIENTE} caracteres).` }
+  if (descricao.length > MAX_DESCRICAO) {
+    return { ok: false, error: `Descricao muito longa (max. ${MAX_DESCRICAO} caracteres).` }
+  }
+
+  return { ok: true, dados: { cliente, descricao: descricao || null } }
+}
+
 const COMPLEXIDADE = { baixa: 'SIMPLES', media: 'MEDIA', alta: 'COMPLEXA' } as const
 
 export interface ArgsAtribuirProjeto {

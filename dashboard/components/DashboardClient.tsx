@@ -51,6 +51,7 @@ import {
   atribuirProjetoComPavimentos,
   transferirResponsavelAtribuicao,
   alterarPrazoAtribuicao,
+  alterarDadosProjeto,
   buscarAvisosPrazo,
   excluirAtribuicao,
   excluirProjeto,
@@ -341,6 +342,25 @@ export default function DashboardClient() {
     await loadData()
   }
 
+  const handleAlterarDadosProjeto = async (
+    projeto: Projeto,
+    dados: { cliente: string; descricao: string | null }
+  ) => {
+    if (!isSupabaseConfigured) {
+      throw new Error('Supabase nao esta configurado.')
+    }
+    if (!projeto.projeto_id) {
+      throw new Error('Projeto sem identificador.')
+    }
+
+    const result = await alterarDadosProjeto(projeto.projeto_id, dados)
+    if (!result.success) {
+      throw new Error(result.error || 'Nao foi possivel alterar os dados do projeto.')
+    }
+
+    await loadData()
+  }
+
   const handleAlterarPrazo = async (projeto: Projeto, novoPrazo: string): Promise<string | null> => {
     if (!isSupabaseConfigured) {
       throw new Error('Supabase nao esta configurado.')
@@ -576,7 +596,8 @@ export default function DashboardClient() {
           color="warning"
           onVerRetrabalho={handleVerRetrabalhoFromTable}
           engenheiros={engenheiros}
-          onTransferirResponsavel={handleTransferirResponsavel}
+          onTransferirResponsavel={isOwner ? handleTransferirResponsavel : undefined}
+          onAlterarDadosProjeto={isOwner ? handleAlterarDadosProjeto : undefined}
           onExcluirTarefa={handleExcluirTarefa}
           onExcluirProjeto={handleExcluirProjeto}
           onAlterarPrazo={isOwner ? handleAlterarPrazo : undefined}
@@ -593,7 +614,8 @@ export default function DashboardClient() {
           color="warning"
           onVerRetrabalho={handleVerRetrabalhoFromTable}
           engenheiros={engenheiros}
-          onTransferirResponsavel={handleTransferirResponsavel}
+          onTransferirResponsavel={isOwner ? handleTransferirResponsavel : undefined}
+          onAlterarDadosProjeto={isOwner ? handleAlterarDadosProjeto : undefined}
           onExcluirTarefa={handleExcluirTarefa}
           onExcluirProjeto={handleExcluirProjeto}
           onAlterarPrazo={isOwner ? handleAlterarPrazo : undefined}
@@ -610,7 +632,8 @@ export default function DashboardClient() {
           color="warning"
           onVerRetrabalho={handleVerRetrabalhoFromTable}
           engenheiros={engenheiros}
-          onTransferirResponsavel={handleTransferirResponsavel}
+          onTransferirResponsavel={isOwner ? handleTransferirResponsavel : undefined}
+          onAlterarDadosProjeto={isOwner ? handleAlterarDadosProjeto : undefined}
           onExcluirTarefa={handleExcluirTarefa}
           onExcluirProjeto={handleExcluirProjeto}
           onAlterarPrazo={isOwner ? handleAlterarPrazo : undefined}
@@ -627,7 +650,8 @@ export default function DashboardClient() {
           color="warning"
           onVerRetrabalho={handleVerRetrabalhoFromTable}
           engenheiros={engenheiros}
-          onTransferirResponsavel={handleTransferirResponsavel}
+          onTransferirResponsavel={isOwner ? handleTransferirResponsavel : undefined}
+          onAlterarDadosProjeto={isOwner ? handleAlterarDadosProjeto : undefined}
           onExcluirTarefa={handleExcluirTarefa}
           onExcluirProjeto={handleExcluirProjeto}
           onAlterarPrazo={isOwner ? handleAlterarPrazo : undefined}
