@@ -752,6 +752,28 @@ export async function alterarPrazoAtribuicao(
   return { success: true, data }
 }
 
+export async function alterarDadosProjeto(
+  projetoId: string,
+  dados: { cliente: string; descricao: string | null }
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  const response = await fetch(`/api/admin/projetos/${projetoId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dados),
+  })
+
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    return {
+      success: false,
+      data,
+      error: data?.error || 'Erro ao alterar os dados do projeto.',
+    }
+  }
+
+  return { success: true, data }
+}
+
 export async function buscarAvisosPrazo(): Promise<AvisoPrazoLinha[]> {
   try {
     const response = await fetch('/api/admin/atribuicoes/avisos-prazo', { cache: 'no-store' })

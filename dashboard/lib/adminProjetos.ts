@@ -33,6 +33,60 @@ export function validarCriarProjeto(body: unknown): Resultado<ArgsCriarProjeto> 
   return { ok: true, args: { p_codigo: codigo, p_cliente: cliente, p_descricao: texto(b.descricao) } }
 }
 
+export interface DadosProjeto {
+  cliente: string
+  // Ausente = nao mexe na descricao; null = apaga.
+  descricao?: string | null
+}
+
+const MIN_CLIENTE = 2
+const MAX_CLIENTE = 200
+const MIN_DESCRICAO = 3
+const MAX_DESCRICAO = 1000
+
+// Cliente e descricao valem para o projeto inteiro (todas as disciplinas).
+// O codigo nao muda por aqui. Minimos iguais aos do formulario de criar projeto.
+export function validarAlterarDadosProjeto(
+  body: unknown
+): { ok: true; dados: DadosProjeto } | { ok: false; error: string } {
+  const b = objeto(body)
+  if (!b) return { ok: false, error: 'Dados invalidos.' }
+  if (typeof b.cliente !== 'string') return { ok: false, error: 'Informe o cliente.' }
+  if (b.descricao !== undefined && b.descricao !== null && typeof b.descricao !== 'string') {
+    return { ok: false, error: 'Descricao invalida.' }
+  }
+
+  const cliente = texto(b.cliente)
+  if (!cliente) return { ok: false, error: 'Informe o cliente.' }
+  if (cliente.length < MIN_CLIENTE) {
+    return { ok: false, error: `O cliente deve ter pelo menos ${MIN_CLIENTE} caracteres.` }
+  }
+  if (cliente.length > MAX_CLIENTE) return { ok: false, error: `Cliente muito longo (max. ${MAX_CLIENTE} caracteres).` }
+
+  if (b.descricao === undefined) return { ok: true, dados: { cliente } }
+
+  const descricao = texto(b.descricao)
+  if (descricao && descricao.length < MIN_DESCRICAO) {
+    return { ok: false, error: `A descricao deve ter pelo menos ${MIN_DESCRICAO} caracteres.` }
+  }
+  if (descricao.length > MAX_DESCRICAO) {
+    return { ok: false, error: `Descricao muito longa (max. ${MAX_DESCRICAO} caracteres).` }
+  }
+
+  return { ok: true, dados: { cliente, descricao: descricao || null } }
+}
+
+// Unico objeto que a rota grava em projetos: so cliente, descricao (se veio)
+// e updated_at. Nada do corpo da requisicao passa direto.
+export function camposAtualizacaoProjeto(
+  dados: DadosProjeto,
+  agoraISO: string
+): { cliente: string; descricao?: string | null; updated_at: string } {
+  return dados.descricao === undefined
+    ? { cliente: dados.cliente, updated_at: agoraISO }
+    : { cliente: dados.cliente, descricao: dados.descricao, updated_at: agoraISO }
+}
+
 const COMPLEXIDADE = { baixa: 'SIMPLES', media: 'MEDIA', alta: 'COMPLEXA' } as const
 
 export interface ArgsAtribuirProjeto {

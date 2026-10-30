@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabaseAdmin'
 import { guardOwnerRoute } from '@/lib/apiGuard'
 import { handleApiError } from '@/lib/apiError'
+import { camposAtualizacaoProjeto, validarAlterarDadosProjeto } from '@/lib/adminProjetos'
 import {
   getAtribuicaoActionMessage,
   getAtribuicaoActionStatus,
@@ -65,6 +66,71 @@ export async function DELETE(
       'DELETE /admin/projetos/[id]',
       error,
       'Nao foi possivel excluir o projeto. Tente novamente.'
+    )
+    return NextResponse.json({ error: message }, { status })
+  }
+}
+
+/**
+ * PATCH /api/admin/projetos/[id]
+ * Body: { cliente, descricao? } — vale para o projeto inteiro (todas as
+ * disciplinas). Sem descricao no corpo, ela nao muda; null apaga. O codigo do
+ * projeto nao muda por aqui.
+ */
+export async function PATCH(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  // Next 15: params chega como Promise.
+  const params = await context.params
+  const guard = await guardOwnerRoute()
+  if (!guard.ok) return guard.response
+
+  if (!isUuid(params.id)) {
+    return NextResponse.json({ error: 'Projeto invalido.' }, { status: 400 })
+  }
+
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'JSON invalido.' }, { status: 400 })
+  }
+
+  const validation = validarAlterarDadosProjeto(body)
+  if (!validation.ok) {
+    return NextResponse.json({ error: validation.error }, { status: 400 })
+  }
+
+  try {
+    const admin = createAdminClient()
+    const { data, error } = await admin
+      .from('projetos')
+      .update(camposAtualizacaoProjeto(validation.dados, new Date().toISOString()))
+      .eq('projeto_id', params.id)
+      .eq('ativo', true)
+      .select('projeto_id, cliente, descricao')
+
+    if (error) {
+      const { status, message } = handleApiError(
+        'PATCH /admin/projetos/[id]',
+        error,
+        'Nao foi possivel alterar os dados do projeto. Tente novamente.'
+      )
+      return NextResponse.json({ error: message }, { status })
+    }
+
+    const projeto = data?.[0]
+    if (!projeto) {
+      return NextResponse.json({ error: 'Projeto nao encontrado.' }, { status: 404 })
+    }
+
+    return NextResponse.json({ projeto })
+  } catch (error) {
+    const { status, message } = handleApiError(
+      'PATCH /admin/projetos/[id]',
+      error,
+      'Nao foi possivel alterar os dados do projeto. Tente novamente.'
     )
     return NextResponse.json({ error: message }, { status })
   }

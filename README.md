@@ -441,14 +441,28 @@ Next.js 14 em `dashboard/`. Quatro rotas:
 | Retrabalho | Percentual geral, por projeto, por disciplina, por motivo, por engenheiro | views `vw_retrabalho_*` |
 
 Cada KPI abre um modal com a tabela detalhada, e os modais têm modo tela cheia. A tabela de projetos
-permite busca, transferir responsável, excluir atribuição ou projeto, ver detalhes e **gerar
+permite busca, alterar dados, excluir atribuição ou projeto, ver detalhes e **gerar
 relatório PDF** (`vw_relatorio_projeto_pdf` + jsPDF, via `/api/admin/projetos/[id]/relatorio`).
+
+### Alterar dados
+
+Só o **owner** vê o botão de lápis ("Alterar dados") na tabela de projetos. Ele abre um menu com
+três opções, e cada uma abre a janela só daquele campo:
+
+- **Cliente e descrição**: vale para o **projeto inteiro** (todas as disciplinas). Grava em
+  `projetos` via `PATCH /api/admin/projetos/[id]` (service role, só projeto ativo). Cliente é
+  obrigatório (2 a 200 caracteres) e descrição é opcional (se preenchida, 3 a 1000), os mesmos
+  mínimos do formulário de criar projeto. O código do projeto não muda.
+- **Prazo**: descrito abaixo. Indisponível em tarefa concluída ou em projeto sem tarefa.
+- **Engenheiro**: transfere a tarefa para outro engenheiro (`transferir_atribuicao`). Indisponível
+  em projeto sem tarefa.
+
+Engenheiro não altera nada pelo dashboard.
 
 ### Alterar prazo
 
-Só o **owner** vê o botão de calendário ("Alterar prazo") na tabela de projetos; ele fica
-desativado em tarefas concluídas. O modal mostra o prazo atual e a data de início, e rejeita data
-anterior ao início ou igual ao prazo atual. Engenheiro não altera prazo pelo dashboard.
+A opção "Prazo" do menu "Alterar dados" abre um modal que mostra o prazo atual e a data de início,
+e rejeita data anterior ao início ou igual ao prazo atual.
 
 Ao salvar, a função `alterar_prazo_atribuicao` (service role, via `/api/admin/*`):
 
