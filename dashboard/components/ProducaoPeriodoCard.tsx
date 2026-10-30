@@ -93,7 +93,7 @@ export default function ProducaoPeriodoCard() {
         </div>
         <p className="text-xs text-gray-500 mt-1">
           Horas do apontamento diario no WhatsApp. Dia sem registro = 0h.
-          Valor = horas trabalhadas × valor da hora (nao grava a tarifa).
+          Valor = horas trabalhadas (o total do dia, que ja inclui o retrabalho) × valor da hora (nao grava a tarifa).
         </p>
       </div>
 
@@ -147,8 +147,8 @@ export default function ProducaoPeriodoCard() {
             <thead>
               <tr className="text-left text-gray-500 border-b">
                 <th className="py-2 pr-4">Engenheiro</th>
-                <th className="py-2 pr-4 text-right">Horas trabalhadas</th>
-                <th className="py-2 pr-4 text-right">Horas retrabalho</th>
+                <th className="py-2 pr-4 text-right">Horas trabalhadas (total)</th>
+                <th className="py-2 pr-4 text-right">Dessas, retrabalho</th>
                 <th className="py-2 pr-4 text-right">Valor da hora</th>
                 <th className="py-2 pl-4 text-right">Valor</th>
               </tr>
@@ -229,7 +229,7 @@ export default function ProducaoPeriodoCard() {
                     {formatHoras(detalheSelecionado.horas_trabalhadas_total)}
                   </div>
                   <div className="text-xs text-gray-500">
-                    {formatHoras(detalheSelecionado.horas_retrabalho_total)} de retrabalho
+                    dessas, {formatHoras(detalheSelecionado.horas_retrabalho_total)} de retrabalho
                   </div>
                 </div>
               </div>
@@ -263,8 +263,8 @@ export default function ProducaoPeriodoCard() {
                         <thead>
                           <tr className="border-b text-left text-gray-500">
                             <th className="py-2 pr-4">Area / disciplina</th>
-                            <th className="py-2 pr-4 text-right">Horas trabalhadas</th>
-                            <th className="py-2 pl-4 text-right">Horas retrabalho</th>
+                            <th className="py-2 pr-4 text-right">Horas trabalhadas (total)</th>
+                            <th className="py-2 pl-4 text-right">Dessas, retrabalho</th>
                           </tr>
                         </thead>
                         <tbody>
