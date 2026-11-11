@@ -1,79 +1,136 @@
-import React from 'react'
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
+'use client'
+
+import React, { useState } from 'react'
+import { Cell, Label, Pie, PieChart } from 'recharts'
+import { ArrowRight } from 'lucide-react'
 import { ProjetosStatus } from '../lib/supabase'
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 
 interface ProjetosStatusChartProps {
   data: ProjetosStatus[]
+  // Clicar numa fatia (ou na linha da lista) abre os projetos daquele status.
+  onSelecionarStatus?: (status: string) => void
 }
 
-const COLORS = {
-  'Concluído': '#10B981',
-  'Em Andamento': '#3B82F6',
-  'Atrasado': '#EF4444',
-  'Aguardando': '#F59E0B',
+const CORES: Record<string, string> = {
+  'Concluído': 'var(--success)',
+  'Em Andamento': 'var(--chart-2)',
+  'Atrasado': 'var(--danger)',
+  'Aguardando': 'var(--warning)',
 }
+const corDoStatus = (status: string) => CORES[status] ?? 'var(--chart-4)'
 
-export default function ProjetosStatusChart({ data }: ProjetosStatusChartProps) {
-  const chartData = data.map(item => ({
-    name: item.status,
-    value: item.quantidade,
+export default function ProjetosStatusChart({ data, onSelecionarStatus }: ProjetosStatusChartProps) {
+  const [ativo, setAtivo] = useState<string | null>(null)
+
+  const chartData = data.map((item) => ({
+    status: item.status,
+    quantidade: item.quantidade,
     percentual: item.percentual,
+    fill: corDoStatus(item.status),
   }))
+  const total = data.reduce((s, item) => s + item.quantidade, 0)
+  // So rotulos: a cor vai direto na fatia (o status tem espaco e acento, nao serve de nome de variavel CSS).
+  const config: ChartConfig = Object.fromEntries(data.map((item) => [item.status, { label: item.status }]))
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 animate-fade-in">
-      <h3 className="text-lg font-bold text-gray-900 mb-4">
-        Projetos por Status
-      </h3>
-      
-      <ResponsiveContainer width="100%" height={300}>
-        <PieChart>
-          <Pie
-            data={chartData}
-            cx="50%"
-            cy="50%"
-            labelLine={false}
-            label={({ name, percentual }) => `${name}: ${percentual}%`}
-            outerRadius={80}
-            fill="#8884d8"
-            dataKey="value"
-          >
-            {chartData.map((entry, index) => (
-              <Cell 
-                key={`cell-${index}`} 
-                fill={COLORS[entry.name as keyof typeof COLORS] || '#6B70D9'} 
-              />
-            ))}
-          </Pie>
-          <Tooltip />
-          <Legend />
-        </PieChart>
-      </ResponsiveContainer>
-      
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        {data.map((item) => (
-          <div 
-            key={item.status}
-            className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-          >
-            <div className="flex items-center space-x-2">
-              <div 
-                className="w-3 h-3 rounded-full"
-                style={{ 
-                  backgroundColor: COLORS[item.status as keyof typeof COLORS] || '#6B70D9' 
+    <Card className="animate-fade-in">
+      <CardHeader>
+        <CardTitle>Projetos por status</CardTitle>
+        <CardDescription>
+          {onSelecionarStatus ? 'Clique numa fatia para ver os projetos' : 'Distribuição atual'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-1 flex-col items-center justify-center gap-6 sm:flex-row">
+        <ChartContainer config={config} className="aspect-square h-[220px] shrink-0">
+          <PieChart>
+            <ChartTooltip cursor={false} content={<ChartTooltipContent nameKey="status" hideLabel />} />
+            <Pie
+              data={chartData}
+              dataKey="quantidade"
+              nameKey="status"
+              innerRadius={62}
+              outerRadius={96}
+              paddingAngle={2}
+              strokeWidth={2}
+              onMouseEnter={(_, index) => setAtivo(chartData[index]?.status ?? null)}
+              onMouseLeave={() => setAtivo(null)}
+              onClick={(_, index) => {
+                const status = chartData[index]?.status
+                if (status && onSelecionarStatus) onSelecionarStatus(status)
+              }}
+              className={cn(onSelecionarStatus && 'cursor-pointer')}
+            >
+              {chartData.map((item) => (
+                <Cell
+                  key={item.status}
+                  fill={item.fill}
+                  fillOpacity={ativo && ativo !== item.status ? 0.35 : 1}
+                  className="transition-[fill-opacity] duration-200"
+                />
+              ))}
+              <Label
+                content={({ viewBox }) => {
+                  if (!viewBox || !('cx' in viewBox)) return null
+                  return (
+                    <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
+                      <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-3xl font-semibold">
+                        {total}
+                      </tspan>
+                      <tspan x={viewBox.cx} y={(viewBox.cy ?? 0) + 22} className="fill-muted-foreground text-xs">
+                        projetos
+                      </tspan>
+                    </text>
+                  )
                 }}
-              ></div>
-              <span className="text-sm font-medium text-gray-700">
-                {item.status}
-              </span>
-            </div>
-            <span className="text-sm font-bold text-gray-900">
-              {item.quantidade}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
+              />
+            </Pie>
+          </PieChart>
+        </ChartContainer>
+
+        <ul className="w-full space-y-1.5">
+          {chartData.map((item) => {
+            const conteudo = (
+              <>
+                <span className="flex items-center gap-2.5">
+                  <span className="size-2.5 rounded-full" style={{ backgroundColor: item.fill }} />
+                  <span className="text-sm font-medium">{item.status}</span>
+                </span>
+                <span className="flex items-center gap-2 text-sm">
+                  <span className="font-semibold tabular-nums">{item.quantidade}</span>
+                  <span className="w-12 text-right text-xs text-muted-foreground tabular-nums">
+                    {item.percentual}%
+                  </span>
+                  {onSelecionarStatus && (
+                    <ArrowRight className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                  )}
+                </span>
+              </>
+            )
+            const classe = cn(
+              'group flex w-full items-center justify-between rounded-lg px-3 py-2 text-left transition-colors',
+              ativo === item.status ? 'bg-muted' : 'hover:bg-muted/70'
+            )
+            return (
+              <li
+                key={item.status}
+                onMouseEnter={() => setAtivo(item.status)}
+                onMouseLeave={() => setAtivo(null)}
+              >
+                {onSelecionarStatus ? (
+                  <button type="button" className={classe} onClick={() => onSelecionarStatus(item.status)}>
+                    {conteudo}
+                  </button>
+                ) : (
+                  <div className={classe}>{conteudo}</div>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      </CardContent>
+    </Card>
   )
 }
-

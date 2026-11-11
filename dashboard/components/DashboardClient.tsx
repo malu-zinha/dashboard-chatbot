@@ -2,15 +2,29 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import dynamic from 'next/dynamic'
-import { 
-  Briefcase, 
-  CheckCircle, 
-  Play, 
+import { useRouter, useSearchParams } from 'next/navigation'
+import {
+  Briefcase,
+  CheckCircle,
+  Play,
   AlertTriangle,
   TrendingUp,
   Users,
+  FolderPlus,
+  UserPlus,
+  Layers,
+  LayoutList,
+  KanbanSquare,
 } from 'lucide-react'
 import Header from '@/components/Header'
+import AppSidebar from '@/components/painel/AppSidebar'
+import AtalhoCard from '@/components/painel/AtalhoCard'
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
+import { Skeleton } from '@/components/ui/skeleton'
+import { filtroDoStatus, infoSecao, resolverSecao, type FiltroProjetos, type SecaoId } from '@/lib/secoes'
 import KPICard from '@/components/KPICard'
 import AtrasosTable from '@/components/AtrasosTable'
 import RetrabalhoDetalhesModal from '@/components/RetrabalhoDetalhesModal'
@@ -154,6 +168,17 @@ export default function DashboardClient() {
   const [projetoSelecionadoId, setProjetoSelecionadoId] = useState<string | null>(null)
   const [projetoSelecionadoCodigo, setProjetoSelecionadoCodigo] = useState<string | undefined>()
   const [projetoSelecionadoCliente, setProjetoSelecionadoCliente] = useState<string | undefined>()
+  // Clique num engenheiro do grafico de carga abre o quadro "em execucao" ja filtrado.
+  const [buscaEngenheirosExecucao, setBuscaEngenheirosExecucao] = useState('')
+
+  // Secao do menu lateral, guardada na URL (?secao=...).
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const secao = resolverSecao(searchParams.get('secao'), isOwner)
+  const irPara = (destino: SecaoId) => {
+    router.push(destino === 'visao-geral' ? '/' : `/?secao=${destino}`, { scroll: false })
+    window.scrollTo({ top: 0 })
+  }
   const engenheirosExecucao = useMemo(() => buildEngenheirosExecucao(projetos), [projetos])
   const totalTarefasEngenheirosExecucao = engenheirosExecucao.reduce(
     (acc, grupo) => acc + grupo.total_tarefas,
@@ -443,9 +468,10 @@ export default function DashboardClient() {
   }
 
   const handleSelectProjetoRetrabalho = async (projetoId: string) => {
-    const projetoInfo = retrabalhoPorProjeto.find(
-      (p) => p.projeto_id === projetoId
-    )
+    // O grafico por area tambem chama isto; o projeto pode nao estar na tabela por projeto.
+    const projetoInfo =
+      retrabalhoPorProjeto.find((p) => p.projeto_id === projetoId) ??
+      retrabalhoTaxaArea.find((p) => p.projeto_id === projetoId)
     await openRetrabalhoModal(
       projetoId,
       projetoInfo?.codigo_projeto,
@@ -474,119 +500,261 @@ export default function DashboardClient() {
     )
   }
 
+  // Abre a lista de projetos com o filtro pedido (KPIs, grafico de status, secao Projetos).
+  const abrirProjetos = (filtro: FiltroProjetos, telaCheia = false) => {
+    setModalFullscreen(telaCheia)
+    if (filtro === 'all') setShowProjetosModal(true)
+    if (filtro === 'concluido') setShowProjetosConcluidosModal(true)
+    if (filtro === 'em_execucao') setShowProjetosExecucaoModal(true)
+    if (filtro === 'atrasado') setShowAtrasadosModal(true)
+  }
+
+  const abrirEngenheirosExecucao = (busca = '', telaCheia = false) => {
+    setBuscaEngenheirosExecucao(busca)
+    setModalFullscreen(telaCheia)
+    setShowEngenheirosExecucaoModal(true)
+  }
+
+  const info = infoSecao(secao)
+  const carregandoPrimeiraVez = isLoading && !lastUpdate
+
+  // Criar e atribuir exigem owner no servidor; para os demais o botao so falharia.
+  const botoesDono = isOwner && (secao === 'visao-geral' || secao === 'projetos') && (
+    <div className="flex flex-wrap gap-2">
+      <Button variant="outline" onClick={() => setShowCriarProjetoModal(true)}>
+        <FolderPlus />
+        Criar projeto
+      </Button>
+      <Button onClick={() => setShowAtribuirTaskModal(true)}>
+        <UserPlus />
+        Atribuir projeto
+      </Button>
+    </div>
+  )
+
   return (
-    <div className="min-h-screen bg-linear-to-br from-gray-50 to-tecpred-light">
-      <Header lastUpdate={lastUpdate} isLoading={isLoading} isConnected={realtimeConectado} />
+    <SidebarProvider>
+      <AppSidebar secaoAtiva={secao} onSelecionar={irPara} />
+      <SidebarInset>
+        <Header lastUpdate={lastUpdate} isLoading={isLoading} isConnected={realtimeConectado} titulo={info.titulo} />
 
-      <main className="container mx-auto px-6 py-8">
-        {isLoading && !lastUpdate && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="w-12 h-12 border-4 border-tecpred-primary border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-gray-500 text-sm">Carregando dados do dashboard...</p>
+        <main className="mx-auto w-full max-w-[1500px] flex-1 space-y-6 p-4 md:p-6 lg:p-8">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">{info.titulo}</h1>
+              <p className="mt-1 text-sm text-muted-foreground">{info.descricao}</p>
+            </div>
+            {botoesDono}
           </div>
-        )}
-        {(!isLoading || lastUpdate) && (
-        <>
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
-        {falhasCarga.length > 0 && (
-          <div
-            role="alert"
-            className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex flex-wrap items-center justify-between gap-3"
-          >
-            <span>
-              ⚠️ Parte dos dados não carregou ({falhasCarga.join(', ')}). Os números abaixo
-              podem estar incompletos.
-            </span>
-            <button
-              onClick={() => loadData()}
-              className="rounded-md border border-amber-400 bg-white px-3 py-1 font-semibold hover:bg-amber-100"
+
+          {falhasCarga.length > 0 && (
+            <div
+              role="alert"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
             >
-              Tentar de novo
-            </button>
-          </div>
-        )}
-        {/* Criar e atribuir exigem owner no servidor; para os demais o botao so falharia. */}
-        {isOwner && (
-        <div className="mb-6 flex flex-wrap gap-3">
-          <button
-            onClick={() => setShowCriarProjetoModal(true)}
-            className="px-6 py-3 bg-linear-to-r from-tecpred-primary to-tecpred-secondary text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-semibold flex items-center gap-2 border-2 border-tecpred-primary"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-              <line x1="12" x2="12" y1="11" y2="17"></line>
-              <line x1="9" x2="15" y1="14" y2="14"></line>
-            </svg>
-            Criar Novo Projeto
-          </button>
-          <button
-            onClick={() => setShowAtribuirTaskModal(true)}
-            className="px-6 py-3 bg-linear-to-r from-tecpred-primary to-tecpred-secondary text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-semibold flex items-center gap-2 border-2 border-tecpred-primary"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-              <circle cx="9" cy="7" r="4"></circle>
-              <line x1="19" x2="19" y1="8" y2="14"></line>
-              <line x1="22" x2="16" y1="11" y2="11"></line>
-            </svg>
-            Atribuir Novo Projeto
-          </button>
-        </div>
-        )}
+              <span>
+                ⚠️ Parte dos dados não carregou ({falhasCarga.join(', ')}). Os números abaixo
+                podem estar incompletos.
+              </span>
+              <Button size="sm" variant="outline" className="bg-white" onClick={() => loadData()}>
+                Tentar de novo
+              </Button>
+            </div>
+          )}
 
-        <section className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            Visão Geral da Produção
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-            <KPICard
-              title="Total de Projetos"
-              value={visaoGeral?.total_projetos || 0}
-              subtitle={`${visaoGeral?.total_areas || 0} áreas`}
-              icon={Briefcase}
-              color="warning"
-              onClick={() => { setModalFullscreen(false); setShowProjetosModal(true) }}
-              onExpand={() => { setModalFullscreen(true); setShowProjetosModal(true) }}
+          {carregandoPrimeiraVez && (
+            <div className="space-y-6" aria-busy>
+              <p className="sr-only">Carregando dados do dashboard...</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-36 rounded-xl" />
+                ))}
+              </div>
+              <Skeleton className="h-24 rounded-xl" />
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <Skeleton className="h-80 rounded-xl" />
+                <Skeleton className="h-80 rounded-xl" />
+              </div>
+            </div>
+          )}
+
+          {!carregandoPrimeiraVez && secao === 'visao-geral' && (
+            <>
+              <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-5">
+                <KPICard
+                  title="Total de Projetos"
+                  value={visaoGeral?.total_projetos || 0}
+                  subtitle={`${visaoGeral?.total_areas || 0} áreas`}
+                  icon={Briefcase}
+                  color="primary"
+                  onClick={() => abrirProjetos('all')}
+                  onExpand={() => abrirProjetos('all', true)}
+                />
+                <KPICard
+                  title="Projetos Concluídos"
+                  value={visaoGeral?.projetos_concluidos || 0}
+                  subtitle={`${visaoGeral?.areas_concluidas || 0} áreas concluídas`}
+                  icon={CheckCircle}
+                  color="success"
+                  onClick={() => abrirProjetos('concluido')}
+                  onExpand={() => abrirProjetos('concluido', true)}
+                />
+                <KPICard
+                  title="Em Execução"
+                  value={visaoGeral?.projetos_em_execucao || 0}
+                  subtitle={`${visaoGeral?.areas_ativas || 0} áreas ativas`}
+                  icon={Play}
+                  color="primary"
+                  onClick={() => abrirProjetos('em_execucao')}
+                  onExpand={() => abrirProjetos('em_execucao', true)}
+                />
+                <KPICard
+                  title="Engenheiros em Execução"
+                  value={engenheirosExecucao.length}
+                  subtitle={`${totalTarefasEngenheirosExecucao} tarefa(s) em execução`}
+                  icon={Users}
+                  color="primary"
+                  onClick={() => { setBuscaEngenheirosExecucao(''); setModalFullscreen(false); setShowEngenheirosExecucaoModal(true) }}
+                  onExpand={() => abrirEngenheirosExecucao('', true)}
+                />
+                <KPICard
+                  title="Atrasados"
+                  value={visaoGeral?.projetos_atrasados || 0}
+                  subtitle="Requer atenção"
+                  icon={AlertTriangle}
+                  color="danger"
+                  onClick={() => abrirProjetos('atrasado')}
+                  onExpand={() => abrirProjetos('atrasado', true)}
+                />
+              </section>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="size-4 text-primary" />
+                    Progresso geral
+                  </CardTitle>
+                  <CardDescription>Percentual concluído médio</CardDescription>
+                </CardHeader>
+                <CardContent className="flex items-center gap-4">
+                  <Progress value={visaoGeral?.percentual_concluido_medio || 0} className="h-3 flex-1" />
+                  <span className="w-20 text-right text-2xl font-semibold tabular-nums text-primary">
+                    {(visaoGeral?.percentual_concluido_medio ?? 0).toFixed(1)}%
+                  </span>
+                </CardContent>
+              </Card>
+
+              <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <ProjetosStatusChart
+                  data={projetosStatus}
+                  onSelecionarStatus={(status) => abrirProjetos(filtroDoStatus(status))}
+                />
+                <CargaTrabalhoChart
+                  data={cargaTrabalho}
+                  onSelecionarEngenheiro={(nome) => abrirEngenheirosExecucao(nome)}
+                />
+              </section>
+
+              <AtrasosTable
+                data={atrasosEngenheiro}
+                acao={
+                  <Button variant="outline" size="sm" onClick={() => setShowEngenheirosModal(true)}>
+                    Ver todos os engenheiros
+                  </Button>
+                }
+              />
+            </>
+          )}
+
+          {!carregandoPrimeiraVez && secao === 'projetos' && (
+            <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <AtalhoCard
+                titulo="Todos os projetos"
+                descricao="Busca, filtros, prazos, PDF e ações"
+                icone={Briefcase}
+                valor={visaoGeral?.total_projetos || 0}
+                onClick={() => abrirProjetos('all')}
+              />
+              <AtalhoCard
+                titulo="Em execução"
+                descricao={`${visaoGeral?.areas_ativas || 0} áreas ativas`}
+                icone={Play}
+                valor={visaoGeral?.projetos_em_execucao || 0}
+                onClick={() => abrirProjetos('em_execucao')}
+              />
+              <AtalhoCard
+                titulo="Concluídos"
+                descricao="Com filtro por período de conclusão"
+                icone={CheckCircle}
+                tom="sucesso"
+                valor={visaoGeral?.projetos_concluidos || 0}
+                onClick={() => abrirProjetos('concluido')}
+              />
+              <AtalhoCard
+                titulo="Atrasados"
+                descricao="Prazo vencido"
+                icone={AlertTriangle}
+                tom="perigo"
+                valor={visaoGeral?.projetos_atrasados || 0}
+                onClick={() => abrirProjetos('atrasado')}
+              />
+            </section>
+          )}
+
+          {!carregandoPrimeiraVez && secao === 'engenheiros' && (
+            <>
+              <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <AtalhoCard
+                  titulo="Listagem de engenheiros"
+                  descricao="Projetos, áreas, progresso, retrabalho e atrasos de cada um"
+                  icone={LayoutList}
+                  valor={engenheiros.length}
+                  onClick={() => setShowEngenheirosModal(true)}
+                />
+                <AtalhoCard
+                  titulo="Em execução"
+                  descricao={`${totalTarefasEngenheirosExecucao} tarefa(s) em execução, por engenheiro`}
+                  icone={KanbanSquare}
+                  valor={engenheirosExecucao.length}
+                  onClick={() => abrirEngenheirosExecucao()}
+                />
+              </section>
+              <CargaTrabalhoChart
+                data={cargaTrabalho}
+                onSelecionarEngenheiro={(nome) => abrirEngenheirosExecucao(nome)}
+              />
+            </>
+          )}
+
+          {!carregandoPrimeiraVez && secao === 'areas' && (
+            <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <AtalhoCard
+                titulo="Listagem de áreas"
+                descricao="Tempo médio, projetos, áreas ativas e taxa de conclusão"
+                icone={Layers}
+                valor={areas.length}
+                onClick={() => setShowAreasModal(true)}
+              />
+            </section>
+          )}
+
+          {!carregandoPrimeiraVez && secao === 'retrabalho' && (
+            <RetrabalhoCard
+              data={retrabalhos}
+              retrabalhoGeral={retrabalhoGeral}
+              retrabalhoPorProjeto={retrabalhoPorProjeto}
+              motivosGeral={retrabalhoMotivosGeral}
+              taxaAreaGeral={retrabalhoTaxaArea}
+              onSelectProjeto={handleSelectProjetoRetrabalho}
             />
-            <KPICard
-              title="Projetos Concluídos"
-              value={visaoGeral?.projetos_concluidos || 0}
-              subtitle={`${visaoGeral?.areas_concluidas || 0} áreas concluídas`}
-              icon={CheckCircle}
-              color="warning"
-              onClick={() => { setModalFullscreen(false); setShowProjetosConcluidosModal(true) }}
-              onExpand={() => { setModalFullscreen(true); setShowProjetosConcluidosModal(true) }}
-            />
-            <KPICard
-              title="Em Execução"
-              value={visaoGeral?.projetos_em_execucao || 0}
-              subtitle={`${visaoGeral?.areas_ativas || 0} áreas ativas`}
-              icon={Play}
-              color="warning"
-              onClick={() => { setModalFullscreen(false); setShowProjetosExecucaoModal(true) }}
-              onExpand={() => { setModalFullscreen(true); setShowProjetosExecucaoModal(true) }}
-            />
-            <KPICard
-              title="Engenheiros em Execução"
-              value={engenheirosExecucao.length}
-              subtitle={`${totalTarefasEngenheirosExecucao} tarefa(s) em execução`}
-              icon={Users}
-              color="warning"
-              onClick={() => { setModalFullscreen(false); setShowEngenheirosExecucaoModal(true) }}
-              onExpand={() => { setModalFullscreen(true); setShowEngenheirosExecucaoModal(true) }}
-            />
-            <KPICard
-              title="Atrasados"
-              value={visaoGeral?.projetos_atrasados || 0}
-              subtitle="Requer atenção"
-              icon={AlertTriangle}
-              color="warning"
-              onClick={() => { setModalFullscreen(false); setShowAtrasadosModal(true) }}
-              onExpand={() => { setModalFullscreen(true); setShowAtrasadosModal(true) }}
-            />
-          </div>
-        </section>
-        
+          )}
+
+          {!carregandoPrimeiraVez && secao === 'producao' && isOwner && (
+            <ProducaoPeriodoCard />
+          )}
+        </main>
+      </SidebarInset>
+
         <ProjetosTable
           isOpen={showProjetosModal}
           onClose={() => setShowProjetosModal(false)}
@@ -670,6 +838,7 @@ export default function DashboardClient() {
           projetos={projetos}
           fullscreen={modalFullscreen}
           onToggleFullscreen={() => setModalFullscreen((v) => !v)}
+          buscaInicial={buscaEngenheirosExecucao}
         />
         <AreasTable
           isOpen={showAreasModal}
@@ -689,79 +858,6 @@ export default function DashboardClient() {
           onAtribuir={handleAtribuirTask}
         />
 
-        <section className="mb-8">
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="flex items-center space-x-2 mb-4">
-              <TrendingUp className="w-5 h-5 text-tecpred-primary" />
-              <h3 className="text-lg font-bold text-gray-900">
-                Progresso Geral
-              </h3>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex-1">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-700">
-                    Percentual Concluído Médio
-                  </span>
-                  <span className="text-2xl font-bold text-tecpred-primary">
-                    {(visaoGeral?.percentual_concluido_medio ?? 0).toFixed(1)}%
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-4">
-                  <div
-                    className="bg-linear-to-r from-tecpred-primary to-tecpred-secondary h-4 rounded-full transition-all duration-500"
-                    style={{ width: `${visaoGeral?.percentual_concluido_medio || 0}%` }}
-                  ></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-gray-900">Análises e Gráficos</h2>
-            <button
-              onClick={() => setShowAreasModal(true)}
-              className="px-4 py-2 bg-tecpred-primary text-white rounded-lg hover:bg-tecpred-secondary transition-colors text-sm"
-            >
-              Ver Todas as Áreas
-            </button>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ProjetosStatusChart data={projetosStatus} />
-            <CargaTrabalhoChart data={cargaTrabalho} />
-          </div>
-        </section>
-
-        <section className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-gray-900">Atrasos</h2>
-            <button
-              onClick={() => setShowEngenheirosModal(true)}
-              className="px-4 py-2 bg-tecpred-primary text-white rounded-lg hover:bg-tecpred-secondary transition-colors text-sm"
-            >
-              Ver Todos os Engenheiros
-            </button>
-          </div>
-          <AtrasosTable data={atrasosEngenheiro} />
-        </section>
-
-        {isOwner && (
-          <section className="mb-8">
-            <ProducaoPeriodoCard />
-          </section>
-        )}
-
-        <section className="mb-8">
-          <RetrabalhoCard
-            data={retrabalhos}
-            retrabalhoGeral={retrabalhoGeral}
-            retrabalhoPorProjeto={retrabalhoPorProjeto}
-            motivosGeral={retrabalhoMotivosGeral}
-            taxaAreaGeral={retrabalhoTaxaArea}
-            onSelectProjeto={handleSelectProjetoRetrabalho}
-          />
           <RetrabalhoDetalhesModal
             isOpen={showRetrabalhoDetalhesModal}
             onClose={() => {
@@ -781,10 +877,6 @@ export default function DashboardClient() {
             areasProjeto={retrabalhoAreasProjeto}
             motivosProjeto={retrabalhoMotivosProjeto}
           />
-        </section>
-        </>
-        )}
-      </main>
-    </div>
+    </SidebarProvider>
   )
 }

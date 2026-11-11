@@ -1,13 +1,9 @@
 'use client'
 
-import React from 'react'
-import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-} from 'recharts'
+import React, { useState } from 'react'
+import { Cell, Label, Pie, PieChart } from 'recharts'
+import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
+import { cn } from '@/lib/utils'
 
 interface RetrabalhoPizzaChartProps {
   data: Array<{ motivo_retrabalho: string; quantidade: number }>
@@ -45,26 +41,27 @@ function corDoMotivo(motivo: string, index: number): string {
   return COR_POR_MOTIVO[motivo] ?? COLORS[index % COLORS.length]
 }
 
-const CustomTooltip = ({
+function TooltipMotivo({
   active,
   payload,
 }: {
   active?: boolean
-  payload?: { name: string; value: number }[]
-}) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-sm">
-        <p className="font-semibold text-gray-800">{payload[0].name}</p>
-        <p className="text-gray-600">
-          <span className="font-bold text-danger">{payload[0].value}</span>{' '}
-          ocorrência{payload[0].value !== 1 ? 's' : ''}
-        </p>
-      </div>
-    )
-  }
-  return null
+  payload?: { name: string; value: number; payload: { fill: string } }[]
+}) {
+  if (!active || !payload?.length) return null
+  const item = payload[0]
+  return (
+    <div className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2 text-xs shadow-xl">
+      <span className="size-2.5 rounded-full" style={{ backgroundColor: item.payload.fill }} />
+      <span className="font-medium">{item.name}</span>
+      <span className="font-mono tabular-nums text-muted-foreground">
+        {item.value} ocorrência{item.value !== 1 ? 's' : ''}
+      </span>
+    </div>
+  )
 }
+
+const config: ChartConfig = {}
 
 export default function RetrabalhoPizzaChart({
   data,
@@ -72,77 +69,105 @@ export default function RetrabalhoPizzaChart({
   height = 280,
   mensagemVazia = 'Nenhum motivo registrado',
 }: RetrabalhoPizzaChartProps) {
+  // Fatia e linha da lista se destacam juntas.
+  const [ativo, setAtivo] = useState<string | null>(null)
+
   if (!data || data.length === 0) {
     return (
       <div>
-        {title && (
-          <h4 className="text-sm font-semibold text-gray-700 mb-3">{title}</h4>
-        )}
-        <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+        {title && <h4 className="mb-3 text-sm font-semibold">{title}</h4>}
+        <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
           <p className="text-sm">{mensagemVazia}</p>
         </div>
       </div>
     )
   }
 
-  const chartData = data.map((item) => ({
+  const chartData = data.map((item, index) => ({
     name: item.motivo_retrabalho,
     value: item.quantidade,
+    fill: corDoMotivo(item.motivo_retrabalho, index),
   }))
 
   const total = data.reduce((sum, item) => sum + item.quantidade, 0)
 
   return (
     <div>
-      {title && (
-        <h4 className="text-sm font-semibold text-gray-700 mb-3">{title}</h4>
-      )}
+      {title && <h4 className="mb-3 text-sm font-semibold">{title}</h4>}
 
       {/* Pizza a esquerda e lista a direita; em tela estreita, uma embaixo da outra. */}
-      <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-8 max-w-3xl mx-auto">
-        <div className="w-full md:w-1/2 shrink-0">
-          <ResponsiveContainer width="100%" height={height}>
+      <div className="mx-auto flex max-w-3xl flex-col gap-4 md:flex-row md:items-center md:gap-8">
+        <div className="w-full shrink-0 md:w-1/2">
+          <ChartContainer config={config} className="mx-auto aspect-square" style={{ height, maxHeight: height }}>
             <PieChart>
+              <ChartTooltip cursor={false} content={<TooltipMotivo />} />
               <Pie
                 data={chartData}
-                cx="50%"
-                cy="50%"
-                outerRadius={Math.round(height * 0.4)}
                 dataKey="value"
-                labelLine={false}
+                nameKey="name"
+                innerRadius={Math.round(height * 0.26)}
+                outerRadius={Math.round(height * 0.4)}
+                paddingAngle={2}
+                strokeWidth={2}
+                onMouseEnter={(_, index) => setAtivo(chartData[index]?.name ?? null)}
+                onMouseLeave={() => setAtivo(null)}
               >
-                {chartData.map((item, index) => (
-                  <Cell key={`cell-${index}`} fill={corDoMotivo(item.name, index)} />
+                {chartData.map((item) => (
+                  <Cell
+                    key={item.name}
+                    fill={item.fill}
+                    fillOpacity={ativo && ativo !== item.name ? 0.35 : 1}
+                    className="transition-[fill-opacity] duration-200"
+                  />
                 ))}
+                <Label
+                  content={({ viewBox }) => {
+                    if (!viewBox || !('cx' in viewBox)) return null
+                    return (
+                      <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
+                        <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-2xl font-semibold">
+                          {total}
+                        </tspan>
+                        <tspan x={viewBox.cx} y={(viewBox.cy ?? 0) + 20} className="fill-muted-foreground text-xs">
+                          ocorrências
+                        </tspan>
+                      </text>
+                    )
+                  }}
+                />
               </Pie>
-              <Tooltip content={<CustomTooltip />} />
             </PieChart>
-          </ResponsiveContainer>
+          </ChartContainer>
         </div>
 
         {/* Lista com contagens (e a unica legenda) */}
-        <div className="w-full md:w-1/2 space-y-1">
+        <ul className="w-full space-y-1 md:w-1/2">
           {data.map((item, index) => (
-            <div
+            <li
               key={item.motivo_retrabalho}
-              className="flex items-center justify-between py-1 px-2 rounded-sm hover:bg-gray-50"
+              onMouseEnter={() => setAtivo(item.motivo_retrabalho)}
+              onMouseLeave={() => setAtivo(null)}
+              className={cn(
+                'flex items-center justify-between rounded-lg px-2.5 py-1.5 transition-colors',
+                ativo === item.motivo_retrabalho ? 'bg-muted' : 'hover:bg-muted/70'
+              )}
             >
-              <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
                 <div
-                  className="w-3 h-3 rounded-full shrink-0"
+                  className="size-2.5 shrink-0 rounded-full"
                   style={{ backgroundColor: corDoMotivo(item.motivo_retrabalho, index) }}
                 />
-                <span className="text-xs text-gray-700 truncate">{item.motivo_retrabalho}</span>
+                <span className="truncate text-sm">{item.motivo_retrabalho}</span>
               </div>
-              <div className="flex items-center gap-2 shrink-0 ml-2">
-                <span className="text-xs font-bold text-gray-900">{item.quantidade}</span>
-                <span className="text-xs text-gray-400">
-                  ({total > 0 ? Math.round((item.quantidade / total) * 100) : 0}%)
+              <div className="ml-2 flex shrink-0 items-center gap-2">
+                <span className="text-sm font-semibold tabular-nums">{item.quantidade}</span>
+                <span className="w-10 text-right text-xs text-muted-foreground tabular-nums">
+                  {total > 0 ? Math.round((item.quantidade / total) * 100) : 0}%
                 </span>
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       </div>
     </div>
   )

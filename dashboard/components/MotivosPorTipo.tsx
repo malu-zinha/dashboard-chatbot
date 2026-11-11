@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { RetrabalhoMotivo } from '@/lib/supabase'
 import { FiltroMotivos, motivosDoFiltro } from '@/lib/ocorrencias'
 import RetrabalhoPizzaChart from '@/components/RetrabalhoPizzaChart'
+import { Button } from '@/components/ui/button'
 
 interface MotivosPorTipoProps {
   data: RetrabalhoMotivo[]
@@ -36,26 +37,24 @@ export default function MotivosPorTipo({ data, escopo, height = 280 }: MotivosPo
   const botao = (alvo: Exclude<FiltroMotivos, 'geral'>, rotulo: string) => {
     const ativo = filtro === alvo
     return (
-      <button
+      <Button
         type="button"
+        size="sm"
+        variant={ativo ? 'default' : 'outline'}
         onClick={() => alternar(alvo)}
         aria-pressed={ativo}
-        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
-          ativo
-            ? 'bg-tecpred-primary text-white border-tecpred-primary'
-            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-        }`}
+        className="rounded-full"
       >
         {rotulo}
-      </button>
+      </Button>
     )
   }
 
   return (
     <div>
       <div className="mb-3">
-        <h4 className="text-sm font-semibold text-gray-700">Motivos mais frequentes — {escopo}</h4>
-        <p className="text-xs text-gray-500 mt-0.5">{SUBTITULO[filtro]}</p>
+        <h4 className="text-sm font-semibold">Motivos mais frequentes — {escopo}</h4>
+        <p className="mt-0.5 text-xs text-muted-foreground">{SUBTITULO[filtro]}</p>
       </div>
 
       <RetrabalhoPizzaChart
@@ -69,13 +68,9 @@ export default function MotivosPorTipo({ data, escopo, height = 280 }: MotivosPo
         {botao('retrabalho', 'Ver só retrabalho')}
         {botao('paralisacao', 'Ver só paralisação')}
         {filtro !== 'geral' && (
-          <button
-            type="button"
-            onClick={() => setFiltro('geral')}
-            className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-800 underline"
-          >
+          <Button type="button" size="sm" variant="link" onClick={() => setFiltro('geral')}>
             Voltar ao geral
-          </button>
+          </Button>
         )}
       </div>
     </div>

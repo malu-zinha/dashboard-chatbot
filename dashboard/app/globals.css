@@ -1,4 +1,10 @@
 @import 'tailwindcss';
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+/*
+  ---break---
+*/
+@custom-variant dark (&:is(.dark *));
 
 @theme {
   --color-tecpred-primary: #2e3192;
@@ -58,12 +64,62 @@
   textarea::placeholder {
     color: var(--color-gray-400);
   }
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
 }
 
+/* Tema TecPred (so modo claro). Azul da marca = #2E3192. */
 :root {
-  --tecpred-primary: #2E3192;
-  --tecpred-secondary: #4A4FB7;
-  --tecpred-accent: #6B70D9;
+  --radius: 0.75rem;
+
+  --background: #f5f6fa;
+  --foreground: #161a33;
+  --card: #ffffff;
+  --card-foreground: #161a33;
+  --popover: #ffffff;
+  --popover-foreground: #161a33;
+
+  --primary: #2e3192;
+  --primary-foreground: #ffffff;
+  --secondary: #eef0fb;
+  --secondary-foreground: #2e3192;
+  --muted: #f1f3f8;
+  --muted-foreground: #646a85;
+  --accent: #e8e9f8;
+  --accent-foreground: #2e3192;
+  --destructive: #dc2626;
+
+  --border: #e3e6f0;
+  --input: #dadeea;
+  --ring: #4a4fb7;
+
+  /* Graficos: tons do azul da marca + cores de status */
+  --chart-1: #2e3192;
+  --chart-2: #4a4fb7;
+  --chart-3: #6b70d9;
+  --chart-4: #9ea2ea;
+  --chart-5: #c9cbf4;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --alert: #ff6b35;
+
+  /* Menu lateral: azul escuro da marca, logo branco */
+  --sidebar: #1a1d5e;
+  --sidebar-foreground: #d7d9f3;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #1a1d5e;
+  --sidebar-accent: #2b2f86;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #2b2f7a;
+  --sidebar-ring: #6b70d9;
 }
 
 body {
@@ -87,5 +143,55 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-tecpred-primary;
 }
-
-
+/*
+  ---break---
+*/
+@theme inline {
+  --font-heading: var(--font-inter);
+  --font-sans: var(--font-inter);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-status-success: var(--success);
+  --color-status-warning: var(--warning);
+  --color-status-danger: var(--danger);
+  --color-status-alert: var(--alert);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+/*
+  ---break---
+*/

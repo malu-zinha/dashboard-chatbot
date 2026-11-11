@@ -1,29 +1,28 @@
 'use client'
 
-import React from 'react'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-  LabelList,
-} from 'recharts'
+import React, { useState } from 'react'
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, XAxis, YAxis } from 'recharts'
 import { RetrabalhoTaxaArea } from '@/lib/supabase'
+import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
+import { cn } from '@/lib/utils'
 
 interface RetrabalhoTaxaAreaChartProps {
   data: RetrabalhoTaxaArea[]
+  // Clicar numa barra abre os detalhes de retrabalho daquele projeto.
+  onSelecionarProjeto?: (projetoId: string) => void
 }
 
+// Mesma regra de antes (relativa ao maior percentual): verde, ambar, vermelho.
 function percentualColor(percentual: number, max: number): string {
   const ratio = max > 0 ? percentual / max : 0
-  if (ratio < 0.33) return '#22c55e'
-  if (ratio < 0.66) return '#f59e0b'
-  return '#ef4444'
+  if (ratio < 0.33) return 'var(--success)'
+  if (ratio < 0.66) return 'var(--warning)'
+  return 'var(--danger)'
 }
+
+const config = {
+  percentual_retrabalho_disciplina: { label: '% por horas' },
+} satisfies ChartConfig
 
 function textoLimpo(valor?: string | null): string {
   return (valor || '').trim().replace(/\s+/g, ' ')
@@ -50,53 +49,39 @@ function formatEdificioDisciplina(
   return area ? `${nome} (${codigo}) / ${area}` : `${nome} (${codigo})`
 }
 
-const CustomTooltip = ({
+function TooltipArea({
   active,
   payload,
 }: {
   active?: boolean
-  payload?: Array<{ payload: RetrabalhoTaxaArea; value: number }>
-}) => {
+  payload?: Array<{ payload: RetrabalhoTaxaArea }>
+}) {
   if (!active || !payload?.length) return null
   const d = payload[0].payload
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-xs max-w-[220px]">
-      <p className="font-bold text-gray-900 mb-1">
-        {formatEdificioDisciplina(d)}
-      </p>
-      <div className="mt-2 space-y-1">
-        <div className="flex justify-between gap-4">
-          <span className="text-gray-500">Horas retrab.</span>
-          <span className="font-semibold text-gray-800">
-            {(d.horas_retrabalho_total || 0).toFixed(1)}h
-          </span>
-        </div>
-        <div className="flex justify-between gap-4">
-          <span className="text-gray-500">Horas totais</span>
-          <span className="font-semibold text-gray-800">
-            {(d.horas_trabalhadas_total || 0).toFixed(1)}h
-          </span>
-        </div>
-        <div className="flex justify-between gap-4 border-t pt-1">
-          <span className="text-gray-500 font-semibold">Retrabalho (%)</span>
-          <span className="font-bold text-gray-900">
-            {d.percentual_retrabalho_disciplina.toFixed(2)}%
-          </span>
-        </div>
+    <div className="grid max-w-[240px] gap-1.5 rounded-lg border bg-background px-3 py-2 text-xs shadow-xl">
+      <p className="font-medium">{formatEdificioDisciplina(d)}</p>
+      <div className="flex justify-between gap-4">
+        <span className="text-muted-foreground">Horas retrab.</span>
+        <span className="font-mono font-medium tabular-nums">{(d.horas_retrabalho_total || 0).toFixed(1)}h</span>
+      </div>
+      <div className="flex justify-between gap-4">
+        <span className="text-muted-foreground">Horas totais</span>
+        <span className="font-mono font-medium tabular-nums">{(d.horas_trabalhadas_total || 0).toFixed(1)}h</span>
+      </div>
+      <div className="flex justify-between gap-4 border-t pt-1.5">
+        <span className="font-medium">Retrabalho (%)</span>
+        <span className="font-mono font-semibold tabular-nums">{d.percentual_retrabalho_disciplina.toFixed(2)}%</span>
       </div>
     </div>
   )
 }
 
-export default function RetrabalhoTaxaAreaChart({
-  data,
-}: RetrabalhoTaxaAreaChartProps) {
+export default function RetrabalhoTaxaAreaChart({ data, onSelecionarProjeto }: RetrabalhoTaxaAreaChartProps) {
+  const [ativo, setAtivo] = useState<number | null>(null)
+
   if (!data || data.length === 0) {
-    return (
-      <p className="text-sm text-gray-500 py-3">
-        Nenhum dado de retrabalho por horas disponivel.
-      </p>
-    )
+    return <p className="py-3 text-sm text-muted-foreground">Nenhum dado de retrabalho por horas disponivel.</p>
   }
 
   const sorted = [...data]
@@ -112,53 +97,56 @@ export default function RetrabalhoTaxaAreaChart({
 
   return (
     <div>
-      <p className="text-xs text-gray-500 mb-3">
-        Percentual = horas de retrabalho / horas trabalhadas totais. Mostrando ate 15 combinacoes projeto/area com maior percentual.
+      <p className="mb-3 text-xs text-muted-foreground">
+        Percentual = horas de retrabalho / horas trabalhadas totais. Mostrando ate 15 combinacoes projeto/area com maior
+        percentual.{onSelecionarProjeto ? ' Clique numa barra para abrir o projeto.' : ''}
       </p>
-      <ResponsiveContainer width="100%" height={chartHeight}>
+      <ChartContainer config={config} className="aspect-auto w-full" style={{ height: chartHeight }}>
         <BarChart
           data={chartData}
           layout="vertical"
-          margin={{ top: 4, right: 60, left: 10, bottom: 4 }}
-          barCategoryGap="20%"
+          margin={{ top: 4, right: 56, left: 4, bottom: 4 }}
+          barCategoryGap="22%"
+          onMouseLeave={() => setAtivo(null)}
         >
-          <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+          <CartesianGrid horizontal={false} />
           <XAxis
             type="number"
             domain={[0, 'auto']}
-            tickFormatter={(v) => `${v.toFixed(1)}%`}
-            tick={{ fontSize: 11, fill: '#6b7280' }}
-            label={{
-              value: '% por horas',
-              position: 'insideBottomRight',
-              offset: -4,
-              fontSize: 10,
-              fill: '#9ca3af',
+            tickFormatter={(v: number) => `${v.toFixed(1)}%`}
+            tickLine={false}
+            axisLine={false}
+          />
+          <YAxis type="category" dataKey="label" width={200} tickLine={false} axisLine={false} />
+          <ChartTooltip cursor={{ fill: 'var(--muted)', opacity: 0.6 }} content={<TooltipArea />} />
+          <Bar
+            dataKey="percentual_retrabalho_disciplina"
+            radius={[0, 6, 6, 0]}
+            maxBarSize={26}
+            onMouseEnter={(_, index) => setAtivo(index)}
+            onClick={(entrada) => {
+              const projetoId = (entrada?.payload as RetrabalhoTaxaArea | undefined)?.projeto_id
+              if (projetoId && onSelecionarProjeto) onSelecionarProjeto(projetoId)
             }}
-          />
-          <YAxis
-            type="category"
-            dataKey="label"
-            width={200}
-            tick={{ fontSize: 11, fill: '#374151' }}
-          />
-          <Tooltip content={<CustomTooltip />} />
-          <Bar dataKey="percentual_retrabalho_disciplina" radius={[0, 4, 4, 0]} maxBarSize={28}>
+            className={cn(onSelecionarProjeto && 'cursor-pointer')}
+          >
             {chartData.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}
                 fill={percentualColor(entry.percentual_retrabalho_disciplina, maxPercentual)}
+                fillOpacity={ativo !== null && ativo !== index ? 0.45 : 1}
+                className="transition-[fill-opacity] duration-200"
               />
             ))}
             <LabelList
               dataKey="percentual_retrabalho_disciplina"
               position="right"
-              formatter={(v: number) => `${v.toFixed(1)}%`}
-              style={{ fontSize: 11, fill: '#374151', fontWeight: 600 }}
+              formatter={(v: unknown) => `${Number(v).toFixed(1)}%`}
+              className="fill-foreground text-[11px] font-semibold"
             />
           </Bar>
         </BarChart>
-      </ResponsiveContainer>
+      </ChartContainer>
     </div>
   )
 }
