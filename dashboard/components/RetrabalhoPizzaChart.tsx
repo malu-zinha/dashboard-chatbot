@@ -6,15 +6,14 @@ import {
   Pie,
   Cell,
   ResponsiveContainer,
-  Legend,
   Tooltip,
 } from 'recharts'
-import { RetrabalhoMotivo } from '@/lib/supabase'
 
 interface RetrabalhoPizzaChartProps {
-  data: RetrabalhoMotivo[]
+  data: Array<{ motivo_retrabalho: string; quantidade: number }>
   title: string
   height?: number
+  mensagemVazia?: string
 }
 
 const COLORS = [
@@ -71,6 +70,7 @@ export default function RetrabalhoPizzaChart({
   data,
   title,
   height = 280,
+  mensagemVazia = 'Nenhum motivo registrado',
 }: RetrabalhoPizzaChartProps) {
   if (!data || data.length === 0) {
     return (
@@ -79,7 +79,7 @@ export default function RetrabalhoPizzaChart({
           <h4 className="text-sm font-semibold text-gray-700 mb-3">{title}</h4>
         )}
         <div className="flex flex-col items-center justify-center py-8 text-gray-400">
-          <p className="text-sm">Nenhum motivo registrado</p>
+          <p className="text-sm">{mensagemVazia}</p>
         </div>
       </div>
     )
@@ -98,58 +98,51 @@ export default function RetrabalhoPizzaChart({
         <h4 className="text-sm font-semibold text-gray-700 mb-3">{title}</h4>
       )}
 
-      <ResponsiveContainer width="100%" height={height}>
-        <PieChart>
-          <Pie
-            data={chartData}
-            cx="50%"
-            cy="50%"
-            outerRadius={Math.round(height * 0.28)}
-            dataKey="value"
-            labelLine={false}
-          >
-            {chartData.map((item, index) => (
-              <Cell
-                key={`cell-${index}`}
-                fill={corDoMotivo(item.name, index)}
-              />
-            ))}
-          </Pie>
-          <Tooltip content={<CustomTooltip />} />
-          <Legend
-            formatter={(value) => (
-              <span className="text-xs text-gray-700">{value}</span>
-            )}
-          />
-        </PieChart>
-      </ResponsiveContainer>
+      {/* Pizza a esquerda e lista a direita; em tela estreita, uma embaixo da outra. */}
+      <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-8 max-w-3xl mx-auto">
+        <div className="w-full md:w-1/2 flex-shrink-0">
+          <ResponsiveContainer width="100%" height={height}>
+            <PieChart>
+              <Pie
+                data={chartData}
+                cx="50%"
+                cy="50%"
+                outerRadius={Math.round(height * 0.4)}
+                dataKey="value"
+                labelLine={false}
+              >
+                {chartData.map((item, index) => (
+                  <Cell key={`cell-${index}`} fill={corDoMotivo(item.name, index)} />
+                ))}
+              </Pie>
+              <Tooltip content={<CustomTooltip />} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
 
-      {/* Legenda detalhada com contagens */}
-      <div className="mt-3 space-y-1">
-        {data.map((item, index) => (
-          <div
-            key={item.motivo_retrabalho}
-            className="flex items-center justify-between py-1 px-2 rounded hover:bg-gray-50"
-          >
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <div
-                className="w-3 h-3 rounded-full flex-shrink-0"
-                style={{ backgroundColor: corDoMotivo(item.motivo_retrabalho, index) }}
-              />
-              <span className="text-xs text-gray-700 truncate">
-                {item.motivo_retrabalho}
-              </span>
+        {/* Lista com contagens (e a unica legenda) */}
+        <div className="w-full md:w-1/2 space-y-1">
+          {data.map((item, index) => (
+            <div
+              key={item.motivo_retrabalho}
+              className="flex items-center justify-between py-1 px-2 rounded hover:bg-gray-50"
+            >
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div
+                  className="w-3 h-3 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: corDoMotivo(item.motivo_retrabalho, index) }}
+                />
+                <span className="text-xs text-gray-700 truncate">{item.motivo_retrabalho}</span>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                <span className="text-xs font-bold text-gray-900">{item.quantidade}</span>
+                <span className="text-xs text-gray-400">
+                  ({total > 0 ? Math.round((item.quantidade / total) * 100) : 0}%)
+                </span>
+              </div>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-              <span className="text-xs font-bold text-gray-900">
-                {item.quantidade}
-              </span>
-              <span className="text-xs text-gray-400">
-                ({total > 0 ? Math.round((item.quantidade / total) * 100) : 0}%)
-              </span>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   )
