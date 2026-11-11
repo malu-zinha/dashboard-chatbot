@@ -5,7 +5,8 @@ import { resolve } from 'node:path'
 const fetchSource = readFileSync(resolve('dashboard/lib/supabase.ts'), 'utf8')
 const cardSource = readFileSync(resolve('dashboard/components/ProducaoPeriodoCard.tsx'), 'utf8')
 const dashboardSource = readFileSync(resolve('dashboard/components/DashboardClient.tsx'), 'utf8')
-const headerSource = readFileSync(resolve('dashboard/components/Header.tsx'), 'utf8')
+// O link de Admin saiu do Header para o menu lateral (redesign 11/2026); a regra e a mesma.
+const headerSource = readFileSync(resolve('dashboard/components/painel/AppSidebar.tsx'), 'utf8')
 const hookSource = readFileSync(resolve('dashboard/hooks/useIsOwnerActive.ts'), 'utf8')
 
 assert.match(fetchSource, /export async function fetchProducaoEngenheiroPeriodo/)

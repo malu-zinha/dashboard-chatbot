@@ -1,5 +1,6 @@
 import React from 'react'
-import { LucideIcon, Maximize2 } from 'lucide-react'
+import { ArrowRight, LucideIcon, Maximize2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface KPICardProps {
   title: string
@@ -13,28 +14,13 @@ interface KPICardProps {
   onExpand?: () => void
 }
 
-const colorClasses = {
-  primary: 'from-tecpred-primary via-tecpred-secondary to-tecpred-primary',
-  success: 'from-success to-green-600',
-  warning: 'from-tecpred-orange to-tecpred-coral',
-  danger: 'from-danger to-red-600',
-  info: 'from-tecpred-primary to-tecpred-secondary',
-}
-
-const iconBgClasses = {
-  primary: 'bg-tecpred-orange/20',
-  success: 'bg-green-100',
-  warning: 'bg-tecpred-orange/20',
-  danger: 'bg-red-100',
-  info: 'bg-tecpred-primary/20',
-}
-
-const iconColorClasses = {
-  primary: 'text-tecpred-orange',
-  success: 'text-success',
-  warning: 'text-tecpred-orange',
-  danger: 'text-danger',
-  info: 'text-tecpred-primary',
+// Cor so no icone: o card fica neutro e o numero e o destaque.
+const iconClasses = {
+  primary: 'bg-primary/10 text-primary',
+  info: 'bg-primary/10 text-primary',
+  success: 'bg-emerald-50 text-emerald-600',
+  warning: 'bg-amber-50 text-amber-600',
+  danger: 'bg-red-50 text-red-600',
 }
 
 export default function KPICard({
@@ -52,52 +38,42 @@ export default function KPICard({
 
   return (
     <div
-      className={`relative bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 animate-fade-in ${
-        onClick ? 'cursor-pointer hover:scale-105 active:scale-95' : ''
-      }`}
+      className={cn(
+        'group relative overflow-hidden rounded-xl border bg-card text-card-foreground shadow-xs transition-all duration-200 animate-fade-in',
+        onClick && 'hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md'
+      )}
     >
-      <Wrapper onClick={onClick} className="block w-full text-left">
-        <div className={`h-2 bg-linear-to-r ${colorClasses[color]}`}></div>
-
-        <div className="p-6">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-600 mb-1">
-                {title}
-              </p>
-              <h3 className="text-3xl font-bold text-gray-900 mb-2">
-                {value}
-              </h3>
-              {subtitle && (
-                <p className="text-sm text-gray-500">
-                  {subtitle}
-                </p>
-              )}
-
-              {trend && trendValue && (
-                <div className="mt-2 flex items-center space-x-1">
-                  <span className={`text-xs font-semibold ${
-                    trend === 'up' ? 'text-success' :
-                    trend === 'down' ? 'text-danger' :
-                    'text-gray-500'
-                  }`}>
-                    {trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→'} {trendValue}
-                  </span>
-                </div>
-              )}
-
-              {onClick && (
-                <div className="mt-3 text-xs text-tecpred-primary font-medium">
-                  Clique para ver detalhes →
-                </div>
-              )}
-            </div>
-
-            <div className={`p-3 rounded-lg ${iconBgClasses[color]}`}>
-              <Icon className={`w-6 h-6 ${iconColorClasses[color]}`} />
-            </div>
+      <Wrapper
+        onClick={onClick}
+        className="block w-full p-5 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-sm font-medium text-muted-foreground">{title}</p>
+          <div className={cn('flex size-9 shrink-0 items-center justify-center rounded-lg', iconClasses[color])}>
+            <Icon className="size-[18px]" />
           </div>
         </div>
+
+        <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
+        {subtitle && <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>}
+
+        {trend && trendValue && (
+          <p
+            className={cn(
+              'mt-2 text-xs font-semibold',
+              trend === 'up' ? 'text-emerald-600' : trend === 'down' ? 'text-red-600' : 'text-muted-foreground'
+            )}
+          >
+            {trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→'} {trendValue}
+          </p>
+        )}
+
+        {onClick && (
+          <p className="mt-4 flex items-center gap-1 text-xs font-medium text-primary">
+            Ver detalhes
+            <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+          </p>
+        )}
       </Wrapper>
 
       {onExpand && (
@@ -105,12 +81,12 @@ export default function KPICard({
           type="button"
           onClick={onExpand}
           aria-label={`Expandir ${title} em tela cheia`}
-          className="absolute bottom-3 right-3 p-2 rounded-lg text-gray-400 hover:text-tecpred-primary hover:bg-gray-100 transition-colors"
+          title="Abrir em tela cheia"
+          className="absolute right-3 bottom-3 rounded-md p-1.5 text-muted-foreground/70 transition-colors hover:bg-muted hover:text-primary"
         >
-          <Maximize2 className="w-4 h-4" />
+          <Maximize2 className="size-4" />
         </button>
       )}
     </div>
   )
 }
-

@@ -177,7 +177,7 @@ export default function RetrabalhoCard({
           <h4 className="text-sm font-semibold text-gray-700 mb-1">
             Retrabalho por area / projeto
           </h4>
-          <RetrabalhoTaxaAreaChart data={taxaAreaGeral} />
+          <RetrabalhoTaxaAreaChart data={taxaAreaGeral} onSelecionarProjeto={onSelectProjeto} />
         </div>
       )}
 

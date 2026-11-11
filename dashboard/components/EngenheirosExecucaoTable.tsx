@@ -15,6 +15,8 @@ interface EngenheirosExecucaoTableProps {
   projetos: EngenheiroExecucaoProjeto[]
   fullscreen: boolean
   onToggleFullscreen: () => void
+  // Busca ja preenchida ao abrir (ex.: clique no engenheiro do grafico de carga).
+  buscaInicial?: string
 }
 
 
@@ -36,12 +38,13 @@ export default function EngenheirosExecucaoTable({
   projetos,
   fullscreen,
   onToggleFullscreen,
+  buscaInicial = '',
 }: EngenheirosExecucaoTableProps) {
   const [searchTerm, setSearchTerm] = React.useState('')
 
   useEffect(() => {
-    if (isOpen) setSearchTerm('')
-  }, [isOpen])
+    if (isOpen) setSearchTerm(buscaInicial)
+  }, [isOpen, buscaInicial])
 
   const grupos = useMemo(() => buildEngenheirosExecucao(projetos), [projetos])
   const filteredGroups = useMemo(

@@ -1,88 +1,85 @@
 import React from 'react'
-import { AlertTriangle, Clock } from 'lucide-react'
+import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { AtrasosEngenheiro } from '../lib/supabase'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { cn } from '@/lib/utils'
 
 interface AtrasosTableProps {
   data: AtrasosEngenheiro[]
+  // Botao no canto do card (ex.: "Ver todos os engenheiros").
+  acao?: React.ReactNode
 }
 
-export default function AtrasosTable({ data }: AtrasosTableProps) {
+// Mesmos cortes de antes: acima de 30 dias vermelho, acima de 15 laranja, senao amarelo.
+function classeAtrasoMaximo(dias: number) {
+  if (dias > 30) return 'bg-red-50 text-red-700 ring-red-200'
+  if (dias > 15) return 'bg-orange-50 text-orange-700 ring-orange-200'
+  return 'bg-amber-50 text-amber-700 ring-amber-200'
+}
+
+export default function AtrasosTable({ data, acao }: AtrasosTableProps) {
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 animate-fade-in">
-      <div className="flex items-center space-x-2 mb-4">
-        <AlertTriangle className="w-5 h-5 text-warning" />
-        <h3 className="text-lg font-bold text-gray-900">
-          Atrasos por Engenheiro
-        </h3>
-      </div>
-      
-      {data.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          <Clock className="w-12 h-12 mx-auto mb-2 text-success" />
-          <p>🎉 Nenhum atraso registrado!</p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                  Engenheiro
-                </th>
-                <th className="text-center py-3 px-4 text-sm font-semibold text-gray-700">
-                  Projetos Atrasados
-                </th>
-                <th className="text-center py-3 px-4 text-sm font-semibold text-gray-700">
-                  Áreas Atrasadas
-                </th>
-                <th className="text-center py-3 px-4 text-sm font-semibold text-gray-700">
-                  Média de Atraso
-                </th>
-                <th className="text-center py-3 px-4 text-sm font-semibold text-gray-700">
-                  Atraso Máximo
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+    <Card className="animate-fade-in">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <AlertTriangle className="size-4 text-amber-600" />
+          Atrasos por engenheiro
+        </CardTitle>
+        <CardDescription>Quem tem projetos ou áreas com prazo vencido</CardDescription>
+        {acao && <CardAction>{acao}</CardAction>}
+      </CardHeader>
+      <CardContent>
+        {data.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
+            <CheckCircle2 className="size-10 text-emerald-500" />
+            <p>🎉 Nenhum atraso registrado!</p>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Engenheiro</TableHead>
+                <TableHead className="text-center">Projetos atrasados</TableHead>
+                <TableHead className="text-center">Áreas atrasadas</TableHead>
+                <TableHead className="text-center">Média de atraso</TableHead>
+                <TableHead className="text-right">Atraso máximo</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {data.map((item, index) => (
-                <tr 
-                  key={item.eng_id}
-                  className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
-                    index === 0 ? 'bg-red-50' : ''
-                  }`}
-                >
-                  <td className="py-3 px-4 text-sm font-medium text-gray-900">
-                    {item.engenheiro}
-                  </td>
-                  <td className="py-3 px-4 text-center">
-                    <span className="inline-flex items-center justify-center w-8 h-8 bg-danger text-white rounded-full text-xs font-bold">
+                // O primeiro da lista (mais atrasado) continua destacado.
+                <TableRow key={item.eng_id} className={cn(index === 0 && 'bg-red-50/60 hover:bg-red-50')}>
+                  <TableCell className="font-medium">{item.engenheiro}</TableCell>
+                  <TableCell className="text-center">
+                    <span className="inline-flex size-7 items-center justify-center rounded-full bg-red-100 text-xs font-semibold text-red-700">
                       {item.qtde_projetos_atrasados}
                     </span>
-                  </td>
-                  <td className="py-3 px-4 text-center">
-                    <span className="inline-flex items-center justify-center w-8 h-8 bg-warning text-white rounded-full text-xs font-bold">
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <span className="inline-flex size-7 items-center justify-center rounded-full bg-orange-100 text-xs font-semibold text-orange-700">
                       {item.qtde_areas_atrasadas}
                     </span>
-                  </td>
-                  <td className="py-3 px-4 text-center text-sm font-semibold text-gray-900">
-                    {item.dias_medios_atraso.toFixed(1)} dias
-                  </td>
-                  <td className="py-3 px-4 text-center">
-                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
-                      item.atraso_maximo_dias > 30 ? 'bg-danger text-white' :
-                      item.atraso_maximo_dias > 15 ? 'bg-warning text-white' :
-                      'bg-yellow-100 text-yellow-800'
-                    }`}>
+                  </TableCell>
+                  <TableCell className="text-center tabular-nums">
+                    {item.dias_medios_atraso.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} dias
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span
+                      className={cn(
+                        'inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset tabular-nums',
+                        classeAtrasoMaximo(item.atraso_maximo_dias)
+                      )}
+                    >
                       {item.atraso_maximo_dias} dias
                     </span>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
   )
 }
-
