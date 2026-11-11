@@ -125,15 +125,22 @@ assert.match(
   /import EngenheirosExecucaoTable from/,
   'DashboardClient deve importar EngenheirosExecucaoTable'
 )
+// Redesign 11/2026: os KPIs viraram as celulas do carimbo da prancha (PranchaResumo).
+const pranchaContent = readFileSync('dashboard/components/painel/PranchaResumo.tsx', 'utf8')
 assert.match(
-  dashboardClientContent,
-  /title="Engenheiros em Execu[cç][aã]o"/,
-  'DashboardClient deve renderizar o card Engenheiros em Execucao'
+  pranchaContent,
+  /rotulo="Engenheiros em execu[cç][aã]o"[\s\S]*?onAbrir=\{\(\) => onAbrirEngenheiros\(\)\}/,
+  'a prancha deve ter a celula Engenheiros em execucao ligada a onAbrirEngenheiros'
 )
 assert.match(
   dashboardClientContent,
-  /setShowEngenheirosExecucaoModal\(true\)/,
-  'card deve abrir o modal de engenheiros em execucao'
+  /<PranchaResumo[\s\S]*?onAbrirEngenheiros=/,
+  'DashboardClient deve renderizar a prancha com onAbrirEngenheiros'
+)
+assert.match(
+  dashboardClientContent,
+  /const abrirEngenheirosExecucao = [\s\S]*?setShowEngenheirosExecucaoModal\(true\)/,
+  'o card deve abrir o modal de engenheiros em execucao'
 )
 assert.match(
   dashboardClientContent,

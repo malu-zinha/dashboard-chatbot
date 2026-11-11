@@ -62,7 +62,7 @@ export default function AtrasosTable({ data, acao }: AtrasosTableProps) {
                     </span>
                   </TableCell>
                   <TableCell className="text-center tabular-nums">
-                    {item.dias_medios_atraso.toFixed(1)} dias
+                    {item.dias_medios_atraso.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} dias
                   </TableCell>
                   <TableCell className="text-right">
                     <span

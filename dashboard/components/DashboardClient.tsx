@@ -8,8 +8,6 @@ import {
   CheckCircle,
   Play,
   AlertTriangle,
-  TrendingUp,
-  Users,
   FolderPlus,
   UserPlus,
   Layers,
@@ -19,13 +17,11 @@ import {
 import Header from '@/components/Header'
 import AppSidebar from '@/components/painel/AppSidebar'
 import AtalhoCard from '@/components/painel/AtalhoCard'
+import PranchaResumo from '@/components/painel/PranchaResumo'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { filtroDoStatus, infoSecao, resolverSecao, type FiltroProjetos, type SecaoId } from '@/lib/secoes'
-import KPICard from '@/components/KPICard'
 import AtrasosTable from '@/components/AtrasosTable'
 import RetrabalhoDetalhesModal from '@/components/RetrabalhoDetalhesModal'
 import ProjetosTable from '@/components/ProjetosTable'
@@ -580,69 +576,14 @@ export default function DashboardClient() {
 
           {!carregandoPrimeiraVez && secao === 'visao-geral' && (
             <>
-              <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-5">
-                <KPICard
-                  title="Total de Projetos"
-                  value={visaoGeral?.total_projetos || 0}
-                  subtitle={`${visaoGeral?.total_areas || 0} áreas`}
-                  icon={Briefcase}
-                  color="primary"
-                  onClick={() => abrirProjetos('all')}
-                  onExpand={() => abrirProjetos('all', true)}
-                />
-                <KPICard
-                  title="Projetos Concluídos"
-                  value={visaoGeral?.projetos_concluidos || 0}
-                  subtitle={`${visaoGeral?.areas_concluidas || 0} áreas concluídas`}
-                  icon={CheckCircle}
-                  color="success"
-                  onClick={() => abrirProjetos('concluido')}
-                  onExpand={() => abrirProjetos('concluido', true)}
-                />
-                <KPICard
-                  title="Em Execução"
-                  value={visaoGeral?.projetos_em_execucao || 0}
-                  subtitle={`${visaoGeral?.areas_ativas || 0} áreas ativas`}
-                  icon={Play}
-                  color="primary"
-                  onClick={() => abrirProjetos('em_execucao')}
-                  onExpand={() => abrirProjetos('em_execucao', true)}
-                />
-                <KPICard
-                  title="Engenheiros em Execução"
-                  value={engenheirosExecucao.length}
-                  subtitle={`${totalTarefasEngenheirosExecucao} tarefa(s) em execução`}
-                  icon={Users}
-                  color="primary"
-                  onClick={() => { setBuscaEngenheirosExecucao(''); setModalFullscreen(false); setShowEngenheirosExecucaoModal(true) }}
-                  onExpand={() => abrirEngenheirosExecucao('', true)}
-                />
-                <KPICard
-                  title="Atrasados"
-                  value={visaoGeral?.projetos_atrasados || 0}
-                  subtitle="Requer atenção"
-                  icon={AlertTriangle}
-                  color="danger"
-                  onClick={() => abrirProjetos('atrasado')}
-                  onExpand={() => abrirProjetos('atrasado', true)}
-                />
-              </section>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="size-4 text-primary" />
-                    Progresso geral
-                  </CardTitle>
-                  <CardDescription>Percentual concluído médio</CardDescription>
-                </CardHeader>
-                <CardContent className="flex items-center gap-4">
-                  <Progress value={visaoGeral?.percentual_concluido_medio || 0} className="h-3 flex-1" />
-                  <span className="w-20 text-right text-2xl font-semibold tabular-nums text-primary">
-                    {(visaoGeral?.percentual_concluido_medio ?? 0).toFixed(1)}%
-                  </span>
-                </CardContent>
-              </Card>
+              <PranchaResumo
+                visaoGeral={visaoGeral}
+                engenheirosEmExecucao={engenheirosExecucao.length}
+                tarefasEmExecucao={totalTarefasEngenheirosExecucao}
+                lastUpdate={lastUpdate}
+                onAbrirProjetos={abrirProjetos}
+                onAbrirEngenheiros={(telaCheia) => abrirEngenheirosExecucao('', telaCheia)}
+              />
 
               <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <ProjetosStatusChart

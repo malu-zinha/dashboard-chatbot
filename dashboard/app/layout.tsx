@@ -1,11 +1,12 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Archivo } from 'next/font/google'
 import './globals.css'
 import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/sonner'
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
+// Archivo com eixo de largura: expandida nos numeros e titulos, normal no texto.
+const archivo = Archivo({ subsets: ['latin'], axes: ['wdth'], variable: '--font-archivo' })
 
 export const metadata: Metadata = {
   title: 'TecPred Dashboard | Visão Executiva em Tempo Real',
@@ -18,8 +19,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="pt-BR" className={cn('font-sans', inter.variable)}>
-      <body className={inter.className}>
+    <html lang="pt-BR" className={cn('font-sans', archivo.variable)}>
+      <body>
         <TooltipProvider delayDuration={150}>{children}</TooltipProvider>
         <Toaster position="top-right" richColors />
       </body>
