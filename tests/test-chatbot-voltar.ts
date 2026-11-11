@@ -63,7 +63,7 @@ const enviar = async (flow: any, msg: string): Promise<string> =>
   (await flow.processarMensagem(msg)).mensagem
 
 // Caminho da Notificacao Noturna ate a pergunta das observacoes, reusado por varios casos.
-const ATE_OBSERVACOES = ['2', '1', 'Revisao das pranchas do 3o pavimento', '8', '1', '3', '2', '1']
+const ATE_OBSERVACOES = ['2', '1', 'Revisao das pranchas do 3o pavimento', '8', '1', '1', '3', '2', '1']
 
 // =====================================================
 // Um caso por passo alcancavel por 0/voltar
@@ -88,15 +88,27 @@ const casos: Array<{ nome: string; chegarAte: string[]; esperado: RegExp[]; step
     step: 'feito_dia',
   },
   {
-    nome: 'retrabalho_motivo -> teve retrabalho?',
+    nome: 'ocorrencia_tipo -> teve retrabalho ou paralisacao?',
     chegarAte: ['2', '1', 'Revisao das pranchas do 3o pavimento', '8', '1'],
-    esperado: [/🔄 \*Teve retrabalho\/paralisação hoje\?\*/, /1️⃣ Sim/],
+    esperado: [/🔄 \*Teve retrabalho ou paralisação hoje\?\*/, /1️⃣ Sim/],
     step: 'retrabalho_pergunta',
   },
   {
+    nome: 'retrabalho_motivo -> o que aconteceu?',
+    chegarAte: ['2', '1', 'Revisao das pranchas do 3o pavimento', '8', '1', '2'],
+    esperado: [/🔀 \*O que aconteceu\?\*/, /2️⃣ Paralisação/],
+    step: 'ocorrencia_tipo',
+  },
+  {
     nome: 'retrabalho_horas -> motivo do retrabalho',
-    chegarAte: ['2', '1', 'Revisao das pranchas do 3o pavimento', '8', '1', '3'],
-    esperado: [/⚠️ \*Motivo do Retrabalho \/ Paralisação\*/, /3️⃣ Erro de projeto \(TecPred\)/],
+    chegarAte: ['2', '1', 'Revisao das pranchas do 3o pavimento', '8', '1', '1', '3'],
+    esperado: [/⚠️ \*Motivo do retrabalho\*/, /3️⃣ Erro de projeto \(TecPred\)/],
+    step: 'retrabalho_motivo',
+  },
+  {
+    nome: 'retrabalho_horas -> motivo da paralisacao',
+    chegarAte: ['2', '1', 'Revisao das pranchas do 3o pavimento', '8', '1', '2', '3'],
+    esperado: [/⚠️ \*Motivo da paralisação\*/, /3️⃣ Erro de projeto \(TecPred\)/],
     step: 'retrabalho_motivo',
   },
   {
@@ -162,10 +174,13 @@ for (const caso of casos) {
   assert.match(aposFeito, /✅ Feito registrado!\n\n⏱️ \*Quantas horas foram trabalhadas hoje/)
 
   const aposHoras = await enviar(flow, '8')
-  assert.match(aposHoras, /✅ Horas registradas: 8\n\n🔄 \*Teve retrabalho\/paralisação hoje\?\*/)
+  assert.match(aposHoras, /✅ Horas registradas: 8\n\n🔄 \*Teve retrabalho ou paralisação hoje\?\*/)
+
+  const aposSimOcorrencia = await enviar(flow, '1')
+  assert.match(aposSimOcorrencia, /🔀 \*O que aconteceu\?\*/)
 
   const aposMotivo = await enviar(flow, '1')
-  assert.match(aposMotivo, /⚠️ \*Motivo do Retrabalho \/ Paralisação\*/)
+  assert.match(aposMotivo, /⚠️ \*Motivo do retrabalho\*/)
 
   const aposHorasRetrabalho = await enviar(flow, '3')
   assert.match(aposHorasRetrabalho, /✅ Motivo registrado: Erro de projeto \(TecPred\)\n\n⏱️ \*Quantas horas foram gastas no retrabalho/)
@@ -196,9 +211,9 @@ for (const caso of casos) {
   await enviar(flow, '2') // nao teve retrabalho
   const aposGravar = await enviar(flow, '1')
 
-  assert.match(aposGravar, /✅ Sem retrabalho!\n\n📝 \*Quer adicionar observações\?\*/)
+  assert.match(aposGravar, /✅ Sem retrabalho nem paralisação!\n\n📝 \*Quer adicionar observações\?\*/)
 
-  console.log('   ✅ "Sem retrabalho!" segue colado a pergunta de observacoes')
+  console.log('   ✅ "Sem retrabalho nem paralisação!" segue colado a pergunta de observacoes')
 }
 
 if (falhas > 0) {

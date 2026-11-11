@@ -13,6 +13,11 @@ import { getSupabaseService, SupabaseUnavailableError } from '../../integrations
 import { redactSecrets } from '../../logic/security/redactSecrets.ts';
 import { dataLocalBR } from '../../logic/datas/dataLocal.ts';
 import {
+  ROTULO_OCORRENCIA,
+  textosOcorrencia,
+  type TipoOcorrencia,
+} from '../../logic/retrabalho/tipoOcorrencia.ts';
+import {
   filterEtapasPendentes,
   filterPavimentosPendentes,
   filterGlobaisPendentes,
@@ -47,6 +52,7 @@ type FlowStep =
   | 'feito_dia'
   | 'horas_trabalhadas'
   | 'retrabalho_pergunta'
+  | 'ocorrencia_tipo'
   | 'retrabalho_motivo'
   | 'retrabalho_horas'
   | 'horas_confirmar'
@@ -126,6 +132,9 @@ interface FlowState {
   previsaoTexto?: string;
   feitoTexto?: string;
   teveRetrabalho?: boolean;
+  // Retrabalho e paralisacao usam os mesmos motivos e a mesma linha do dia; o tipo e o que
+  // separa os dois no dashboard (coluna tipo_retrabalho).
+  tipoOcorrencia?: TipoOcorrencia;
   motivoRetrabalho?: string;
   horasTrabalhadasTotal?: number;
   horasRetrabalho?: number;
@@ -239,6 +248,7 @@ export function validarHorasRetrabalho(input: {
  */
 export function formatarResumoHoras(input: {
   teveRetrabalho?: boolean;
+  tipoOcorrencia?: TipoOcorrencia;
   motivoRetrabalho?: string;
   horasTrabalhadasTotal?: number;
   horasRetrabalho?: number;
@@ -252,12 +262,13 @@ export function formatarResumoHoras(input: {
   }
 
   if (!input.teveRetrabalho) {
-    return resumo + `🔄 Sem retrabalho hoje\n`;
+    return resumo + `🔄 Sem retrabalho nem paralisação hoje\n`;
   }
 
   const percentual = calcularPercentualRetrabalhoHoras(horasRetrabalho, horasTrabalhadasTotal);
-  resumo += `⚠️ Motivo: ${input.motivoRetrabalho ?? '—'}\n`;
-  resumo += `🔄 Horas de retrabalho: *${horasRetrabalho}h* (${percentual.toFixed(1)}%)\n`;
+  const tipo = input.tipoOcorrencia ?? 'retrabalho';
+  resumo += `⚠️ Motivo ${textosOcorrencia(tipo).doTipo}: ${input.motivoRetrabalho ?? '—'}\n`;
+  resumo += `🔄 Horas de ${ROTULO_OCORRENCIA[tipo].toLowerCase()}: *${horasRetrabalho}h* (${percentual.toFixed(1)}%)\n`;
 
   return resumo;
 }
@@ -436,6 +447,8 @@ export class EngineerProjectFlow {
           return await this.stepHorasTrabalhadas(msg);
         case 'retrabalho_pergunta':
           return await this.stepRetrabalhoPerguntaComHoras(msg);
+        case 'ocorrencia_tipo':
+          return await this.stepOcorrenciaTipo(msg);
         case 'retrabalho_motivo':
           return await this.stepRetrabalhoMotivoComHoras(msg);
         case 'retrabalho_horas':
@@ -906,13 +919,41 @@ _Digite o número da opção desejada_`;
 
   private renderRetrabalhoPergunta(): FlowResult {
     return {
-      mensagem: `🔄 *Teve retrabalho/paralisação hoje?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
+      mensagem: `🔄 *Teve retrabalho ou paralisação hoje?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
       finalizado: false
     };
   }
 
+  private renderOcorrenciaTipo(): FlowResult {
+    return {
+      mensagem: `🔀 *O que aconteceu?*\n\n1️⃣ Retrabalho\n2️⃣ Paralisação\n\n_Digite 1 ou 2_\n\n*0.* Voltar | *menu* — início`,
+      finalizado: false
+    };
+  }
+
+  private async stepOcorrenciaTipo(msg: string): Promise<FlowResult> {
+    const resposta = msg.trim();
+
+    // Chegou aqui por 0/voltar: repetir a pergunta em vez de tratar a string vazia como opcao.
+    if (!resposta) return this.renderOcorrenciaTipo();
+
+    const tipo: TipoOcorrencia | null =
+      resposta === '1' ? 'retrabalho' : resposta === '2' ? 'paralisacao' : null;
+
+    if (!tipo) {
+      return {
+        mensagem: '❌ Opção inválida. Digite *1* para Retrabalho ou *2* para Paralisação.',
+        finalizado: false
+      };
+    }
+
+    this.state.tipoOcorrencia = tipo;
+    this.goToStep('retrabalho_motivo');
+    return this.renderRetrabalhoMotivo();
+  }
+
   private renderRetrabalhoMotivo(): FlowResult {
-    let mensagem = `⚠️ *Motivo do Retrabalho / Paralisação*\n\n`;
+    let mensagem = `⚠️ *Motivo ${textosOcorrencia(this.state.tipoOcorrencia).doTipo}*\n\n`;
     MOTIVOS_RETRABALHO.forEach((motivo, index) => {
       mensagem += `${index + 1}️⃣ ${motivo}\n`;
     });
@@ -928,12 +969,14 @@ _Digite o número da opção desejada_`;
 
     if (resposta === '1') {
       this.state.teveRetrabalho = true;
-      this.goToStep('retrabalho_motivo');
-      return this.renderRetrabalhoMotivo();
+      this.goToStep('ocorrencia_tipo');
+      return this.renderOcorrenciaTipo();
     }
 
     if (resposta === '2') {
       this.state.teveRetrabalho = false;
+      this.state.tipoOcorrencia = undefined;
+      this.state.motivoRetrabalho = undefined;
       this.state.horasRetrabalho = 0;
 
       // Nao grava aqui: quem grava e stepHorasConfirmar, depois do engenheiro revisar.
@@ -971,7 +1014,7 @@ _Digite o número da opção desejada_`;
 
   private renderRetrabalhoHoras(): FlowResult {
     return {
-      mensagem: `⏱️ *Quantas horas foram gastas no retrabalho/paralisação?*\n\n_Exemplo: 2 ou 1,5_`,
+      mensagem: `⏱️ *Quantas horas foram gastas ${textosOcorrencia(this.state.tipoOcorrencia).noTipo}?*\n\n_Exemplo: 2 ou 1,5_`,
       finalizado: false
     };
   }
@@ -1078,7 +1121,8 @@ _Digite o número da opção desejada_`;
         this.state.selectedAtribuicaoId!,
         teveRetrabalho,
         this.state.motivoRetrabalho,
-        undefined,
+        // Sem retrabalho nao ha tipo: a RPC ja zera motivo e tipo nesse ramo.
+        teveRetrabalho ? this.state.tipoOcorrencia : undefined,
         undefined,
         // validarHorasRetrabalho acima ja rejeitou null e <= 0
         this.state.horasTrabalhadasTotal!,
@@ -1113,7 +1157,7 @@ _Digite o número da opção desejada_`;
       const perguntaObs = this.renderObservacoesPergunta().mensagem;
 
       if (!teveRetrabalho) {
-        return { mensagem: `✅ Sem retrabalho!\n\n${perguntaObs}`, finalizado: false };
+        return { mensagem: `✅ Sem retrabalho nem paralisação!\n\n${perguntaObs}`, finalizado: false };
       }
 
       const percentual = calcularPercentualRetrabalhoHoras(
@@ -1122,7 +1166,7 @@ _Digite o número da opção desejada_`;
       );
 
       return {
-        mensagem: `✅ Retrabalho registrado: ${this.state.horasRetrabalho}h de ${this.state.horasTrabalhadasTotal}h (${percentual.toFixed(1)}%)\n\n${perguntaObs}`,
+        mensagem: `✅ ${textosOcorrencia(this.state.tipoOcorrencia).registrado}: ${this.state.horasRetrabalho}h de ${this.state.horasTrabalhadasTotal}h (${percentual.toFixed(1)}%)\n\n${perguntaObs}`,
         finalizado: false
       };
     }
@@ -1238,9 +1282,9 @@ _Digite o número da opção desejada_`;
     mensagem += `✔️ Feito: ${this.state.feitoTexto}\n`;
 
     if (this.state.teveRetrabalho) {
-      mensagem += `🔄 Retrabalho: Sim (${this.state.motivoRetrabalho})\n`;
+      mensagem += `🔄 ${ROTULO_OCORRENCIA[this.state.tipoOcorrencia ?? 'retrabalho']}: ${this.state.motivoRetrabalho}\n`;
     } else {
-      mensagem += `🔄 Retrabalho: Não\n`;
+      mensagem += `🔄 Retrabalho/paralisação: Não\n`;
     }
 
     if (this.state.observacoesTexto) {

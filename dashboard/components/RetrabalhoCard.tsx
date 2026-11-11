@@ -7,7 +7,7 @@ import {
   RetrabalhoMotivo,
   RetrabalhoTaxaArea,
 } from '@/lib/supabase'
-import RetrabalhoPizzaChart from '@/components/RetrabalhoPizzaChart'
+import MotivosPorTipo from '@/components/MotivosPorTipo'
 import RetrabalhoTaxaAreaChart from '@/components/RetrabalhoTaxaAreaChart'
 
 interface RetrabalhoCardProps {
@@ -183,11 +183,7 @@ export default function RetrabalhoCard({
 
       {motivosGeral.length > 0 && (
         <div className="pt-4 border-t border-gray-200 mt-4">
-          <RetrabalhoPizzaChart
-            data={motivosGeral}
-            title="Motivos mais frequentes — TecPred (geral)"
-            height={280}
-          />
+          <MotivosPorTipo data={motivosGeral} escopo="TecPred (geral)" height={280} />
         </div>
       )}
     </div>
