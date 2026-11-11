@@ -124,6 +124,8 @@ export interface RetrabalhoDetalheProjeto {
   motivo_retrabalho: string | null
   horas_trabalhadas_total: number | null
   horas_retrabalho: number | null
+  // 'retrabalho' | 'paralisacao'; null = registro de antes da separacao
+  tipo_retrabalho?: string | null
   area_id: string
   area_codigo: string
   area_descricao: string
@@ -143,6 +145,8 @@ export interface RetrabalhoAreaProjeto {
 }
 
 export interface RetrabalhoMotivo {
+  // 'retrabalho' | 'paralisacao' | 'nao_classificado' (views vw_ocorrencias_*)
+  tipo?: string
   motivo_retrabalho: string
   quantidade: number
   engenheiros_afetados?: number
@@ -364,7 +368,7 @@ export async function fetchRetrabalhoMotivosPorProjeto(
   projetoId: string
 ): Promise<RetrabalhoMotivo[]> {
   const { data, error } = await supabase
-    .from('vw_retrabalho_motivos_por_projeto')
+    .from('vw_ocorrencias_motivos_por_projeto')
     .select('*')
     .eq('projeto_id', projetoId)
     .order('quantidade', { ascending: false })
@@ -379,7 +383,7 @@ export async function fetchRetrabalhoMotivosPorProjeto(
 
 export async function fetchRetrabalhoMotivosGeral(): Promise<RetrabalhoMotivo[]> {
   const { data, error } = await supabase
-    .from('vw_dono_retrabalhos_por_motivo')
+    .from('vw_ocorrencias_por_motivo')
     .select('*')
     .order('quantidade', { ascending: false })
 

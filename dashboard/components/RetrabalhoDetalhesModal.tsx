@@ -7,8 +7,24 @@ import {
   RetrabalhoAreaProjeto,
   RetrabalhoMotivo,
 } from '@/lib/supabase'
-import RetrabalhoPizzaChart from '@/components/RetrabalhoPizzaChart'
+import MotivosPorTipo from '@/components/MotivosPorTipo'
 import { formatarDataBR } from '@/lib/datas'
+import { normalizarTipo, rotuloTipo } from '@/lib/ocorrencias'
+
+// Etiqueta do tipo na lista de registros.
+const CLASSE_TIPO = {
+  retrabalho: 'bg-orange-50 text-orange-700 border-orange-200',
+  paralisacao: 'bg-sky-50 text-sky-700 border-sky-200',
+  nao_classificado: 'bg-gray-100 text-gray-500 border-gray-200',
+} as const
+
+function EtiquetaTipo({ tipo }: { tipo: string | null | undefined }) {
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${CLASSE_TIPO[normalizarTipo(tipo)]}`}>
+      {rotuloTipo(tipo)}
+    </span>
+  )
+}
 
 interface RetrabalhoDetalhesModalProps {
   isOpen: boolean
@@ -190,7 +206,8 @@ export default function RetrabalhoDetalhesModal({
                                   <div className="flex-shrink-0 text-xs font-semibold text-tecpred-primary w-28 pt-0.5">
                                     {item.engenheiro_nome}
                                   </div>
-                                  <div className="flex-1 text-sm text-gray-700">
+                                  <div className="flex-1 text-sm text-gray-700 flex flex-wrap items-center gap-2">
+                                    <EtiquetaTipo tipo={item.tipo_retrabalho} />
                                     {item.motivo_retrabalho || (
                                       <span className="italic text-gray-400">Sem motivo informado</span>
                                     )}
@@ -227,9 +244,9 @@ export default function RetrabalhoDetalhesModal({
                   Nenhum motivo registrado para este projeto.
                 </p>
               ) : (
-                <RetrabalhoPizzaChart
+                <MotivosPorTipo
                   data={motivosProjeto}
-                  title={`Distribuição de motivos — ${projetoCodigo || 'Projeto'}`}
+                  escopo={projetoCodigo || 'Projeto'}
                   height={300}
                 />
               )}
@@ -258,6 +275,7 @@ export default function RetrabalhoDetalhesModal({
                           <span className="px-2 py-0.5 rounded-full text-xs bg-tecpred-light text-tecpred-primary font-medium">
                             {item.area_descricao}
                           </span>
+                          <EtiquetaTipo tipo={item.tipo_retrabalho} />
                         </div>
                         <span className="text-xs text-gray-500">
                           Engenheiro:{' '}

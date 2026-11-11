@@ -46,10 +46,11 @@ O fluxo mais longo, e o que alimenta os indicadores.
 4. `Revisao das pranchas do 3o pavimento` → esperado: `✅ Feito registrado!` +
    `⏱️ *Quantas horas foram trabalhadas hoje nesta tarefa/disciplina?*`
 5. `abc` → esperado: `❌ Informe um número maior que zero para as horas trabalhadas.`
-6. `8` → esperado: `✅ Horas registradas: 8` + `🔄 *Teve retrabalho/paralisação hoje?*`
-7. `1` (sim) → esperado: `⚠️ *Motivo do Retrabalho / Paralisação*` com os 6 motivos
+6. `8` → esperado: `✅ Horas registradas: 8` + `🔄 *Teve retrabalho ou paralisação hoje?*`
+7. `1` (sim) → esperado: `🔀 *O que aconteceu?*` com `1️⃣ Retrabalho` e `2️⃣ Paralisação`
+7b. `1` (retrabalho) → esperado: `⚠️ *Motivo do retrabalho*` com os 6 motivos
 8. `3` → esperado: `✅ Motivo registrado: Erro de projeto (TecPred)` +
-   `⏱️ *Quantas horas foram gastas no retrabalho/paralisação?*`
+   `⏱️ *Quantas horas foram gastas no retrabalho?*`
 9. `9` → esperado:
    `❌ As horas de retrabalho não podem ser maiores que as horas trabalhadas totais.`
 10. `2` → **cai na tela de confirmação** (Teste 3)
@@ -58,6 +59,12 @@ O fluxo mais longo, e o que alimenta os indicadores.
 12. `1` → `📝 *Observações*`; `ab` → `❌ Observação muito curta. Digite pelo menos 3 caracteres.`
 13. `Cliente enviou revisao no fim do dia` → esperado:
     `✅ *Notificação Noturna Registrada!*` com projeto, feito, retrabalho e observações
+14. Refaça em outra atribuição escolhendo `2` (paralisação) no passo 7b → esperado:
+    `⚠️ *Motivo da paralisação*` com os **mesmos 6 motivos**, depois
+    `⏱️ *Quantas horas foram gastas na paralisação?*` e, ao confirmar,
+    `✅ Paralisação registrada: ...`
+    - [ ] No banco, `retrabalho_projetos.tipo_retrabalho` = `paralisacao` (e `retrabalho` no passo 13)
+    - [ ] No dashboard, o registro aparece na pizza "Motivos de paralisação"
 14. Se a disciplina tiver etapa pendente, a mensagem emenda
     `📐 *Alguma etapa foi concluída hoje?*`; `2` encerra com `Descanse bem! 🌙`
 
@@ -101,13 +108,13 @@ Percorra o Teste 2 até o passo 10. Esperado:
 1. Chegue à tela de confirmação
 2. `2` → esperado: volta a `⏱️ *Quantas horas foram trabalhadas hoje...*`, **sem** mensagem de erro
    - [ ] Nada gravado no banco
-3. Refaça com `4` / `1` / `1` / `1` e confirme
+3. Refaça com `4` / `1` / `1` / `1` / `1` e confirme
    - [ ] A linha tem as horas **novas** (4 e 1), sem resquício das anteriores
 
 ### 3.3 Voltar com `0` na confirmação
 
 1. Chegue à tela de confirmação
-2. `0` → esperado: volta a `⏱️ *Quantas horas foram gastas no retrabalho/paralisação?*`
+2. `0` → esperado: volta a `⏱️ *Quantas horas foram gastas no retrabalho?*` (ou `na paralisação?`)
    - [ ] Sem `❌` na resposta — voltar não é erro de validação
    - [ ] Nada gravado no banco
 
@@ -170,8 +177,9 @@ O ponto fraco histórico do fluxo — teste com atenção.
 1. Em **qualquer** tela intermediária, `0` deve devolver a **pergunta anterior**, nunca um `❌`.
    Percorra a noturna e aperte `0` em cada passo:
    - [ ] horas trabalhadas → `✔️ *O que foi feito hoje?*`
-   - [ ] motivo do retrabalho → `🔄 *Teve retrabalho/paralisação hoje?*`
-   - [ ] horas de retrabalho → `⚠️ *Motivo do Retrabalho / Paralisação*`
+   - [ ] "o que aconteceu?" → `🔄 *Teve retrabalho ou paralisação hoje?*`
+   - [ ] motivo → `🔀 *O que aconteceu?*`
+   - [ ] horas de retrabalho/paralisação → `⚠️ *Motivo do retrabalho*` / `⚠️ *Motivo da paralisação*`
    - [ ] observações → `📝 *Quer adicionar observações?*`
    - [ ] "alguma etapa foi concluída" → `📝 *Observações*`
 2. `menu` em qualquer ponto → esperado: `⬅️ *Voltando ao menu principal*` + o menu

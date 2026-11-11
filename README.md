@@ -379,9 +379,12 @@ grava em `projetos_previsao`.
 escolhe a atribuição
   → "O que foi feito hoje?"
   → "Quantas horas foram trabalhadas hoje?"
-  → "Teve retrabalho/paralisação hoje?"
-       ├─ Sim → motivo (lista fechada de 6) → horas de retrabalho
+  → "Teve retrabalho ou paralisação hoje?"
+       ├─ Sim → "O que aconteceu?" 1 Retrabalho | 2 Paralisação
+       │        → motivo (a mesma lista fechada de 6 para os dois) → horas
        └─ Não
+     (o tipo vai em retrabalho_projetos.tipo_retrabalho; registros de antes de 11/11/2026
+      ficam com tipo NULL e o dashboard mostra como "Não classificado")
   → CONFIRMAÇÃO: resumo das horas → 1 confirma e grava | 2 corrige
   → observações (opcional)
   → "Alguma etapa foi concluída hoje?" (se houver etapa pendente)

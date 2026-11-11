@@ -30,6 +30,22 @@ const COLORS = [
   '#14B8A6', // teal
 ]
 
+// Cor fixa por motivo: com retrabalho e paralisacao em pizzas separadas, a cor por
+// posicao faria o mesmo motivo mudar de cor de uma pizza para a outra. As cores sao as
+// que cada motivo ja tinha na pizza unica, para quem ja conhece o grafico.
+const COR_POR_MOTIVO: Record<string, string> = {
+  'Outro': '#EF4444',
+  'Alteração de projeto (Construtora)': '#F59E0B',
+  'Erro de projeto (TecPred)': '#3B82F6',
+  'Projeto Suspenso': '#10B981',
+  'Falta de informação (Construtora)': '#8B5CF6',
+  'Erro de comunicação': '#EC4899',
+}
+
+function corDoMotivo(motivo: string, index: number): string {
+  return COR_POR_MOTIVO[motivo] ?? COLORS[index % COLORS.length]
+}
+
 const CustomTooltip = ({
   active,
   payload,
@@ -58,8 +74,13 @@ export default function RetrabalhoPizzaChart({
 }: RetrabalhoPizzaChartProps) {
   if (!data || data.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-8 text-gray-400">
-        <p className="text-sm">Nenhum motivo registrado</p>
+      <div>
+        {title && (
+          <h4 className="text-sm font-semibold text-gray-700 mb-3">{title}</h4>
+        )}
+        <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+          <p className="text-sm">Nenhum motivo registrado</p>
+        </div>
       </div>
     )
   }
@@ -87,10 +108,10 @@ export default function RetrabalhoPizzaChart({
             dataKey="value"
             labelLine={false}
           >
-            {chartData.map((_, index) => (
+            {chartData.map((item, index) => (
               <Cell
                 key={`cell-${index}`}
-                fill={COLORS[index % COLORS.length]}
+                fill={corDoMotivo(item.name, index)}
               />
             ))}
           </Pie>
@@ -113,7 +134,7 @@ export default function RetrabalhoPizzaChart({
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <div
                 className="w-3 h-3 rounded-full flex-shrink-0"
-                style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                style={{ backgroundColor: corDoMotivo(item.motivo_retrabalho, index) }}
               />
               <span className="text-xs text-gray-700 truncate">
                 {item.motivo_retrabalho}
