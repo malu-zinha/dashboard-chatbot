@@ -5,14 +5,6 @@
 
 export type TipoOcorrencia = 'retrabalho' | 'paralisacao' | 'nao_classificado'
 
-export const ORDEM_TIPOS: TipoOcorrencia[] = ['retrabalho', 'paralisacao', 'nao_classificado']
-
-export const TITULO_MOTIVOS_POR_TIPO: Record<TipoOcorrencia, string> = {
-  retrabalho: 'Motivos de retrabalho',
-  paralisacao: 'Motivos de paralisação',
-  nao_classificado: 'Não classificado (registros de antes da separação)',
-}
-
 const ROTULO_TIPO: Record<TipoOcorrencia, string> = {
   retrabalho: 'Retrabalho',
   paralisacao: 'Paralisação',
@@ -27,20 +19,23 @@ export function rotuloTipo(tipo: string | null | undefined): string {
   return ROTULO_TIPO[normalizarTipo(tipo)]
 }
 
+export type FiltroMotivos = 'geral' | 'retrabalho' | 'paralisacao'
+
 /**
- * Separa as linhas por tipo, na ordem retrabalho, paralisacao, nao classificado.
- * Retrabalho e paralisacao aparecem sempre (logo depois do deploy a paralisacao esta
- * vazia, e isso precisa ficar visivel); "nao classificado" so aparece se tiver linha.
- * Dentro de cada grupo, maior quantidade primeiro.
+ * Linhas da pizza para o filtro escolhido, maior quantidade primeiro.
+ * - geral: soma retrabalho, paralisacao e os registros antigos sem tipo, por motivo
+ *   (o mesmo numero que a pizza unica mostrava antes da separacao);
+ * - retrabalho / paralisacao: so as linhas daquele tipo (antigos sem tipo nao entram).
  */
-export function agruparMotivosPorTipo<T extends { tipo?: string | null; quantidade: number }>(
-  linhas: T[]
-): Array<{ tipo: TipoOcorrencia; titulo: string; linhas: T[] }> {
-  return ORDEM_TIPOS.map((tipo) => ({
-    tipo,
-    titulo: TITULO_MOTIVOS_POR_TIPO[tipo],
-    linhas: linhas
-      .filter((l) => normalizarTipo(l.tipo) === tipo)
-      .sort((a, b) => b.quantidade - a.quantidade),
-  })).filter((g) => g.tipo !== 'nao_classificado' || g.linhas.length > 0)
+export function motivosDoFiltro<T extends { tipo?: string | null; motivo_retrabalho: string; quantidade: number }>(
+  linhas: T[],
+  filtro: FiltroMotivos
+): Array<{ motivo_retrabalho: string; quantidade: number }> {
+  const escolhidas = filtro === 'geral' ? linhas : linhas.filter((l) => normalizarTipo(l.tipo) === filtro)
+  const porMotivo = new Map<string, number>()
+  for (const l of escolhidas) {
+    porMotivo.set(l.motivo_retrabalho, (porMotivo.get(l.motivo_retrabalho) ?? 0) + l.quantidade)
+  }
+  return Array.from(porMotivo, ([motivo_retrabalho, quantidade]) => ({ motivo_retrabalho, quantidade }))
+    .sort((a, b) => b.quantidade - a.quantidade)
 }

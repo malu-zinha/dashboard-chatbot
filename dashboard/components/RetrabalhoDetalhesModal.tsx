@@ -248,7 +248,6 @@ export default function RetrabalhoDetalhesModal({
                   data={motivosProjeto}
                   escopo={projetoCodigo || 'Projeto'}
                   height={300}
-                  empilhar
                 />
               )}
             </div>

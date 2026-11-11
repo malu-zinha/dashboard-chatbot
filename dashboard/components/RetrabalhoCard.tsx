@@ -183,7 +183,7 @@ export default function RetrabalhoCard({
 
       {motivosGeral.length > 0 && (
         <div className="pt-4 border-t border-gray-200 mt-4">
-          <MotivosPorTipo data={motivosGeral} escopo="TecPred (geral)" height={280} />
+          <MotivosPorTipo data={motivosGeral} escopo="TecPred" height={280} />
         </div>
       )}
     </div>
