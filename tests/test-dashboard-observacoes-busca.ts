@@ -42,23 +42,20 @@ assert.match(
   'ProjetosTable deve ter icone Eye para ver detalhes'
 )
 
-// Verifica correcao da busca: engenheirosExtras para disciplinas concluidas
+// Verifica correcao da busca: o engenheiro de uma disciplina ja concluida continua achando
+// o projeto na aba em_execucao. Desde o agrupamento por projeto, a busca olha os campos de
+// TODAS as disciplinas do projeto (lib/projetosAgrupados.ts); o comportamento tem teste em
+// test-dashboard-projetos-agrupados.ts.
+const projetosAgrupadosContent = readFileSync(resolve('dashboard/lib/projetosAgrupados.ts'), 'utf8')
 assert.match(
-  projetosTableContent,
-  /engenheirosExtras.*filterStatus.*em_execucao/s,
-  'ProjetosTable deve coletar engenheiros extras na aba em_execucao'
+  projetosAgrupadosContent,
+  /export const camposBusca = [\s\S]*?projeto\.disciplinas\.flatMap\(\(d\) => \[d\.engenheiro_nome/,
+  'camposBusca deve incluir o engenheiro de todas as disciplinas do projeto'
 )
-
 assert.match(
   projetosTableContent,
-  /disciplinasConcluidasPorProjeto\.get\(item\.projeto_id\)/,
-  'ProjetosTable deve buscar disciplinas concluidas por projeto_id'
-)
-
-assert.match(
-  projetosTableContent,
-  /\.\.\.engenheirosExtras/,
-  'ProjetosTable deve incluir engenheirosExtras no searchScore'
+  /filtrarProjetos\(projetosAgrupados, filterStatus, searchTerm/,
+  'ProjetosTable deve filtrar e buscar pelos projetos agrupados'
 )
 
 // Verifica ProjetoDetalhesModal exibe observacoes

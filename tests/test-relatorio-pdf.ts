@@ -260,8 +260,8 @@ assert.match(
 )
 assert.match(
   projetosTableContent,
-  /isDisciplinaConcluida\(item\).*FileDown/s,
-  'Botao PDF deve aparecer apenas para disciplinas concluidas'
+  /projeto\.situacao === 'concluido' && \([\s\S]*?FileDown/,
+  'Botao PDF deve aparecer apenas com o projeto inteiro concluido (o relatorio e do projeto)'
 )
 
 // ============================================

@@ -105,7 +105,7 @@ export const mockProjetosStatus = [
   },
 ]
 
-export const mockProjetos = [
+const mockProjetosBase = [
   {
     projeto_id: '1',
     codigo_projeto: 'PRJ-001',
@@ -459,6 +459,18 @@ export const mockProjetos = [
     dias_atraso: 0,
   },
 ]
+
+// Como na view vw_projetos_detalhado: uma linha por disciplina, cada uma com atribuicao_id.
+// Algumas disciplinas extras para a tabela agrupada por projeto ter o que abrir.
+const mockDisciplinasExtras = [
+  { ...mockProjetosBase[0], engenheiro_nome: 'Ana Costa', area_descricao: 'Hidrossanitário', status_descricao: 'Concluido', percentual_andamento: 100.0, data_conclusao: '2024-02-20', dias_atraso: 0 },
+  { ...mockProjetosBase[0], engenheiro_nome: 'Pedro Oliveira', area_descricao: 'Cabeamento', status_descricao: 'Aguardando Inicio', percentual_andamento: 0, data_conclusao: null, dias_atraso: 0 },
+  { ...mockProjetosBase[1], engenheiro_nome: 'João Silva', area_descricao: 'Elétrico', status_descricao: 'Concluido', percentual_andamento: 100.0, data_conclusao: '2024-02-27', dias_atraso: 0 },
+]
+
+export const mockProjetos = [...mockProjetosBase.slice(0, 2), ...mockDisciplinasExtras, ...mockProjetosBase.slice(2)].map(
+  (linha, i) => ({ atribuicao_id: `mock-atribuicao-${i + 1}`, ...linha })
+)
 
 export const mockEngenheiros = [
   {
