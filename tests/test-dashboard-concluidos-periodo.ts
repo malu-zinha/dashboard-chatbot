@@ -167,16 +167,23 @@ assert.match(projetosTable, /periodoInvalido/, 'datas invertidas devem ser avisa
 
 // Uma lista unica de campos buscaveis para a tabela e para o aviso de ocultados: com duas,
 // um campo novo entraria so numa e o aviso passaria a divergir do que a tabela mostra.
-assert.match(projetosTable, /const camposBusca = /, 'deve existir uma lista unica de campos de busca')
+// Desde o agrupamento por projeto, a lista de campos vive em lib/projetosAgrupados.ts.
+const projetosAgrupados = readFileSync(resolve('dashboard/lib/projetosAgrupados.ts'), 'utf8')
+assert.match(projetosAgrupados, /export const camposBusca = /, 'deve existir uma lista unica de campos de busca')
+assert.doesNotMatch(projetosTable, /const camposBusca = /, 'a tabela nao pode ter uma segunda lista de campos')
 assert.equal(
-  (projetosTable.match(/item\.codigo_projeto,\n\s+item\.cliente,/g) || []).length,
+  (projetosAgrupados.match(/projeto\.codigo_projeto,\n\s+projeto\.cliente,/g) || []).length,
   1,
   'a lista de campos de busca nao pode estar duplicada'
 )
-assert.match(projetosTable, /searchMatches\(searchTerm, camposBusca\(item\)\)/, 'o aviso reusa searchMatches')
 assert.match(
-  projetosTable,
-  /searchScore\(searchTerm, camposBusca\(item, engenheirosExtras\)\)/,
+  projetosAgrupados,
+  /searchScore\(termo, camposBusca\(p\)\) > 0/,
+  'o aviso de ocultados reusa a mesma lista'
+)
+assert.match(
+  projetosAgrupados,
+  /searchScore\(termo, camposBusca\(projeto\)\)/,
   'o ranking da tabela reusa a mesma lista'
 )
 

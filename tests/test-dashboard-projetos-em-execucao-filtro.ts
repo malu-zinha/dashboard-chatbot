@@ -46,15 +46,16 @@ assert.equal(
   'projeto atrasado tambem aparece em Atrasados'
 )
 
+// Desde o agrupamento por projeto, o filtro das abas vive em lib/projetosAgrupados.ts.
 const projetosTableContent = readFileSync(
-  resolve('dashboard/components/ProjetosTable.tsx'),
+  resolve('dashboard/lib/projetosAgrupados.ts'),
   'utf8'
 )
 const emExecucaoBranch = projetosTableContent.match(
   /filterStatus === 'em_execucao'[\s\S]*?} else if \(filterStatus === 'atrasado'\)/
 )?.[0]
 
-assert.ok(emExecucaoBranch, 'ProjetosTable deve ter branch em_execucao')
+assert.ok(emExecucaoBranch, 'projetoNaAba deve ter branch em_execucao')
 assert.doesNotMatch(
   emExecucaoBranch,
   /dias_atraso\s*={0,3}\s*0|dias_atraso\s*===\s*0/,

@@ -2,19 +2,20 @@
 
 import React from 'react'
 import { X, Search, SearchX, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, Trash2, UserRoundCog, Eye, FileDown, CalendarClock, PencilLine, Building2 } from 'lucide-react'
-import { buildCompletedDisciplineKey, getProjetoAreaDisplayName } from '@/lib/compatibilizacao'
+import { getProjetoAreaDisplayName } from '@/lib/compatibilizacao'
 import { formatarDataBR, toDataISO } from '@/lib/datas'
 import { avisoValeParaPrazo, estadoAvisoPrazo, type AvisoPrazoLinha } from '@/lib/avisoPrazo'
 import {
-  isProjetoConcluido,
-  particionarPorPeriodoConclusao,
-  periodoConclusaoAtivo,
-  projetoConcluidoNoPeriodo,
-  projetoMatchesStatusFilter,
   type PeriodoConclusao,
   type ProjetoStatusFilter,
 } from '@/lib/projetoFilters'
-import { searchMatches, searchScore } from '@/lib/search'
+import {
+  agruparProjetos,
+  buscaCasouPorDisciplina,
+  filtrarProjetos,
+  type ProjetoAgrupado,
+  type SituacaoProjeto,
+} from '@/lib/projetosAgrupados'
 import { verificarAtribuicaoInfo, fetchRelatorioProjetoPdf, type Engenheiro } from '@/lib/supabase'
 import { gerarRelatorioPdf } from '@/lib/gerarRelatorioPdf'
 import ProjetoDetalhesModal from './ProjetoDetalhesModal'
@@ -148,7 +149,10 @@ export default function ProjetosTable({
   const [searchTerm, setSearchTerm] = React.useState('')
   const [filterStatus, setFilterStatus] = React.useState<ProjetoStatusFilter>(initialFilter)
   const [tooltipOpen, setTooltipOpen] = React.useState<string | null>(null)
-  const [expandedConcluidas, setExpandedConcluidas] = React.useState<Set<string>>(new Set())
+  // Linhas de projeto abertas (mostrando as disciplinas). Com busca, o projeto achado pelo
+  // engenheiro ou pela area de uma disciplina abre sozinho; quem a pessoa fechou fica fechado.
+  const [expandidos, setExpandidos] = React.useState<Set<string>>(new Set())
+  const [recolhidos, setRecolhidos] = React.useState<Set<string>>(new Set())
   const [transferProjeto, setTransferProjeto] = React.useState<Projeto | null>(null)
   const [deleteProjeto, setDeleteProjeto] = React.useState<Projeto | null>(null)
   const [prazoProjeto, setPrazoProjeto] = React.useState<Projeto | null>(null)
@@ -178,7 +182,8 @@ export default function ProjetosTable({
       }
       // Limpa busca quando abre o modal
       setSearchTerm('')
-      setExpandedConcluidas(new Set())
+      setExpandidos(new Set())
+      setRecolhidos(new Set())
       setDataConclusaoInicio('')
       setDataConclusaoFim('')
       setAvisoSucesso(null)
@@ -206,44 +211,12 @@ export default function ProjetosTable({
     item.motivo_aguardo?.trim() ||
     `Projeto atrasado há ${item.dias_atraso} dia(s). Nenhuma observação registrada.`
 
-  const isDisciplinaConcluida = isProjetoConcluido
-
-  const disciplinasConcluidasPorProjeto = React.useMemo(() => {
-    const grupos = new Map<string, Projeto[]>()
-    const chavesPorProjeto = new Map<string, Set<string>>()
-
-    for (const item of data) {
-      if (!isDisciplinaConcluida(item)) continue
-
-      const chave = buildCompletedDisciplineKey(item)
-      if (!chavesPorProjeto.has(item.projeto_id)) chavesPorProjeto.set(item.projeto_id, new Set())
-      const chaves = chavesPorProjeto.get(item.projeto_id)!
-      if (chaves.has(chave)) continue
-
-      chaves.add(chave)
-      if (!grupos.has(item.projeto_id)) grupos.set(item.projeto_id, [])
-      grupos.get(item.projeto_id)!.push(item)
-    }
-
-    return grupos
-  }, [data])
-
-  const showConcluidas = filterStatus === 'em_execucao'
   const showFiltroPeriodo = filterStatus === 'concluido'
   const showAcoes = true
-  const totalColunas = 8 + (showConcluidas ? 1 : 0) + (onVerRetrabalho ? 1 : 0) + (showAcoes ? 1 : 0)
+  const totalColunas = 8 + (onVerRetrabalho ? 1 : 0) + (showAcoes ? 1 : 0)
 
-  const toggleConcluidas = (projetoId: string) => {
-    setExpandedConcluidas((prev) => {
-      const next = new Set(prev)
-      if (next.has(projetoId)) {
-        next.delete(projetoId)
-      } else {
-        next.add(projetoId)
-      }
-      return next
-    })
-  }
+  // Uma linha por projeto; as disciplinas (linhas da view) ficam dentro dele.
+  const projetosAgrupados = React.useMemo(() => agruparProjetos(data), [data])
 
   // O periodo so vale na aba de concluidos. Com as datas invertidas nao filtramos nada:
   // o aviso abaixo dos inputs explica, em vez de esvaziar a tabela sem motivo aparente.
@@ -255,67 +228,41 @@ export default function ProjetosTable({
     ? { dataInicio: dataConclusaoInicio || undefined, dataFim: dataConclusaoFim || undefined }
     : {}
 
-  // Lista unica de campos buscaveis. A tabela e o aviso de ocultados precisam concordar:
-  // com duas listas, um campo novo entraria so numa e o aviso passaria a divergir da tabela.
-  // engenheirosExtras entra so na aba em_execucao, que nao usa o aviso.
-  const camposBusca = (item: Projeto, engenheirosExtras: string[] = []) => [
-    item.codigo_projeto,
-    item.cliente,
-    item.engenheiro_nome,
-    ...engenheirosExtras,
-    item.area_descricao,
-    getProjetoAreaDisplayName(item),
-  ]
-
-  const buscaCasa = (item: Projeto) => searchMatches(searchTerm, camposBusca(item))
-
-  // Concluidos sem data_conclusao nao cabem num recorte por data. Em vez de deixa-los
-  // sumir calados, a tela lista quem ficou de fora.
-  const ocultadosSemData = React.useMemo(() => {
-    if (!periodoConclusaoAtivo(periodoConclusao)) return [] as Projeto[]
-
-    const concluidos = data.filter(isProjetoConcluido)
-    return particionarPorPeriodoConclusao(concluidos, periodoConclusao)
-      .ocultadosSemData
-      .filter(buscaCasa)
+  // Filtro da aba, periodo e busca (com ranking) numa so passada: mesmas regras das abas
+  // (vw_bloco1_visao_geral). Concluidos sem data de conclusao nao cabem num recorte por data;
+  // em vez de sumirem calados, a tela lista quem ficou de fora (ocultadosSemData).
+  const { projetos: filteredData, ocultadosSemData } = React.useMemo(
+    () => filtrarProjetos(projetosAgrupados, filterStatus, searchTerm, periodoConclusao),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, periodoConclusao.dataInicio, periodoConclusao.dataFim, searchTerm])
+    [projetosAgrupados, filterStatus, searchTerm, periodoConclusao.dataInicio, periodoConclusao.dataFim]
+  )
 
-  const filteredData = data
-    .map(item => {
-      // Filtro mais preciso baseado no estado real do projeto
-      let matchesFilter = false
+  // Fechar o que a pessoa fechou vale so para a busca atual.
+  React.useEffect(() => {
+    setRecolhidos(new Set())
+  }, [searchTerm])
 
-      if (filterStatus === 'all') {
-        matchesFilter = true
-      } else if (filterStatus === 'concluido') {
-        // Projeto concluído: tem data_conclusao OU percentual = 100%
-        matchesFilter = isProjetoConcluido(item) &&
-                        projetoConcluidoNoPeriodo(item, periodoConclusao)
-      } else if (filterStatus === 'em_execucao') {
-        // Em execução: não concluído, incluindo projetos atrasados.
-        matchesFilter = projetoMatchesStatusFilter(item, filterStatus)
-      } else if (filterStatus === 'atrasado') {
-        // Atrasado: tem dias de atraso
-        matchesFilter = item.dias_atraso > 0
-      }
+  const projetoAberto = (projeto: ProjetoAgrupado<Projeto>) =>
+    projeto.total > 0 &&
+    !recolhidos.has(projeto.projeto_id) &&
+    (expandidos.has(projeto.projeto_id) || buscaCasouPorDisciplina(projeto, searchTerm))
 
-      // Na aba em_execucao, incluir engenheiros das disciplinas concluidas do mesmo projeto na busca
-      const engenheirosExtras = filterStatus === 'em_execucao'
-        ? (disciplinasConcluidasPorProjeto.get(item.projeto_id) || [])
-            .map(d => d.engenheiro_nome)
-        : []
-
-      // Pontuação de relevância da busca (0 = não casa). Só pontua se passou no filtro.
-      const score = matchesFilter
-        ? searchScore(searchTerm, camposBusca(item, engenheirosExtras))
-        : 0
-
-      return { item, score }
+  const alternarProjeto = (projeto: ProjetoAgrupado<Projeto>) => {
+    const aberto = projetoAberto(projeto)
+    const id = projeto.projeto_id
+    setExpandidos((prev) => {
+      const next = new Set(prev)
+      if (aberto) next.delete(id)
+      else next.add(id)
+      return next
     })
-    .filter(entry => entry.score > 0)
-    .sort((a, b) => b.score - a.score) // mais relevantes primeiro (empate mantém ordem)
-    .map(entry => entry.item)
+    setRecolhidos((prev) => {
+      const next = new Set(prev)
+      if (aberto) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
 
   const engenheirosDestino = engenheiros.filter((eng) =>
     eng.ativo !== false && eng.eng_id !== transferProjeto?.eng_id
@@ -551,6 +498,154 @@ export default function ProjetosTable({
     }
   }
 
+  // Mesma ordem de antes: aguardando vence atraso, que vence concluido/andamento.
+  const renderStatusDisciplina = (item: Projeto, rowKey: string) => {
+    const statusAguardando = isStatusAguardando(item.status_descricao)
+    const statusAtrasado = !statusAguardando && item.dias_atraso > 0
+
+    if (statusAguardando || statusAtrasado) {
+      return (
+        // Tooltip controlado: abre no hover, no foco do teclado e no toque.
+        <Tooltip
+          open={tooltipOpen === rowKey}
+          onOpenChange={(aberto) =>
+            setTooltipOpen((atual) => (aberto ? rowKey : atual === rowKey ? null : atual))
+          }
+        >
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={(e) => {
+                // O radix fecha o tooltip no clique; no toque o clique e o que abre.
+                e.preventDefault()
+                setTooltipOpen(rowKey)
+              }}
+              className={cn(
+                classeBadge,
+                'cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                statusAguardando
+                  ? 'bg-amber-50 text-amber-800 ring-amber-200'
+                  : 'bg-orange-50 text-orange-800 ring-orange-200'
+              )}
+            >
+              <span
+                aria-hidden="true"
+                className={cn('size-1.5 rounded-full', statusAguardando ? 'bg-amber-500' : 'bg-[var(--alert)]')}
+              />
+              {item.status_descricao}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="start" className="max-w-72 flex-col items-start gap-1 px-3 py-2 text-left">
+            <span className="font-semibold">
+              {statusAguardando ? 'Motivo do aguardo' : 'Motivo do atraso'}
+            </span>
+            <span className="whitespace-normal leading-relaxed">
+              {statusAguardando ? getMotivoAguardo(item) : getMotivoAtraso(item)}
+            </span>
+          </TooltipContent>
+        </Tooltip>
+      )
+    }
+
+    return (
+      <span
+        className={cn(
+          classeBadge,
+          item.data_conclusao
+            ? 'bg-emerald-50 text-emerald-800 ring-emerald-200'
+            : 'bg-secondary text-primary ring-primary/15'
+        )}
+      >
+        <span
+          aria-hidden="true"
+          className={cn('size-1.5 rounded-full', item.data_conclusao ? 'bg-emerald-500' : 'bg-primary')}
+        />
+        {item.status_descricao}
+      </span>
+    )
+  }
+
+  // Situacao do projeto inteiro, a partir das disciplinas (mesmas regras das abas).
+  const SITUACOES: Record<SituacaoProjeto, { rotulo: string; classe: string; ponto: string }> = {
+    concluido: { rotulo: 'Concluído', classe: 'bg-emerald-50 text-emerald-800 ring-emerald-200', ponto: 'bg-emerald-500' },
+    atrasado: { rotulo: 'Atrasado', classe: 'bg-orange-50 text-orange-800 ring-orange-200', ponto: 'bg-[var(--alert)]' },
+    aguardando: { rotulo: 'Aguardando início', classe: 'bg-amber-50 text-amber-800 ring-amber-200', ponto: 'bg-amber-500' },
+    em_andamento: { rotulo: 'Em andamento', classe: 'bg-secondary text-primary ring-primary/15', ponto: 'bg-primary' },
+    sem_disciplinas: { rotulo: 'Sem disciplinas', classe: 'bg-muted text-muted-foreground ring-border', ponto: 'bg-muted-foreground/50' },
+  }
+
+  const renderSituacao = (situacao: SituacaoProjeto) => {
+    const s = SITUACOES[situacao]
+    return (
+      <span className={cn(classeBadge, s.classe)}>
+        <span aria-hidden="true" className={cn('size-1.5 rounded-full', s.ponto)} />
+        {s.rotulo}
+      </span>
+    )
+  }
+
+  const renderProgresso = (percentual: number) => (
+    <div className="flex items-center justify-center gap-2">
+      {/* O que falta fica hachurado, como na prancha */}
+      <div className="hachura relative h-1.5 w-16 overflow-hidden rounded-full bg-muted text-primary/15">
+        <div
+          className={cn(
+            'h-full rounded-full',
+            percentual >= 100
+              ? 'bg-[var(--success)]'
+              : percentual >= 75
+                ? 'bg-primary'
+                : percentual >= 50
+                  ? 'bg-[var(--chart-3)]'
+                  : 'bg-muted-foreground/50'
+          )}
+          style={{ width: `${Math.min(percentual, 100)}%` }}
+        />
+      </div>
+      <span className="w-10 text-right font-medium tabular-nums">
+        {Number(percentual).toFixed(0)}%
+      </span>
+    </div>
+  )
+
+  const renderAtraso = (dias: number) =>
+    dias > 0 ? (
+      <span className={cn(classeBadge, 'bg-orange-50 font-semibold text-orange-800 ring-orange-200 tabular-nums')}>
+        {dias} dias
+      </span>
+    ) : (
+      <span className="text-emerald-700">No prazo</span>
+    )
+
+  // Acoes de uma disciplina (ou de um projeto sem disciplina): as mesmas de antes.
+  const renderAcoesLinha = (item: Projeto) => (
+    <>
+      <BotaoAcao rotulo="Ver detalhes" onClick={() => setDetalheProjeto(item)}>
+        <Eye />
+      </BotaoAcao>
+      {(onAlterarDadosProjeto || onAlterarPrazo || onTransferirResponsavel) && (
+        <BotaoAcao
+          rotulo="Alterar dados"
+          onClick={() => abrirMenuAlterarDados(item)}
+          aria-haspopup="dialog"
+          className="text-primary hover:bg-secondary hover:text-primary"
+        >
+          <PencilLine />
+        </BotaoAcao>
+      )}
+      {onExcluirTarefa && (
+        <BotaoAcao
+          rotulo={item.atribuicao_id ? 'Excluir tarefa' : 'Excluir projeto'}
+          onClick={() => abrirExclusao(item)}
+          disabled={!item.atribuicao_id && !onExcluirProjeto}
+          className="hover:bg-red-50 hover:text-red-700"
+        >
+          <Trash2 />
+        </BotaoAcao>
+      )}
+    </>
+  )
+
   if (!isOpen && !embutido) return null
 
   const subtitulo = `${filteredData.length} projeto(s) encontrado(s)`
@@ -644,28 +739,28 @@ export default function ProjetosTable({
                   {ocultadosSemData.length <= 5 ? (
                     <p>
                       <span className="font-semibold">
-                        {ocultadosSemData.length} disciplina(s) concluída(s) sem data de conclusão
+                        {ocultadosSemData.length} projeto(s) concluído(s) sem data de conclusão
                       </span>{' '}
-                      {ocultadosSemData.length === 1 ? 'foi ocultada' : 'foram ocultadas'} pelo período:{' '}
-                      {ocultadosSemData.map((item, i) => (
-                        <span key={item.atribuicao_id || `${item.projeto_id}-${i}`}>
+                      {ocultadosSemData.length === 1 ? 'foi ocultado' : 'foram ocultados'} pelo período:{' '}
+                      {ocultadosSemData.map((projeto, i) => (
+                        <span key={projeto.projeto_id}>
                           {i > 0 && ', '}
-                          <span className="font-semibold">{item.codigo_projeto}</span>
-                          {' '}({item.engenheiro_nome} — {getProjetoAreaDisplayName(item)})
+                          <span className="font-semibold">{projeto.codigo_projeto}</span>
+                          {' '}({projeto.cliente})
                         </span>
                       ))}
                     </p>
                   ) : (
                     <details>
                       <summary className="cursor-pointer rounded-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                        {ocultadosSemData.length} disciplinas concluídas sem data de conclusão foram
-                        ocultadas pelo período (ver quais)
+                        {ocultadosSemData.length} projetos concluídos sem data de conclusão foram
+                        ocultados pelo período (ver quais)
                       </summary>
                       <ul className="mt-2 ml-4 list-disc space-y-0.5">
-                        {ocultadosSemData.map((item, i) => (
-                          <li key={item.atribuicao_id || `${item.projeto_id}-${i}`}>
-                            <span className="font-semibold">{item.codigo_projeto}</span>
-                            {' '}({item.engenheiro_nome} — {getProjetoAreaDisplayName(item)})
+                        {ocultadosSemData.map((projeto) => (
+                          <li key={projeto.projeto_id}>
+                            <span className="font-semibold">{projeto.codigo_projeto}</span>
+                            {' '}({projeto.cliente})
                           </li>
                         ))}
                       </ul>
@@ -682,22 +777,19 @@ export default function ProjetosTable({
           <table data-slot="table" className="w-full caption-bottom text-sm">
             <TableHeader className="sticky top-0 z-10 bg-muted shadow-[inset_0_-1px_0_var(--border)]">
               <TableRow className="border-0 hover:bg-transparent">
-                <TableHead className="px-4 text-xs font-medium text-muted-foreground">Código</TableHead>
-                <TableHead className="px-4 text-xs font-medium text-muted-foreground">Cliente</TableHead>
-                <TableHead className="px-4 text-xs font-medium text-muted-foreground">Engenheiro</TableHead>
-                <TableHead className="px-4 text-xs font-medium text-muted-foreground">Área</TableHead>
-                {showConcluidas && (
-                  <TableHead className="px-4 text-xs font-medium text-muted-foreground">Concluidas</TableHead>
-                )}
-                <TableHead className="px-4 text-xs font-medium text-muted-foreground">Status</TableHead>
-                <TableHead className="px-4 text-center text-xs font-medium text-muted-foreground">Progresso</TableHead>
-                <TableHead className="px-4 text-center text-xs font-medium text-muted-foreground">Prazo</TableHead>
-                <TableHead className="px-4 text-center text-xs font-medium text-muted-foreground">Atraso</TableHead>
+                <TableHead className="px-3 text-xs font-medium text-muted-foreground">Código</TableHead>
+                <TableHead className="px-3 text-xs font-medium text-muted-foreground">Cliente</TableHead>
+                <TableHead className="px-3 text-xs font-medium text-muted-foreground">Engenheiros</TableHead>
+                <TableHead className="px-3 text-center text-xs font-medium text-muted-foreground">Disciplinas</TableHead>
+                <TableHead className="px-3 text-xs font-medium text-muted-foreground">Situação</TableHead>
+                <TableHead className="px-3 text-center text-xs font-medium text-muted-foreground">Progresso</TableHead>
+                <TableHead className="px-3 text-center text-xs font-medium text-muted-foreground" title="Menor prazo entre as disciplinas em aberto">Prazo</TableHead>
+                <TableHead className="px-3 text-center text-xs font-medium text-muted-foreground">Atraso</TableHead>
                 {onVerRetrabalho && (
-                  <TableHead className="px-4 text-center text-xs font-medium text-muted-foreground">Retrabalho</TableHead>
+                  <TableHead className="px-3 text-center text-xs font-medium text-muted-foreground">Retrabalho</TableHead>
                 )}
                 {showAcoes && (
-                  <TableHead className="px-4 text-center text-xs font-medium text-muted-foreground">Ações</TableHead>
+                  <TableHead className="px-3 text-center text-xs font-medium text-muted-foreground">Ações</TableHead>
                 )}
               </TableRow>
             </TableHeader>
@@ -712,167 +804,96 @@ export default function ProjetosTable({
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredData.map((item, index) => {
-                  const areaDisplayName = getProjetoAreaDisplayName(item)
-                  const rowKey = item.atribuicao_id || `${item.projeto_id}-${areaDisplayName}-${item.engenheiro_nome}-${index}`
-                  const concluidas = disciplinasConcluidasPorProjeto.get(item.projeto_id) || []
-                  const isExpanded = expandedConcluidas.has(item.projeto_id)
-                  // Mesma ordem de antes: aguardando vence atraso, que vence concluido/andamento.
-                  const statusAguardando = isStatusAguardando(item.status_descricao)
-                  const statusAtrasado = !statusAguardando && item.dias_atraso > 0
+                filteredData.map((projeto) => {
+                  const aberto = projetoAberto(projeto)
+                  const base = projeto.linhaBase
+                  const semDisciplinas = projeto.total === 0
+                  const idDisciplinas = `disciplinas-${projeto.projeto_id}`
 
                   return (
-                  <React.Fragment key={rowKey}>
-                  <TableRow>
-                    <TableCell className="px-4 py-3">
-                      <span className="font-wide font-semibold text-primary tabular-nums">
-                        {item.codigo_projeto}
-                      </span>
-                    </TableCell>
-                    <TableCell className="min-w-[180px] px-4 py-3 whitespace-normal">
-                      <div className="font-medium text-foreground">
-                        {item.cliente}
-                      </div>
-                      {item.descricao && (
-                        <div className="mt-0.5 text-xs text-muted-foreground">
-                          {item.descricao.length > 50 ? item.descricao.substring(0, 50) + '...' : item.descricao}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="px-4 py-3">
-                      {item.engenheiro_nome}
-                    </TableCell>
-                    <TableCell className="px-4 py-3">
-                      <span className="inline-flex rounded-md bg-secondary px-2 py-0.5 text-xs font-medium text-primary">
-                        {areaDisplayName}
-                      </span>
-                    </TableCell>
-                    {showConcluidas && (
-                      <TableCell className="px-4 py-3">
+                  <React.Fragment key={projeto.projeto_id}>
+                  <TableRow
+                    className={cn(!semDisciplinas && 'cursor-pointer', aberto && 'bg-secondary/40 hover:bg-secondary/60')}
+                    onClick={(e) => {
+                      // Clique na linha abre/fecha; botoes da linha fazem so a propria acao.
+                      if (semDisciplinas || (e.target as HTMLElement).closest('button, a, [role="dialog"]')) return
+                      alternarProjeto(projeto)
+                    }}
+                  >
+                    <TableCell className="px-3 py-3">
+                      {semDisciplinas ? (
+                        <span className="inline-flex items-center gap-1.5 pl-5 font-wide font-semibold text-primary tabular-nums">
+                          {projeto.codigo_projeto}
+                        </span>
+                      ) : (
                         <button
                           type="button"
-                          onClick={() => toggleConcluidas(item.projeto_id)}
-                          aria-expanded={isExpanded}
-                          className={cn(
-                            'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                            concluidas.length > 0
-                              ? 'bg-emerald-50 text-emerald-800 ring-emerald-200 hover:bg-emerald-100'
-                              : 'bg-muted text-muted-foreground ring-border'
-                          )}
-                          title={`Ver disciplinas concluidas de ${item.codigo_projeto}`}
+                          onClick={() => alternarProjeto(projeto)}
+                          aria-expanded={aberto}
+                          aria-controls={idDisciplinas}
+                          title={aberto ? 'Esconder disciplinas' : 'Ver disciplinas'}
+                          className="inline-flex items-center gap-1.5 rounded-sm font-wide font-semibold text-primary tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
-                          {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-                          <span className="tabular-nums">
-                            {concluidas.length > 0 ? `${concluidas.length} concluida(s)` : 'Nenhuma'}
-                          </span>
+                          {aberto ? <ChevronDown className="size-4" aria-hidden="true" /> : <ChevronRight className="size-4" aria-hidden="true" />}
+                          {projeto.codigo_projeto}
                         </button>
-                      </TableCell>
-                    )}
-                    <TableCell className="px-4 py-3">
-                      {statusAguardando || statusAtrasado ? (
-                        // Tooltip controlado: abre no hover, no foco do teclado e no toque.
-                        <Tooltip
-                          open={tooltipOpen === rowKey}
-                          onOpenChange={(aberto) =>
-                            setTooltipOpen((atual) => (aberto ? rowKey : atual === rowKey ? null : atual))
-                          }
-                        >
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                // O radix fecha o tooltip no clique; no toque o clique e o que abre.
-                                e.preventDefault()
-                                setTooltipOpen(rowKey)
-                              }}
-                              className={cn(
-                                classeBadge,
-                                'cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                                statusAguardando
-                                  ? 'bg-amber-50 text-amber-800 ring-amber-200'
-                                  : 'bg-orange-50 text-orange-800 ring-orange-200'
-                              )}
-                            >
-                              <span
-                                aria-hidden="true"
-                                className={cn('size-1.5 rounded-full', statusAguardando ? 'bg-amber-500' : 'bg-[var(--alert)]')}
-                              />
-                              {item.status_descricao}
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" align="start" className="max-w-72 flex-col items-start gap-1 px-3 py-2 text-left">
-                            <span className="font-semibold">
-                              {statusAguardando ? 'Motivo do aguardo' : 'Motivo do atraso'}
-                            </span>
-                            <span className="whitespace-normal leading-relaxed">
-                              {statusAguardando ? getMotivoAguardo(item) : getMotivoAtraso(item)}
-                            </span>
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <span
-                          className={cn(
-                            classeBadge,
-                            item.data_conclusao
-                              ? 'bg-emerald-50 text-emerald-800 ring-emerald-200'
-                              : 'bg-secondary text-primary ring-primary/15'
-                          )}
-                        >
-                          <span
-                            aria-hidden="true"
-                            className={cn('size-1.5 rounded-full', item.data_conclusao ? 'bg-emerald-500' : 'bg-primary')}
-                          />
-                          {item.status_descricao}
-                        </span>
                       )}
                     </TableCell>
-                    <TableCell className="px-4 py-3">
-                      <div className="flex items-center justify-center gap-2">
-                        {/* O que falta fica hachurado, como na prancha */}
-                        <div className="hachura relative h-1.5 w-16 overflow-hidden rounded-full bg-muted text-primary/15">
-                          <div
-                            className={cn(
-                              'h-full rounded-full',
-                              item.percentual_andamento >= 100
-                                ? 'bg-[var(--success)]'
-                                : item.percentual_andamento >= 75
-                                  ? 'bg-primary'
-                                  : item.percentual_andamento >= 50
-                                    ? 'bg-[var(--chart-3)]'
-                                    : 'bg-muted-foreground/50'
-                            )}
-                            style={{ width: `${Math.min(item.percentual_andamento, 100)}%` }}
-                          />
+                    <TableCell className="min-w-[170px] px-3 py-3 whitespace-normal">
+                      <div className="font-medium text-foreground">
+                        {projeto.cliente}
+                      </div>
+                      {projeto.descricao && (
+                        <div className="mt-0.5 text-xs text-muted-foreground">
+                          {projeto.descricao.length > 50 ? projeto.descricao.substring(0, 50) + '...' : projeto.descricao}
                         </div>
-                        <span className="w-10 text-right font-medium tabular-nums">
-                          {item.percentual_andamento.toFixed(0)}%
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-4 py-3 text-center">
-                      <div className="inline-flex items-center gap-1.5 tabular-nums">
-                        {formatarDataBR(item.data_prevista)}
-                        {renderIconeAviso(item)}
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-4 py-3 text-center">
-                      {item.dias_atraso > 0 ? (
-                        <span className={cn(classeBadge, 'bg-orange-50 font-semibold text-orange-800 ring-orange-200 tabular-nums')}>
-                          {item.dias_atraso} dias
-                        </span>
-                      ) : (
-                        <span className="text-emerald-700">No prazo</span>
                       )}
+                    </TableCell>
+                    <TableCell className="min-w-[140px] px-4 py-3 whitespace-normal">
+                      {projeto.engenheiros.length === 0 ? (
+                        <span className="text-muted-foreground">-</span>
+                      ) : (
+                        <span title={projeto.engenheiros.join(', ')}>
+                          {projeto.engenheiros.slice(0, 2).join(', ')}
+                          {projeto.engenheiros.length > 2 && (
+                            <span className="ml-1 text-xs text-muted-foreground">+{projeto.engenheiros.length - 2}</span>
+                          )}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-3 py-3 text-center tabular-nums">
+                      {semDisciplinas ? (
+                        <span className="text-muted-foreground">-</span>
+                      ) : (
+                        <span title={`${projeto.concluidas} de ${projeto.total} disciplina(s) concluída(s)`}>
+                          <span className="font-semibold">{projeto.concluidas}</span>
+                          <span className="text-muted-foreground">/{projeto.total}</span>
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-3 py-3">
+                      {renderSituacao(projeto.situacao)}
+                    </TableCell>
+                    <TableCell className="px-3 py-3">
+                      {semDisciplinas ? <div className="text-center text-muted-foreground">-</div> : renderProgresso(projeto.progresso)}
+                    </TableCell>
+                    <TableCell className="px-3 py-3 text-center tabular-nums">
+                      {projeto.situacao === 'concluido'
+                        ? <span className="text-muted-foreground">-</span>
+                        : formatarDataBR(projeto.proximoPrazo)}
+                    </TableCell>
+                    <TableCell className="px-3 py-3 text-center">
+                      {renderAtraso(projeto.maiorAtraso)}
                     </TableCell>
                     {onVerRetrabalho && (
-                      <TableCell className="px-4 py-3 text-center">
+                      <TableCell className="px-3 py-3 text-center">
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
-                          onClick={() => onVerRetrabalho(item)}
-                          title={`Ver retrabalhos de ${item.codigo_projeto}`}
-                          aria-label={`Ver retrabalhos de ${item.codigo_projeto}`}
+                          onClick={() => onVerRetrabalho(base)}
+                          title={`Ver retrabalhos de ${projeto.codigo_projeto}`}
+                          aria-label={`Ver retrabalhos de ${projeto.codigo_projeto}`}
                         >
                           <AlertTriangle className="text-[var(--alert)]" />
                           Ver
@@ -880,66 +901,74 @@ export default function ProjetosTable({
                       </TableCell>
                     )}
                     {showAcoes && (
-                      <TableCell className="px-4 py-3 text-center">
+                      <TableCell className="px-3 py-3 text-center">
                         <div className="inline-flex items-center gap-0.5">
-                          <BotaoAcao rotulo="Ver detalhes" onClick={() => setDetalheProjeto(item)}>
-                            <Eye />
-                          </BotaoAcao>
-                          {(onAlterarDadosProjeto || onAlterarPrazo || onTransferirResponsavel) && (
-                            <BotaoAcao
-                              rotulo="Alterar dados"
-                              onClick={() => abrirMenuAlterarDados(item)}
-                              aria-haspopup="dialog"
-                              className="text-primary hover:bg-secondary hover:text-primary"
-                            >
-                              <PencilLine />
-                            </BotaoAcao>
-                          )}
-                          {isDisciplinaConcluida(item) && (
+                          {semDisciplinas && renderAcoesLinha(base)}
+                          {/* O relatorio e do projeto inteiro: so com todas as disciplinas concluidas. */}
+                          {projeto.situacao === 'concluido' && (
                             <BotaoAcao
                               rotulo="Gerar PDF do projeto"
-                              onClick={() => handleGerarPdf(item)}
-                              disabled={gerandoPdfProjetoId === item.projeto_id}
+                              onClick={() => handleGerarPdf(base)}
+                              disabled={gerandoPdfProjetoId === projeto.projeto_id}
                             >
-                              {gerandoPdfProjetoId === item.projeto_id ? (
+                              {gerandoPdfProjetoId === projeto.projeto_id ? (
                                 <Loader2 className="animate-spin" />
                               ) : (
                                 <FileDown />
                               )}
                             </BotaoAcao>
                           )}
-                          {onExcluirTarefa && (
-                            <BotaoAcao
-                              rotulo={item.atribuicao_id ? 'Excluir tarefa' : 'Excluir projeto'}
-                              onClick={() => abrirExclusao(item)}
-                              disabled={!item.atribuicao_id && !onExcluirProjeto}
-                              className="hover:bg-red-50 hover:text-red-700"
-                            >
-                              <Trash2 />
-                            </BotaoAcao>
-                          )}
                         </div>
                       </TableCell>
                     )}
                   </TableRow>
-                  {showConcluidas && isExpanded && (
-                    <TableRow className="bg-emerald-50/40 hover:bg-emerald-50/40">
-                      <TableCell colSpan={totalColunas} className="px-4 py-3 whitespace-normal">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium">Disciplinas concluidas:</span>
-                          {concluidas.length > 0 ? (
-                            concluidas.map((disciplina) => (
-                              <span
-                                key={`${getProjetoAreaDisplayName(disciplina)}-${disciplina.engenheiro_nome}`}
-                                className={cn(classeBadge, 'bg-card text-emerald-800 ring-emerald-200')}
-                              >
-                                <CheckCircle className="size-3.5" aria-hidden="true" />
-                                {getProjetoAreaDisplayName(disciplina)} - {disciplina.engenheiro_nome}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="text-muted-foreground">Nenhuma concluida.</span>
-                          )}
+                  {aberto && (
+                    <TableRow className="bg-secondary/20 hover:bg-secondary/20">
+                      <TableCell colSpan={totalColunas} className="px-3 pt-1 pb-3 sm:pl-10">
+                        <div id={idDisciplinas} className="overflow-x-auto rounded-lg border bg-card">
+                          <table className="w-full text-sm">
+                            <caption className="sr-only">Disciplinas de {projeto.codigo_projeto}</caption>
+                            <thead>
+                              <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
+                                <th className="px-3 py-2 font-medium">Engenheiro</th>
+                                <th className="px-3 py-2 font-medium">Área</th>
+                                <th className="px-3 py-2 font-medium">Status</th>
+                                <th className="px-3 py-2 text-center font-medium">Progresso</th>
+                                <th className="px-3 py-2 text-center font-medium">Prazo</th>
+                                <th className="px-3 py-2 text-center font-medium">Atraso</th>
+                                {showAcoes && <th className="px-3 py-2 text-center font-medium">Ações</th>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {projeto.disciplinas.map((item, index) => {
+                                const rowKey = item.atribuicao_id || `${item.projeto_id}-${getProjetoAreaDisplayName(item)}-${item.engenheiro_nome}-${index}`
+                                return (
+                                  <tr key={rowKey} className="border-b last:border-0">
+                                    <td className="px-3 py-2">{item.engenheiro_nome}</td>
+                                    <td className="px-3 py-2">
+                                      <span className="inline-flex rounded-md bg-secondary px-2 py-0.5 text-xs font-medium text-primary">
+                                        {getProjetoAreaDisplayName(item)}
+                                      </span>
+                                    </td>
+                                    <td className="px-3 py-2">{renderStatusDisciplina(item, rowKey)}</td>
+                                    <td className="px-3 py-2">{renderProgresso(item.percentual_andamento)}</td>
+                                    <td className="px-3 py-2 text-center">
+                                      <div className="inline-flex items-center gap-1.5 tabular-nums">
+                                        {formatarDataBR(item.data_prevista)}
+                                        {renderIconeAviso(item)}
+                                      </div>
+                                    </td>
+                                    <td className="px-3 py-2 text-center">{renderAtraso(item.dias_atraso)}</td>
+                                    {showAcoes && (
+                                      <td className="px-3 py-2 text-center">
+                                        <div className="inline-flex items-center gap-0.5">{renderAcoesLinha(item)}</div>
+                                      </td>
+                                    )}
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -955,7 +984,7 @@ export default function ProjetosTable({
         {/* Footer */}
         <div className="shrink-0 border-t bg-muted/40 px-4 py-3">
           <p className="text-center text-sm text-muted-foreground tabular-nums">
-            Mostrando {filteredData.length} de {data.length} projetos
+            Mostrando {filteredData.length} de {projetosAgrupados.length} projetos
           </p>
         </div>
     </>
