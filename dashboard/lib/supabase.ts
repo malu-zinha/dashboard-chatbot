@@ -1,4 +1,5 @@
 import { createBrowserClient } from '@supabase/ssr'
+import type { ResumoOcorrencias } from './relatorioOcorrencias'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { buscarTodasAsPaginas } from '@/lib/paginacao'
 import type { AvisoPrazoLinha } from '@/lib/avisoPrazo'
@@ -888,11 +889,17 @@ export interface DisciplinaRelatorio {
   percentual_ponderado: number
   dias_execucao: number
   dias_retrabalho: number
+  // Retrabalho e paralisacao desta disciplina, por tipo (de retrabalho_projetos).
+  ocorrencias?: ResumoOcorrencias
 }
 
 export interface RelatorioProjetoResponse {
   relatorio: RelatorioProjetoData
   disciplinas: DisciplinaRelatorio[]
+  // Retrabalho e paralisacao do projeto, por tipo: dias distintos e horas.
+  ocorrencias?: ResumoOcorrencias
+  // Relatos de disciplinas desativadas: contam no projeto, mas nao aparecem na tabela.
+  relatos_fora_das_disciplinas?: number
   gerado_em: string
 }
 

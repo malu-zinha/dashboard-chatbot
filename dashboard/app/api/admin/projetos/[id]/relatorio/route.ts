@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabaseAdmin'
 import { guardOwnerRoute } from '@/lib/apiGuard'
 import { handleApiError } from '@/lib/apiError'
 import { isUuid } from '@/lib/adminAtribuicoes'
+import { resumirOcorrencias, resumoVazio, type ResumoOcorrencias } from '@/lib/relatorioOcorrencias'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -36,6 +37,8 @@ export interface DisciplinaRelatorio {
   percentual_ponderado: number
   dias_execucao: number
   dias_retrabalho: number
+  // Retrabalho e paralisacao desta disciplina, por tipo (de retrabalho_projetos).
+  ocorrencias?: ResumoOcorrencias
 }
 
 /**
@@ -96,9 +99,41 @@ export async function GET(
       return NextResponse.json({ error: message }, { status })
     }
 
+    // Retrabalho e paralisacao vem dos relatos (retrabalho_projetos), separados por tipo.
+    // As colunas dias_retrabalho/dias_paralisacao da view continuam na resposta, mas o PDF
+    // nao as usa: dias_paralisacao le status_historico (sempre 0) e dias_retrabalho conta
+    // linhas, misturando os dois tipos. Detalhe em lib/relatorioOcorrencias.ts.
+    const { data: relatos, error: errorRelatos } = await admin
+      .from('retrabalho_projetos')
+      .select('eng_projeto_id, data_retrabalho, tipo_retrabalho, horas_retrabalho')
+      .eq('projeto_id', params.id)
+      .eq('necessitou_retrabalho', true)
+
+    if (errorRelatos) {
+      const { status, message } = handleApiError(
+        'GET /admin/projetos/[id]/relatorio/ocorrencias',
+        errorRelatos,
+        'Nao foi possivel carregar os dados do relatorio.'
+      )
+      return NextResponse.json({ error: message }, { status })
+    }
+
+    const ocorrencias = resumirOcorrencias(relatos || [])
+    // Relatos de disciplina desativada (removida ou transferida) contam no projeto, mas a
+    // disciplina nao aparece na tabela do PDF: o PDF avisa.
+    const idsAtivos = new Set(((disciplinas || []) as DisciplinaRelatorio[]).map((d) => d.eng_projeto_id))
+    const relatosForaDasDisciplinas = (relatos || []).filter(
+      (r) => !r.eng_projeto_id || !idsAtivos.has(r.eng_projeto_id)
+    ).length
+
     return NextResponse.json({
       relatorio: relatorio as RelatorioProjetoData,
-      disciplinas: (disciplinas || []) as DisciplinaRelatorio[],
+      disciplinas: ((disciplinas || []) as DisciplinaRelatorio[]).map((d) => ({
+        ...d,
+        ocorrencias: ocorrencias.porDisciplina[d.eng_projeto_id] ?? resumoVazio(),
+      })),
+      ocorrencias: ocorrencias.projeto,
+      relatos_fora_das_disciplinas: relatosForaDasDisciplinas,
       gerado_em: new Date().toISOString(),
     })
   } catch (error) {
