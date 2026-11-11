@@ -168,7 +168,7 @@ export default function ProducaoPeriodoCard() {
                       <button
                         type="button"
                         onClick={() => setSelectedEngId(row.eng_id)}
-                        className="text-left font-semibold text-tecpred-primary hover:text-tecpred-secondary hover:underline focus:outline-none focus:ring-2 focus:ring-tecpred-primary focus:ring-offset-2 rounded"
+                        className="text-left font-semibold text-tecpred-primary hover:text-tecpred-secondary hover:underline focus:outline-hidden focus:ring-2 focus:ring-tecpred-primary focus:ring-offset-2 rounded-sm"
                       >
                         {row.engenheiro}
                       </button>

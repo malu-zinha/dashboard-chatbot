@@ -106,7 +106,7 @@ export default function MemoriaisDescritivosTab() {
               <button
                 type="button"
                 onClick={handleRemoveFile}
-                className="p-1 rounded hover:bg-gray-200 text-gray-500 hover:text-gray-700"
+                className="p-1 rounded-sm hover:bg-gray-200 text-gray-500 hover:text-gray-700"
                 aria-label="Remover arquivo"
               >
                 <X className="w-4 h-4" />
@@ -135,7 +135,7 @@ export default function MemoriaisDescritivosTab() {
           <button
             type="submit"
             disabled={!canSubmit || isLoading}
-            className="px-6 py-3 bg-gradient-to-r from-tecpred-primary to-tecpred-secondary text-white rounded-lg font-semibold shadow hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-6 py-3 bg-linear-to-r from-tecpred-primary to-tecpred-secondary text-white rounded-lg font-semibold shadow-sm hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isLoading ? (
               <>

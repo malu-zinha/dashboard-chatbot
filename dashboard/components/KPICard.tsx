@@ -22,11 +22,11 @@ const colorClasses = {
 }
 
 const iconBgClasses = {
-  primary: 'bg-tecpred-orange bg-opacity-20',
+  primary: 'bg-tecpred-orange/20',
   success: 'bg-green-100',
-  warning: 'bg-tecpred-orange bg-opacity-20',
+  warning: 'bg-tecpred-orange/20',
   danger: 'bg-red-100',
-  info: 'bg-tecpred-primary bg-opacity-20',
+  info: 'bg-tecpred-primary/20',
 }
 
 const iconColorClasses = {
@@ -57,7 +57,7 @@ export default function KPICard({
       }`}
     >
       <Wrapper onClick={onClick} className="block w-full text-left">
-        <div className={`h-2 bg-gradient-to-r ${colorClasses[color]}`}></div>
+        <div className={`h-2 bg-linear-to-r ${colorClasses[color]}`}></div>
 
         <div className="p-6">
           <div className="flex items-start justify-between">

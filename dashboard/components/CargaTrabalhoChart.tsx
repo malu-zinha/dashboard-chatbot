@@ -42,7 +42,7 @@ export default function CargaTrabalhoChart({ data }: CargaTrabalhoChartProps) {
                 {item.engenheiro}
               </span>
               {item.exclusivo && (
-                <span className="ml-2 text-xs bg-tecpred-accent text-white px-2 py-1 rounded">
+                <span className="ml-2 text-xs bg-tecpred-accent text-white px-2 py-1 rounded-sm">
                   Exclusivo
                 </span>
               )}

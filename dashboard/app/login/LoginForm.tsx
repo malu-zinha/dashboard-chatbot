@@ -39,7 +39,7 @@ export default function LoginForm() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-tecpred-primary via-tecpred-secondary to-tecpred-primary px-4">
+    <main className="min-h-screen flex items-center justify-center bg-linear-to-br from-tecpred-primary via-tecpred-secondary to-tecpred-primary px-4">
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-6">
           <Image
@@ -72,7 +72,7 @@ export default function LoginForm() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-orange focus:border-transparent outline-none transition"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-orange focus:border-transparent outline-hidden transition"
                 placeholder="voce@empresa.com"
               />
             </div>
@@ -88,13 +88,13 @@ export default function LoginForm() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-orange focus:border-transparent outline-none transition"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-orange focus:border-transparent outline-hidden transition"
                 placeholder="••••••••"
               />
             </div>
 
             {error && (
-              <div className="text-sm text-danger bg-danger bg-opacity-10 border border-danger border-opacity-30 rounded-lg px-3 py-2">
+              <div className="text-sm text-danger bg-danger/10 border border-danger/30 rounded-lg px-3 py-2">
                 {error}
               </div>
             )}
@@ -117,7 +117,7 @@ export default function LoginForm() {
           </form>
         </div>
 
-        <p className="text-center text-white text-opacity-70 text-xs mt-6">
+        <p className="text-center text-white/70 text-xs mt-6">
           Esqueceu a senha? Fale com o administrador.
         </p>
       </div>

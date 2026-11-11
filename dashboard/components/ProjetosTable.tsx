@@ -515,7 +515,7 @@ export default function ProjetosTable({
               <button
                 type="button"
                 onClick={() => setAvisoSucesso(null)}
-                className="rounded p-0.5 text-green-700 transition-colors hover:bg-green-100"
+                className="rounded-sm p-0.5 text-green-700 transition-colors hover:bg-green-100"
                 title="Fechar aviso"
                 aria-label="Fechar aviso"
               >
@@ -917,7 +917,7 @@ export default function ProjetosTable({
 
       {transferProjeto && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-40 p-4"
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 p-4"
           onClick={(e) => {
             e.stopPropagation()
             fecharAcao()
@@ -999,7 +999,7 @@ export default function ProjetosTable({
 
       {menuProjeto && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-40 p-4"
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 p-4"
           onClick={(e) => {
             e.stopPropagation()
             fecharAcao()
@@ -1081,7 +1081,7 @@ export default function ProjetosTable({
 
       {dadosProjeto && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-40 p-4"
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 p-4"
           onClick={(e) => {
             e.stopPropagation()
             fecharAcao()
@@ -1174,7 +1174,7 @@ export default function ProjetosTable({
 
       {prazoProjeto && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-40 p-4"
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 p-4"
           onClick={(e) => {
             e.stopPropagation()
             fecharAcao()
@@ -1247,7 +1247,7 @@ export default function ProjetosTable({
 
       {deleteProjeto && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-40 p-4"
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 p-4"
           onClick={(e) => {
             e.stopPropagation()
             fecharAcao()

@@ -210,23 +210,23 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col animate-fade-in" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="bg-gradient-to-r from-tecpred-primary via-tecpred-secondary to-tecpred-primary p-6 rounded-t-xl border-b-4 border-tecpred-orange">
+        <div className="bg-linear-to-r from-tecpred-primary via-tecpred-secondary to-tecpred-primary p-6 rounded-t-xl border-b-4 border-tecpred-orange">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold text-white flex items-center gap-2">
                 <UserPlus className="w-7 h-7" />
                 Atribuir Novo Projeto
               </h2>
-              <p className="text-white text-opacity-90 text-sm mt-1">
+              <p className="text-white/90 text-sm mt-1">
                 Distribuição inteligente baseada em carga de trabalho e exclusividade
               </p>
             </div>
             <button
               onClick={onClose}
-              className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+              className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors"
             >
               <X className="w-6 h-6" />
             </button>
@@ -328,13 +328,13 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
                           required={areaUsaPavimentos}
                         />
                         <div className="mt-2 flex items-start gap-2 text-xs text-gray-500">
-                          <Layers className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                          <Layers className="w-4 h-4 mt-0.5 shrink-0" />
                           <span>Informe um pavimento por linha. Nomes vazios sao ignorados e nomes repetidos nao sao permitidos.</span>
                         </div>
                       </>
                     ) : (
                       <div className="flex items-start gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
-                        <Layers className="w-4 h-4 mt-0.5 flex-shrink-0 text-tecpred-primary" />
+                        <Layers className="w-4 h-4 mt-0.5 shrink-0 text-tecpred-primary" />
                         <span>Esta disciplina usa apenas etapas gerais; nao e necessario cadastrar pavimentos.</span>
                       </div>
                     )}
@@ -442,7 +442,7 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
 
                 <button
                   type="submit"
-                  className="w-full px-6 py-3 bg-gradient-to-r from-tecpred-orange to-tecpred-coral text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-semibold border-2 border-tecpred-orange"
+                  className="w-full px-6 py-3 bg-linear-to-r from-tecpred-orange to-tecpred-coral text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-semibold border-2 border-tecpred-orange"
                 >
                   Atribuir Projeto
                 </button>
@@ -468,7 +468,7 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
                         <div className="flex items-center gap-2">
                           <h4 className="font-bold text-gray-900">{eng.nome}</h4>
                           {eng.eng_id === melhorEngenheiro.eng_id && (
-                            <span className="px-2 py-1 bg-gradient-to-r from-tecpred-orange to-tecpred-coral text-white text-xs rounded-full flex items-center gap-1 shadow-lg">
+                            <span className="px-2 py-1 bg-linear-to-r from-tecpred-orange to-tecpred-coral text-white text-xs rounded-full flex items-center gap-1 shadow-lg">
                               <CheckCircle className="w-3 h-3" />
                               Recomendado
                             </span>
@@ -503,15 +503,15 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
 
                     {/* Estatísticas */}
                     <div className="grid grid-cols-3 gap-2 text-xs">
-                      <div className="bg-gray-50 rounded p-2">
+                      <div className="bg-gray-50 rounded-sm p-2">
                         <div className="text-gray-500">Projetos</div>
                         <div className="font-bold text-gray-900">{eng.total_projetos}</div>
                       </div>
-                      <div className="bg-gray-50 rounded p-2">
+                      <div className="bg-gray-50 rounded-sm p-2">
                         <div className="text-gray-500">Áreas</div>
                         <div className="font-bold text-gray-900">{eng.areas_ativas}</div>
                       </div>
-                      <div className="bg-gray-50 rounded p-2">
+                      <div className="bg-gray-50 rounded-sm p-2">
                         <div className="text-gray-500">Dias</div>
                         <div className="font-bold text-gray-900">{eng.dias_trabalho_pendentes}</div>
                       </div>

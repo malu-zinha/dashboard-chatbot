@@ -50,12 +50,12 @@ export default function RetrabalhoCard({
       </div>
 
       <div className="mb-6 grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="bg-gradient-to-r from-warning to-orange-600 rounded-lg p-4 text-white">
+        <div className="bg-linear-to-r from-warning to-orange-600 rounded-lg p-4 text-white">
           <div className="text-sm font-medium opacity-90">Horas de Retrabalho</div>
           <div className="text-3xl font-bold mt-1">{totalHorasRetrabalho.toFixed(1)}h</div>
           <div className="text-xs opacity-90 mt-0.5">{totalRetrabalhos} ocorrencias</div>
         </div>
-        <div className="bg-gradient-to-r from-tecpred-primary to-tecpred-secondary rounded-lg p-4 text-white">
+        <div className="bg-linear-to-r from-tecpred-primary to-tecpred-secondary rounded-lg p-4 text-white">
           <div className="text-sm font-medium opacity-90">% Geral TecPred</div>
           <div className="text-3xl font-bold mt-1">
             {retrabalhoGeral ? `${retrabalhoGeral.percentual_geral_retrabalho.toFixed(1)}%` : '0%'}
@@ -64,7 +64,7 @@ export default function RetrabalhoCard({
             horas de retrabalho / horas trabalhadas totais
           </div>
         </div>
-        <div className="bg-gradient-to-r from-danger to-red-600 rounded-lg p-4 text-white">
+        <div className="bg-linear-to-r from-danger to-red-600 rounded-lg p-4 text-white">
           <div className="text-sm font-medium opacity-90">Media por Horas</div>
           <div className="text-3xl font-bold mt-1">{mediaGeral.toFixed(1)}%</div>
           <div className="text-xs opacity-90 mt-0.5">
