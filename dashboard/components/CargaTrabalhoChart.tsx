@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { CargaTrabalho } from '../lib/supabase'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
@@ -27,7 +28,11 @@ function iniciais(nome: string) {
 
 // Uma linha por engenheiro: executado em azul cheio, restante hachurado (como corte em planta).
 // A escala e a mesma para todos (o maior total de dias ocupa a largura toda).
+// Com a equipe inteira o card fica longo demais; mostra os primeiros e expande sob pedido.
+const LIMITE_INICIAL = 8
+
 export default function CargaTrabalhoChart({ data, onSelecionarEngenheiro }: CargaTrabalhoChartProps) {
+  const [verTodos, setVerTodos] = useState(false)
   // Legenda clicavel: esconde/mostra cada serie.
   const [ocultas, setOcultas] = useState<Set<Serie>>(new Set())
   const alternar = (serie: Serie) =>
@@ -86,7 +91,7 @@ export default function CargaTrabalhoChart({ data, onSelecionarEngenheiro }: Car
           <p className="py-8 text-center text-sm text-muted-foreground">Nenhum engenheiro com carga ativa.</p>
         ) : (
           <ul className="divide-y">
-            {linhas.map((l) => {
+            {(verTodos ? linhas : linhas.slice(0, LIMITE_INICIAL)).map((l) => {
               const total = l.executados + l.restantes
               const pctExec = total > 0 ? Math.round((l.executados / total) * 100) : 0
               const larguraExec = ocultas.has('executados') ? 0 : (l.executados / escala) * 100
@@ -157,7 +162,14 @@ export default function CargaTrabalhoChart({ data, onSelecionarEngenheiro }: Car
           </ul>
         )}
 
-        <p className="text-xs text-muted-foreground">Barras na mesma escala: a mais longa tem {escala} dias.</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">Barras na mesma escala: a mais longa tem {escala} dias.</p>
+          {linhas.length > LIMITE_INICIAL && (
+            <Button variant="outline" size="sm" onClick={() => setVerTodos((v) => !v)} aria-expanded={verTodos}>
+              {verTodos ? 'Mostrar menos' : `Ver todos (${linhas.length})`}
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   )

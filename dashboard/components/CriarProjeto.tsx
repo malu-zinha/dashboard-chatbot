@@ -3,6 +3,10 @@
 import React, { useState } from 'react'
 import { X, FolderPlus, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
 import { criarProjeto } from '@/lib/supabase'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 interface CriarProjetoProps {
   isOpen: boolean
@@ -22,13 +26,23 @@ const emptyForm: FormData = {
   descricao: '',
 }
 
+// Textarea com o mesmo visual do Input do shadcn.
+const classeTextarea =
+  'w-full min-w-0 resize-none rounded-lg border border-input bg-transparent px-2.5 py-2 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm'
+
+function Obrigatorio() {
+  return (
+    <span aria-hidden="true" className="text-destructive">
+      *
+    </span>
+  )
+}
+
 export default function CriarProjeto({ isOpen, onClose, onSuccess }: CriarProjetoProps) {
   const [formData, setFormData] = useState<FormData>(emptyForm)
   const [isLoading, setIsLoading] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-
-  if (!isOpen) return null
 
   const handleClose = () => {
     setFormData(emptyForm)
@@ -79,125 +93,162 @@ export default function CriarProjeto({ isOpen, onClose, onSuccess }: CriarProjet
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg animate-fade-in">
-        {/* Header */}
-        <div className="bg-linear-to-r from-tecpred-primary via-tecpred-secondary to-tecpred-primary p-6 rounded-t-xl border-b-4 border-tecpred-orange">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                <FolderPlus className="w-7 h-7" />
-                Criar Novo Projeto
-              </h2>
-              <p className="text-white/90 text-sm mt-1">
+    <Dialog
+      open={isOpen}
+      onOpenChange={(aberto) => {
+        // Escape e clique no fundo chegam aqui; bloqueados enquanto a requisicao esta em andamento.
+        if (!aberto && !isLoading) handleClose()
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        onOpenAutoFocus={(e) => {
+          // Foco inicial no primeiro campo, nao no botao de fechar.
+          e.preventDefault()
+          document.getElementById('criar-projeto-codigo')?.focus()
+        }}
+        onEscapeKeyDown={(e) => {
+          if (isLoading) e.preventDefault()
+        }}
+        onInteractOutside={(e) => {
+          if (isLoading) e.preventDefault()
+        }}
+        className="flex max-h-[90vh] max-w-[calc(100%-1rem)] flex-col gap-0 overflow-hidden bg-card p-0 text-card-foreground shadow-2xl ring-1 ring-black/10 sm:max-w-lg"
+      >
+        {/* Cabecalho: prancha azul, igual aos demais modais */}
+        <div className="malha-prancha flex shrink-0 items-start justify-between gap-3 px-4 py-4 text-white sm:px-6 sm:py-5">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/15">
+              <FolderPlus className="size-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <DialogTitle className="font-wide text-lg leading-tight font-semibold text-white sm:text-xl">
+                Criar novo projeto
+              </DialogTitle>
+              <DialogDescription className="mt-1 text-sm text-white/65">
                 Preencha os dados do projeto para cadastrá-lo na plataforma
-              </p>
+              </DialogDescription>
             </div>
-            <button
-              onClick={handleClose}
-              className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors"
-              disabled={isLoading}
-            >
-              <X className="w-6 h-6" />
-            </button>
           </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={handleClose}
+            disabled={isLoading}
+            aria-label="Fechar"
+            title="Fechar"
+            className="shrink-0 text-white/75 hover:bg-white/15 hover:text-white focus-visible:ring-white/50"
+          >
+            <X className="size-5" />
+          </Button>
         </div>
 
-        {/* Body */}
-        <div className="p-6">
+        {/* Corpo */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
           {successMessage && (
-            <div className="mb-4 flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg text-sm">
-              <CheckCircle className="w-5 h-5 shrink-0 text-green-600" />
+            <div
+              role="status"
+              className="mb-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800"
+            >
+              <CheckCircle className="mt-0.5 size-4 shrink-0 text-status-success" aria-hidden="true" />
               {successMessage}
             </div>
           )}
 
           {errorMessage && (
-            <div className="mb-4 flex items-center gap-2 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
-              <AlertCircle className="w-5 h-5 shrink-0 text-red-500" />
+            <div
+              role="alert"
+              className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
+            >
+              <AlertCircle className="mt-0.5 size-4 shrink-0 text-status-danger" aria-hidden="true" />
               {errorMessage}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Código do Projeto <span className="text-red-500">*</span>
-              </label>
-              <input
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="criar-projeto-codigo">
+                Código do projeto <Obrigatorio />
+              </Label>
+              <Input
+                id="criar-projeto-codigo"
                 type="text"
                 value={formData.codigo}
                 onChange={(e) =>
                   setFormData({ ...formData, codigo: e.target.value.toUpperCase() })
                 }
                 placeholder="ex: PRJ-001"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-orange focus:border-transparent uppercase"
+                aria-describedby="criar-projeto-codigo-ajuda"
+                className="h-9 uppercase"
                 required
                 disabled={isLoading}
               />
-              <p className="text-xs text-gray-400 mt-1">Mínimo 3 caracteres. Será salvo em maiúsculas.</p>
+              <p id="criar-projeto-codigo-ajuda" className="text-xs text-muted-foreground">
+                Mínimo 3 caracteres. Será salvo em maiúsculas.
+              </p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nome do Cliente <span className="text-red-500">*</span>
-              </label>
-              <input
+            <div className="space-y-1.5">
+              <Label htmlFor="criar-projeto-cliente">
+                Nome do cliente <Obrigatorio />
+              </Label>
+              <Input
+                id="criar-projeto-cliente"
                 type="text"
                 value={formData.cliente}
                 onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
                 placeholder="Nome do cliente"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-orange focus:border-transparent"
+                className="h-9"
                 required
                 disabled={isLoading}
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Descrição <span className="text-red-500">*</span>
-              </label>
+            <div className="space-y-1.5">
+              <Label htmlFor="criar-projeto-descricao">
+                Descrição <Obrigatorio />
+              </Label>
               <textarea
+                id="criar-projeto-descricao"
                 value={formData.descricao}
                 onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
                 placeholder="Descreva o projeto brevemente"
                 rows={4}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-orange focus:border-transparent resize-none"
+                className={classeTextarea}
                 required
                 disabled={isLoading}
               />
             </div>
 
-            <div className="flex gap-3 pt-2">
-              <button
+            <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+              <Button
                 type="button"
+                variant="outline"
+                size="lg"
                 onClick={handleClose}
                 disabled={isLoading}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50"
+                className="sm:min-w-28"
               >
                 Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="flex-1 px-4 py-3 bg-linear-to-r from-tecpred-orange to-tecpred-coral text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-semibold border-2 border-tecpred-orange flex items-center justify-center gap-2 disabled:opacity-60 disabled:scale-100 disabled:hover:shadow-none"
-              >
+              </Button>
+              <Button type="submit" size="lg" disabled={isLoading} className="px-4 sm:min-w-36">
                 {isLoading ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <Loader2 className="animate-spin" />
                     Criando...
                   </>
                 ) : (
                   <>
-                    <FolderPlus className="w-5 h-5" />
-                    Criar Projeto
+                    <FolderPlus />
+                    Criar projeto
                   </>
                 )}
-              </button>
+              </Button>
             </div>
           </form>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

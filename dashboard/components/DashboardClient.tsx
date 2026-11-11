@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { FolderPlus, UserPlus } from 'lucide-react'
+import { toast } from 'sonner'
 import Header from '@/components/Header'
 import AppSidebar from '@/components/painel/AppSidebar'
 import PranchaResumo from '@/components/painel/PranchaResumo'
@@ -325,22 +326,22 @@ export default function DashboardClient() {
 
   const handleAtribuirTask = async (data: TaskData) => {
     if (!isSupabaseConfigured) {
-      alert('Supabase não está configurado. Não é possível salvar o projeto.')
+      toast.error('Supabase não está configurado. Não é possível salvar o projeto.')
       return
     }
     try {
       const result = await atribuirProjetoComPavimentos(data)
 
       if (!result.success) {
-        alert(`Erro ao atribuir projeto: ${result.error}`)
+        toast.error(`Erro ao atribuir projeto: ${result.error}`)
         return
       }
 
-      alert(`Projeto ${data.codigo_projeto} atribuido com sucesso!`)
+      toast.success(`Projeto ${data.codigo_projeto} atribuido com sucesso!`)
       loadData()
     } catch (err) {
       console.error('Erro ao atribuir task:', err)
-      alert('Erro inesperado ao atribuir projeto. Tente novamente em alguns instantes.')
+      toast.error('Erro inesperado ao atribuir projeto. Tente novamente em alguns instantes.')
     }
   }
 
@@ -610,25 +611,28 @@ export default function DashboardClient() {
                 onAbrirEngenheiros={(telaCheia) => abrirEngenheirosExecucao('', telaCheia)}
               />
 
-              <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <ProjetosStatusChart
-                  data={projetosStatus}
-                  onSelecionarStatus={(status) => abrirProjetos(filtroDoStatus(status))}
-                />
+              {/* Esquerda: status e atrasos empilhados; direita: carga (lista longa). Cada card
+                  fica com a propria altura, sem esticar para acompanhar o vizinho. */}
+              <section className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+                <div className="flex min-w-0 flex-col gap-6">
+                  <ProjetosStatusChart
+                    data={projetosStatus}
+                    onSelecionarStatus={(status) => abrirProjetos(filtroDoStatus(status))}
+                  />
+                  <AtrasosTable
+                    data={atrasosEngenheiro}
+                    acao={
+                      <Button variant="outline" size="sm" onClick={() => irPara('engenheiros')}>
+                        Ver todos os engenheiros
+                      </Button>
+                    }
+                  />
+                </div>
                 <CargaTrabalhoChart
                   data={cargaTrabalho}
                   onSelecionarEngenheiro={(nome) => abrirEngenheirosExecucao(nome)}
                 />
               </section>
-
-              <AtrasosTable
-                data={atrasosEngenheiro}
-                acao={
-                  <Button variant="outline" size="sm" onClick={() => irPara('engenheiros')}>
-                    Ver todos os engenheiros
-                  </Button>
-                }
-              />
             </>
           )}
 
