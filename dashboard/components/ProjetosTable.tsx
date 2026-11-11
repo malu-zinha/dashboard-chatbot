@@ -1,5 +1,7 @@
+'use client'
+
 import React from 'react'
-import { X, Search, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, Trash2, UserRoundCog, Eye, FileDown, CalendarClock, PencilLine, Building2 } from 'lucide-react'
+import { X, Search, SearchX, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, Trash2, UserRoundCog, Eye, FileDown, CalendarClock, PencilLine, Building2 } from 'lucide-react'
 import { buildCompletedDisciplineKey, getProjetoAreaDisplayName } from '@/lib/compatibilizacao'
 import { formatarDataBR, toDataISO } from '@/lib/datas'
 import { avisoValeParaPrazo, estadoAvisoPrazo, type AvisoPrazoLinha } from '@/lib/avisoPrazo'
@@ -17,6 +19,14 @@ import { verificarAtribuicaoInfo, fetchRelatorioProjetoPdf, type Engenheiro } fr
 import { gerarRelatorioPdf } from '@/lib/gerarRelatorioPdf'
 import ProjetoDetalhesModal from './ProjetoDetalhesModal'
 import ModalShell from './ModalShell'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 
 interface Projeto {
   atribuicao_id?: string
@@ -60,9 +70,63 @@ interface ProjetosTableProps {
   onAlterarDadosProjeto?: (projeto: Projeto, dados: { cliente: string; descricao: string | null }) => Promise<void>
   fullscreen: boolean
   onToggleFullscreen: () => void
+  // Renderiza a listagem dentro de um card na pagina, sem modal: isOpen/onClose sao ignorados.
+  embutido?: boolean
 }
 
-export default function ProjetosTable({ 
+// Estilo comum de campos nativos (select, textarea) alinhado ao Input do shadcn.
+const classeCampo =
+  'w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50'
+
+const classeBadge =
+  'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset'
+
+const classeErro = 'rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700'
+
+// Acao da linha: so o icone; o nome vai no tooltip e no aria-label.
+function BotaoAcao({
+  rotulo,
+  className,
+  children,
+  ...props
+}: React.ComponentProps<'button'> & { rotulo: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={rotulo}
+          className={cn('text-muted-foreground hover:text-foreground', className)}
+          {...props}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top">{rotulo}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+// X dos dialogos: fica por ultimo no DOM para o foco inicial cair no conteudo.
+function BotaoFecharDialogo({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label="Fechar"
+      className="absolute top-3 right-3 text-muted-foreground"
+    >
+      <X />
+    </Button>
+  )
+}
+
+export default function ProjetosTable({
   isOpen, 
   onClose, 
   data, 
@@ -79,6 +143,7 @@ export default function ProjetosTable({
   onAlterarDadosProjeto,
   fullscreen,
   onToggleFullscreen,
+  embutido = false,
 }: ProjetosTableProps) {
   const [searchTerm, setSearchTerm] = React.useState('')
   const [filterStatus, setFilterStatus] = React.useState<ProjetoStatusFilter>(initialFilter)
@@ -104,9 +169,10 @@ export default function ProjetosTable({
   const [dataConclusaoInicio, setDataConclusaoInicio] = React.useState('')
   const [dataConclusaoFim, setDataConclusaoFim] = React.useState('')
 
-  // Atualiza o filtro e limpa busca quando o modal abre com um filtro inicial
+  // Atualiza o filtro e limpa busca quando o modal abre com um filtro inicial.
+  // Embutido nao tem "abrir": o reset roda na montagem e a cada troca de initialFilter.
   React.useEffect(() => {
-    if (isOpen) {
+    if (isOpen || embutido) {
       if (initialFilter) {
         setFilterStatus(initialFilter)
       }
@@ -117,7 +183,7 @@ export default function ProjetosTable({
       setDataConclusaoFim('')
       setAvisoSucesso(null)
     }
-  }, [isOpen, initialFilter])
+  }, [isOpen, initialFilter, embutido])
 
   // Mapa de cores para o header
   const colorClasses = {
@@ -344,20 +410,13 @@ export default function ProjetosTable({
 
   const algumaAcaoAberta = Boolean(transferProjeto || deleteProjeto || prazoProjeto || menuProjeto || dadosProjeto)
 
-  // Escape fecha a confirmacao do topo. O ModalShell fica com closeOnEscape
-  // desligado enquanto ela existe — para nao derrubar a tabela por baixo —, entao
-  // sem este listener a tecla nao faria nada. O ProjetoDetalhesModal ja tem o seu.
-  // fecharAcao ignora a chamada durante uma requisicao em voo.
-  React.useEffect(() => {
-    if (!algumaAcaoAberta) return
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') fecharAcao()
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [algumaAcaoAberta, fecharAcao])
+  // Escape e clique no fundo: os dialogos sao radix, que so entrega o Escape ao dialogo
+  // do topo e chama onOpenChange(false) -> fecharAcao. fecharAcao ignora a chamada durante
+  // uma requisicao em voo, e como o open e controlado, o dialogo continua aberto.
+  // O ModalShell ainda recebe closeOnEscape desligado enquanto algo esta por cima.
+  const aoMudarDialogo = (aberto: boolean) => {
+    if (!aberto) fecharAcao()
+  }
 
   const clienteNormalizado = novoCliente.trim()
   const descricaoNormalizada = novaDescricao.trim()
@@ -492,97 +551,96 @@ export default function ProjetosTable({
     }
   }
 
-  if (!isOpen) return null
+  if (!isOpen && !embutido) return null
 
-  return (
+  const subtitulo = `${filteredData.length} projeto(s) encontrado(s)`
+
+  const conteudo = (
     <>
-    <ModalShell
-      isOpen={isOpen}
-      onClose={onClose}
-      fullscreen={fullscreen}
-      onToggleFullscreen={onToggleFullscreen}
-      title={title}
-      subtitle={`${filteredData.length} projeto(s) encontrado(s)`}
-      headerGradientClass={colorClasses[color]}
-      // Com uma confirmacao aberta por cima, o Escape nao pode fechar a tabela por baixo
-      closeOnEscape={!algumaAcaoAberta && !detalheProjeto}
-    >
         {/* Busca */}
-        <div className="p-4 border-b border-gray-200 bg-gray-50">
+        <div className="shrink-0 space-y-3 border-b bg-muted/40 p-3 sm:p-4">
           {avisoSucesso && (
-            <div className="mb-3 flex items-start justify-between gap-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
-              <span>{avisoSucesso}</span>
+            <div
+              role="status"
+              className="flex items-start justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+            >
+              <span className="flex items-start gap-2">
+                <CheckCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                {avisoSucesso}
+              </span>
               <button
                 type="button"
                 onClick={() => setAvisoSucesso(null)}
-                className="rounded-sm p-0.5 text-green-700 transition-colors hover:bg-green-100"
+                className="rounded-sm p-0.5 text-emerald-700 transition-colors hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 title="Fechar aviso"
                 aria-label="Fechar aviso"
               >
-                <X className="h-4 w-4" />
+                <X className="size-4" />
               </button>
             </div>
           )}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Input
               type="text"
+              aria-label="Buscar projetos"
               placeholder="Buscar por código, cliente, engenheiro ou área..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-primary focus:border-transparent"
+              className="h-10 bg-card pl-9"
             />
           </div>
 
           {showFiltroPeriodo && (
-            <div className="mt-3">
+            <div>
               <div className="flex flex-wrap items-end gap-3">
-                <div>
-                  <label htmlFor="concluidos-inicio" className="block text-xs font-medium text-gray-600 mb-1">
+                <div className="space-y-1.5">
+                  <Label htmlFor="concluidos-inicio" className="text-xs font-medium text-muted-foreground">
                     Concluido de
-                  </label>
-                  <input
+                  </Label>
+                  <Input
                     id="concluidos-inicio"
                     type="date"
                     value={dataConclusaoInicio}
                     onChange={(e) => setDataConclusaoInicio(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-tecpred-primary focus:border-transparent"
+                    className="h-9 w-auto bg-card tabular-nums"
                   />
                 </div>
-                <div>
-                  <label htmlFor="concluidos-fim" className="block text-xs font-medium text-gray-600 mb-1">
+                <div className="space-y-1.5">
+                  <Label htmlFor="concluidos-fim" className="text-xs font-medium text-muted-foreground">
                     Concluido ate
-                  </label>
-                  <input
+                  </Label>
+                  <Input
                     id="concluidos-fim"
                     type="date"
                     value={dataConclusaoFim}
                     onChange={(e) => setDataConclusaoFim(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-tecpred-primary focus:border-transparent"
+                    className="h-9 w-auto bg-card tabular-nums"
                   />
                 </div>
                 {(dataConclusaoInicio || dataConclusaoFim) && (
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
+                    className="h-9"
                     onClick={() => {
                       setDataConclusaoInicio('')
                       setDataConclusaoFim('')
                     }}
-                    className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     Limpar período
-                  </button>
+                  </Button>
                 )}
               </div>
 
               {periodoInvalido && (
-                <p className="mt-2 text-sm text-danger">
+                <p className="mt-2 text-sm text-destructive" role="alert">
                   A data inicial deve ser anterior ou igual a data final. O período não foi aplicado.
                 </p>
               )}
 
               {ocultadosSemData.length > 0 && (
-                <div className="mt-2 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                   {ocultadosSemData.length <= 5 ? (
                     <p>
                       <span className="font-semibold">
@@ -599,7 +657,7 @@ export default function ProjetosTable({
                     </p>
                   ) : (
                     <details>
-                      <summary className="cursor-pointer font-semibold">
+                      <summary className="cursor-pointer rounded-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                         {ocultadosSemData.length} disciplinas concluídas sem data de conclusão foram
                         ocultadas pelo período (ver quais)
                       </summary>
@@ -619,344 +677,342 @@ export default function ProjetosTable({
           )}
         </div>
 
-        {/* Tabela */}
-        <div className="flex-1 overflow-auto">
-          <table className="min-w-full">
-            <thead className="bg-gray-100 sticky top-0">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Código
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Cliente
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Engenheiro
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Área
-                </th>
+        {/* Tabela. Sem o wrapper do <Table> do shadcn: ele cria um scroll proprio e quebra o cabecalho fixo. */}
+        <div className={cn('overflow-auto', embutido ? 'max-h-[70vh]' : 'min-h-0 flex-1')}>
+          <table data-slot="table" className="w-full caption-bottom text-sm">
+            <TableHeader className="sticky top-0 z-10 bg-muted shadow-[inset_0_-1px_0_var(--border)]">
+              <TableRow className="border-0 hover:bg-transparent">
+                <TableHead className="px-4 text-xs font-medium text-muted-foreground">Código</TableHead>
+                <TableHead className="px-4 text-xs font-medium text-muted-foreground">Cliente</TableHead>
+                <TableHead className="px-4 text-xs font-medium text-muted-foreground">Engenheiro</TableHead>
+                <TableHead className="px-4 text-xs font-medium text-muted-foreground">Área</TableHead>
                 {showConcluidas && (
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Concluidas
-                  </th>
+                  <TableHead className="px-4 text-xs font-medium text-muted-foreground">Concluidas</TableHead>
                 )}
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Progresso
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Prazo
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Atraso
-                </th>
+                <TableHead className="px-4 text-xs font-medium text-muted-foreground">Status</TableHead>
+                <TableHead className="px-4 text-center text-xs font-medium text-muted-foreground">Progresso</TableHead>
+                <TableHead className="px-4 text-center text-xs font-medium text-muted-foreground">Prazo</TableHead>
+                <TableHead className="px-4 text-center text-xs font-medium text-muted-foreground">Atraso</TableHead>
                 {onVerRetrabalho && (
-                  <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Retrabalho
-                  </th>
+                  <TableHead className="px-4 text-center text-xs font-medium text-muted-foreground">Retrabalho</TableHead>
                 )}
                 {showAcoes && (
-                  <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Ações
-                  </th>
+                  <TableHead className="px-4 text-center text-xs font-medium text-muted-foreground">Ações</TableHead>
                 )}
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+              </TableRow>
+            </TableHeader>
+            <TableBody className="bg-card">
               {filteredData.length === 0 ? (
-                <tr>
-                  <td colSpan={totalColunas} className="px-6 py-12 text-center text-gray-500">
-                    Nenhum projeto encontrado
-                  </td>
-                </tr>
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={totalColunas} className="px-6 py-14 text-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <SearchX className="size-8 text-muted-foreground/60" aria-hidden="true" />
+                      <p>Nenhum projeto encontrado</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ) : (
                 filteredData.map((item, index) => {
                   const areaDisplayName = getProjetoAreaDisplayName(item)
                   const rowKey = item.atribuicao_id || `${item.projeto_id}-${areaDisplayName}-${item.engenheiro_nome}-${index}`
                   const concluidas = disciplinasConcluidasPorProjeto.get(item.projeto_id) || []
                   const isExpanded = expandedConcluidas.has(item.projeto_id)
+                  // Mesma ordem de antes: aguardando vence atraso, que vence concluido/andamento.
+                  const statusAguardando = isStatusAguardando(item.status_descricao)
+                  const statusAtrasado = !statusAguardando && item.dias_atraso > 0
 
                   return (
                   <React.Fragment key={rowKey}>
-                  <tr className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-bold text-tecpred-primary">
+                  <TableRow>
+                    <TableCell className="px-4 py-3">
+                      <span className="font-wide font-semibold text-primary tabular-nums">
                         {item.codigo_projeto}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900">
+                      </span>
+                    </TableCell>
+                    <TableCell className="min-w-[180px] px-4 py-3 whitespace-normal">
+                      <div className="font-medium text-foreground">
                         {item.cliente}
                       </div>
                       {item.descricao && (
-                        <div className="text-xs text-gray-500 mt-1">
+                        <div className="mt-0.5 text-xs text-muted-foreground">
                           {item.descricao.length > 50 ? item.descricao.substring(0, 50) + '...' : item.descricao}
                         </div>
                       )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {item.engenheiro_nome}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs font-medium bg-tecpred-light text-tecpred-primary rounded-full">
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
+                      {item.engenheiro_nome}
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
+                      <span className="inline-flex rounded-md bg-secondary px-2 py-0.5 text-xs font-medium text-primary">
                         {areaDisplayName}
                       </span>
-                    </td>
+                    </TableCell>
                     {showConcluidas && (
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <TableCell className="px-4 py-3">
                         <button
                           type="button"
                           onClick={() => toggleConcluidas(item.projeto_id)}
-                          className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                          aria-expanded={isExpanded}
+                          className={cn(
+                            'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                             concluidas.length > 0
-                              ? 'text-green-700 bg-green-50 hover:bg-green-100 border-green-200'
-                              : 'text-gray-500 bg-gray-50 border-gray-200'
-                          }`}
+                              ? 'bg-emerald-50 text-emerald-800 ring-emerald-200 hover:bg-emerald-100'
+                              : 'bg-muted text-muted-foreground ring-border'
+                          )}
                           title={`Ver disciplinas concluidas de ${item.codigo_projeto}`}
                         >
-                          {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                          {concluidas.length > 0 ? `${concluidas.length} concluida(s)` : 'Nenhuma'}
+                          {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+                          <span className="tabular-nums">
+                            {concluidas.length > 0 ? `${concluidas.length} concluida(s)` : 'Nenhuma'}
+                          </span>
                         </button>
-                      </td>
+                      </TableCell>
                     )}
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {isStatusAguardando(item.status_descricao) ? (
-                        <div
-                          className="relative inline-block"
-                          onMouseEnter={() => setTooltipOpen(rowKey)}
-                          onMouseLeave={() => setTooltipOpen(null)}
+                    <TableCell className="px-4 py-3">
+                      {statusAguardando || statusAtrasado ? (
+                        // Tooltip controlado: abre no hover, no foco do teclado e no toque.
+                        <Tooltip
+                          open={tooltipOpen === rowKey}
+                          onOpenChange={(aberto) =>
+                            setTooltipOpen((atual) => (aberto ? rowKey : atual === rowKey ? null : atual))
+                          }
                         >
-                          <span className="px-2 py-1 text-xs font-medium rounded-full cursor-help bg-yellow-400 text-white">
-                            {item.status_descricao}
-                          </span>
-                          {tooltipOpen === rowKey && (
-                            <div className="absolute left-0 top-full mt-2 z-50 w-72 rounded-lg border border-yellow-200 bg-white p-3 text-xs text-gray-700 shadow-xl">
-                              <div className="mb-1 font-semibold text-yellow-700">Motivo do aguardo</div>
-                              <div className="whitespace-normal leading-relaxed">
-                                {getMotivoAguardo(item)}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ) : item.dias_atraso > 0 ? (
-                        <div
-                          className="relative inline-block"
-                          onMouseEnter={() => setTooltipOpen(rowKey)}
-                          onMouseLeave={() => setTooltipOpen(null)}
-                        >
-                          <span className="px-2 py-1 text-xs font-medium rounded-full cursor-help bg-danger text-white">
-                            {item.status_descricao}
-                          </span>
-                          {tooltipOpen === rowKey && (
-                            <div className="absolute left-0 top-full mt-2 z-50 w-72 rounded-lg border border-red-200 bg-white p-3 text-xs text-gray-700 shadow-xl">
-                              <div className="mb-1 font-semibold text-red-700">Motivo do atraso</div>
-                              <div className="whitespace-normal leading-relaxed">
-                                {getMotivoAtraso(item)}
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                // O radix fecha o tooltip no clique; no toque o clique e o que abre.
+                                e.preventDefault()
+                                setTooltipOpen(rowKey)
+                              }}
+                              className={cn(
+                                classeBadge,
+                                'cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                statusAguardando
+                                  ? 'bg-amber-50 text-amber-800 ring-amber-200'
+                                  : 'bg-orange-50 text-orange-800 ring-orange-200'
+                              )}
+                            >
+                              <span
+                                aria-hidden="true"
+                                className={cn('size-1.5 rounded-full', statusAguardando ? 'bg-amber-500' : 'bg-[var(--alert)]')}
+                              />
+                              {item.status_descricao}
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" align="start" className="max-w-72 flex-col items-start gap-1 px-3 py-2 text-left">
+                            <span className="font-semibold">
+                              {statusAguardando ? 'Motivo do aguardo' : 'Motivo do atraso'}
+                            </span>
+                            <span className="whitespace-normal leading-relaxed">
+                              {statusAguardando ? getMotivoAguardo(item) : getMotivoAtraso(item)}
+                            </span>
+                          </TooltipContent>
+                        </Tooltip>
                       ) : (
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          item.data_conclusao
-                            ? 'bg-success text-white'
-                            : 'bg-info text-white'
-                        }`}>
+                        <span
+                          className={cn(
+                            classeBadge,
+                            item.data_conclusao
+                              ? 'bg-emerald-50 text-emerald-800 ring-emerald-200'
+                              : 'bg-secondary text-primary ring-primary/15'
+                          )}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={cn('size-1.5 rounded-full', item.data_conclusao ? 'bg-emerald-500' : 'bg-primary')}
+                          />
                           {item.status_descricao}
                         </span>
                       )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-16 bg-gray-200 rounded-full h-2">
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-2">
+                        {/* O que falta fica hachurado, como na prancha */}
+                        <div className="hachura relative h-1.5 w-16 overflow-hidden rounded-full bg-muted text-primary/15">
                           <div
-                            className={`h-2 rounded-full ${
-                              item.percentual_andamento >= 100 ? 'bg-success' :
-                              item.percentual_andamento >= 75 ? 'bg-info' :
-                              item.percentual_andamento >= 50 ? 'bg-warning' :
-                              'bg-gray-400'
-                            }`}
+                            className={cn(
+                              'h-full rounded-full',
+                              item.percentual_andamento >= 100
+                                ? 'bg-[var(--success)]'
+                                : item.percentual_andamento >= 75
+                                  ? 'bg-primary'
+                                  : item.percentual_andamento >= 50
+                                    ? 'bg-[var(--chart-3)]'
+                                    : 'bg-muted-foreground/50'
+                            )}
                             style={{ width: `${Math.min(item.percentual_andamento, 100)}%` }}
-                          ></div>
+                          />
                         </div>
-                        <span className="text-sm font-medium text-gray-900 w-12 text-right">
+                        <span className="w-10 text-right font-medium tabular-nums">
                           {item.percentual_andamento.toFixed(0)}%
                         </span>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <div className="inline-flex items-center gap-1.5 text-sm text-gray-900">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-center">
+                      <div className="inline-flex items-center gap-1.5 tabular-nums">
                         {formatarDataBR(item.data_prevista)}
                         {renderIconeAviso(item)}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-center">
                       {item.dias_atraso > 0 ? (
-                        <span className="px-2 py-1 text-xs font-bold bg-danger text-white rounded-full">
+                        <span className={cn(classeBadge, 'bg-orange-50 font-semibold text-orange-800 ring-orange-200 tabular-nums')}>
                           {item.dias_atraso} dias
                         </span>
                       ) : (
-                        <span className="text-sm text-success">No prazo</span>
+                        <span className="text-emerald-700">No prazo</span>
                       )}
-                    </td>
+                    </TableCell>
                     {onVerRetrabalho && (
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <button
+                      <TableCell className="px-4 py-3 text-center">
+                        <Button
                           type="button"
+                          variant="outline"
+                          size="sm"
                           onClick={() => onVerRetrabalho(item)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-lg transition-colors"
                           title={`Ver retrabalhos de ${item.codigo_projeto}`}
+                          aria-label={`Ver retrabalhos de ${item.codigo_projeto}`}
                         >
-                          <AlertTriangle className="w-3.5 h-3.5" />
+                          <AlertTriangle className="text-[var(--alert)]" />
                           Ver
-                        </button>
-                      </td>
+                        </Button>
+                      </TableCell>
                     )}
                     {showAcoes && (
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <div className="inline-flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setDetalheProjeto(item)}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-700 transition-colors hover:bg-gray-100"
-                            title="Ver detalhes"
-                            aria-label="Ver detalhes"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </button>
+                      <TableCell className="px-4 py-3 text-center">
+                        <div className="inline-flex items-center gap-0.5">
+                          <BotaoAcao rotulo="Ver detalhes" onClick={() => setDetalheProjeto(item)}>
+                            <Eye />
+                          </BotaoAcao>
                           {(onAlterarDadosProjeto || onAlterarPrazo || onTransferirResponsavel) && (
-                            <button
-                              type="button"
+                            <BotaoAcao
+                              rotulo="Alterar dados"
                               onClick={() => abrirMenuAlterarDados(item)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100"
-                              title="Alterar dados"
-                              aria-label="Alterar dados"
                               aria-haspopup="dialog"
+                              className="text-primary hover:bg-secondary hover:text-primary"
                             >
-                              <PencilLine className="h-4 w-4" />
-                            </button>
+                              <PencilLine />
+                            </BotaoAcao>
                           )}
                           {isDisciplinaConcluida(item) && (
-                            <button
-                              type="button"
+                            <BotaoAcao
+                              rotulo="Gerar PDF do projeto"
                               onClick={() => handleGerarPdf(item)}
                               disabled={gerandoPdfProjetoId === item.projeto_id}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-green-200 bg-green-50 text-green-700 transition-colors hover:bg-green-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
-                              title="Gerar PDF do projeto"
-                              aria-label="Gerar PDF do projeto"
                             >
                               {gerandoPdfProjetoId === item.projeto_id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Loader2 className="animate-spin" />
                               ) : (
-                                <FileDown className="h-4 w-4" />
+                                <FileDown />
                               )}
-                            </button>
+                            </BotaoAcao>
                           )}
                           {onExcluirTarefa && (
-                            <button
-                              type="button"
+                            <BotaoAcao
+                              rotulo={item.atribuicao_id ? 'Excluir tarefa' : 'Excluir projeto'}
                               onClick={() => abrirExclusao(item)}
                               disabled={!item.atribuicao_id && !onExcluirProjeto}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
-                              title={item.atribuicao_id ? 'Excluir tarefa' : 'Excluir projeto'}
-                              aria-label={item.atribuicao_id ? 'Excluir tarefa' : 'Excluir projeto'}
+                              className="hover:bg-red-50 hover:text-red-700"
                             >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                              <Trash2 />
+                            </BotaoAcao>
                           )}
                         </div>
-                      </td>
+                      </TableCell>
                     )}
-                  </tr>
+                  </TableRow>
                   {showConcluidas && isExpanded && (
-                    <tr className="bg-green-50/40">
-                      <td colSpan={totalColunas} className="px-6 py-4">
-                        <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700">
-                          <span className="font-semibold text-gray-900">Disciplinas concluidas:</span>
+                    <TableRow className="bg-emerald-50/40 hover:bg-emerald-50/40">
+                      <TableCell colSpan={totalColunas} className="px-4 py-3 whitespace-normal">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">Disciplinas concluidas:</span>
                           {concluidas.length > 0 ? (
                             concluidas.map((disciplina) => (
                               <span
                                 key={`${getProjetoAreaDisplayName(disciplina)}-${disciplina.engenheiro_nome}`}
-                                className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-white px-3 py-1 text-xs font-medium text-green-700"
+                                className={cn(classeBadge, 'bg-card text-emerald-800 ring-emerald-200')}
                               >
-                                <CheckCircle className="w-3.5 h-3.5" />
+                                <CheckCircle className="size-3.5" aria-hidden="true" />
                                 {getProjetoAreaDisplayName(disciplina)} - {disciplina.engenheiro_nome}
                               </span>
                             ))
                           ) : (
-                            <span className="text-gray-500">Nenhuma concluida.</span>
+                            <span className="text-muted-foreground">Nenhuma concluida.</span>
                           )}
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )}
                   </React.Fragment>
                   )
                 })
               )}
-            </tbody>
+            </TableBody>
           </table>
         </div>
 
         {/* Footer */}
-        <div
-          className={`p-4 border-t border-gray-200 bg-gray-50 ${
-            fullscreen ? '' : 'rounded-b-xl'
-          }`}
-        >
-          <div className="text-sm text-gray-600 text-center">
+        <div className="shrink-0 border-t bg-muted/40 px-4 py-3">
+          <p className="text-center text-sm text-muted-foreground tabular-nums">
             Mostrando {filteredData.length} de {data.length} projetos
-          </div>
+          </p>
         </div>
+    </>
+  )
+
+  return (
+    <>
+    {embutido ? (
+      <Card className="animate-fade-in gap-0 py-0">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-4 sm:px-5">
+          <h2 className="font-heading text-base font-semibold">{title}</h2>
+          <p className="text-sm text-muted-foreground tabular-nums">{subtitulo}</p>
+        </div>
+        <div className="flex flex-col border-t">{conteudo}</div>
+      </Card>
+    ) : (
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      fullscreen={fullscreen}
+      onToggleFullscreen={onToggleFullscreen}
+      title={title}
+      subtitle={subtitulo}
+      headerGradientClass={colorClasses[color]}
+      // Com uma confirmacao aberta por cima, o Escape nao pode fechar a tabela por baixo
+      closeOnEscape={!algumaAcaoAberta && !detalheProjeto}
+    >
+      {conteudo}
     </ModalShell>
+    )}
 
       {transferProjeto && (
-        <div
-          className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 p-4"
-          onClick={(e) => {
-            e.stopPropagation()
-            fecharAcao()
-          }}
-        >
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">Alterar responsavel</h3>
-                <p className="mt-1 text-sm text-gray-600">
-                  {transferProjeto.codigo_projeto} - {getProjetoAreaDisplayName(transferProjeto)}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={fecharAcao}
-                disabled={isActionSubmitting}
-                className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed"
-              >
-                <X className="h-5 w-5" />
-              </button>
+        <Dialog open onOpenChange={aoMudarDialogo}>
+          <DialogContent showCloseButton={false} className="sm:max-w-md">
+            <div className="pr-8">
+              <DialogTitle className="text-base font-semibold">Alterar responsavel</DialogTitle>
+              <DialogDescription className="mt-1">
+                {transferProjeto.codigo_projeto} - {getProjetoAreaDisplayName(transferProjeto)}
+              </DialogDescription>
             </div>
 
             <div className="space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Responsavel atual</label>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+              <div className="space-y-1.5">
+                <p className="text-sm font-medium">Responsavel atual</p>
+                <div className="rounded-lg border bg-muted/60 px-3 py-2 text-sm">
                   {transferProjeto.engenheiro_nome}
                 </div>
               </div>
 
-              <div>
-                <label htmlFor="novo-responsavel" className="mb-1 block text-sm font-medium text-gray-700">Novo responsavel</label>
+              <div className="space-y-1.5">
+                <Label htmlFor="novo-responsavel">Novo responsavel</Label>
                 <select
                   id="novo-responsavel"
                   value={novoResponsavelId}
                   onChange={(e) => setNovoResponsavelId(e.target.value)}
                   disabled={isActionSubmitting}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-tecpred-primary disabled:bg-gray-50"
+                  className={cn(classeCampo, 'h-9 py-0')}
                 >
                   <option value="">Selecione um engenheiro</option>
                   {engenheirosDestino.map((eng) => (
@@ -968,72 +1024,45 @@ export default function ProjetosTable({
               </div>
 
               {actionError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <div className={classeErro} role="alert">
                   {actionError}
                 </div>
               )}
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={fecharAcao}
-                  disabled={isActionSubmitting}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmarTransferencia}
-                  disabled={isActionSubmitting || !novoResponsavelId}
-                  className="inline-flex items-center gap-2 rounded-lg bg-tecpred-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-tecpred-secondary disabled:cursor-not-allowed disabled:bg-gray-300"
-                >
-                  {isActionSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Salvar
-                </button>
-              </div>
             </div>
-          </div>
-        </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={fecharAcao} disabled={isActionSubmitting}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                onClick={confirmarTransferencia}
+                disabled={isActionSubmitting || !novoResponsavelId}
+              >
+                {isActionSubmitting && <Loader2 className="animate-spin" />}
+                Salvar
+              </Button>
+            </DialogFooter>
+            <BotaoFecharDialogo onClick={fecharAcao} disabled={isActionSubmitting} />
+          </DialogContent>
+        </Dialog>
       )}
 
       {menuProjeto && (
-        <div
-          className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 p-4"
-          onClick={(e) => {
-            e.stopPropagation()
-            fecharAcao()
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="menu-alterar-dados-titulo"
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h3 id="menu-alterar-dados-titulo" className="text-lg font-bold text-gray-900">Alterar dados</h3>
-                <p className="mt-1 text-sm text-gray-600">
-                  {menuProjeto.codigo_projeto} - {getProjetoAreaDisplayName(menuProjeto)}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={fecharAcao}
-                className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-                aria-label="Fechar"
-              >
-                <X className="h-5 w-5" />
-              </button>
+        <Dialog open onOpenChange={aoMudarDialogo}>
+          <DialogContent showCloseButton={false} className="sm:max-w-md">
+            <div className="pr-8">
+              <DialogTitle className="text-base font-semibold">Alterar dados</DialogTitle>
+              <DialogDescription className="mt-1">
+                {menuProjeto.codigo_projeto} - {getProjetoAreaDisplayName(menuProjeto)}
+              </DialogDescription>
             </div>
 
             <div className="space-y-2">
               {[
                 {
                   chave: 'dados',
-                  icone: <Building2 className="h-5 w-5" />,
+                  icone: <Building2 className="size-5" />,
                   titulo: 'Cliente e descrição',
                   detalhe: 'Vale para o projeto inteiro (todas as disciplinas)',
                   motivo: onAlterarDadosProjeto ? null : 'sem permissão',
@@ -1041,7 +1070,7 @@ export default function ProjetosTable({
                 },
                 {
                   chave: 'prazo',
-                  icone: <CalendarClock className="h-5 w-5" />,
+                  icone: <CalendarClock className="size-5" />,
                   titulo: 'Prazo',
                   detalhe: `Prazo atual: ${formatarDataBR(menuProjeto.data_prevista)}`,
                   motivo: motivoSemPrazo(menuProjeto),
@@ -1049,7 +1078,7 @@ export default function ProjetosTable({
                 },
                 {
                   chave: 'engenheiro',
-                  icone: <UserRoundCog className="h-5 w-5" />,
+                  icone: <UserRoundCog className="size-5" />,
                   titulo: 'Engenheiro',
                   detalhe: `Responsável atual: ${menuProjeto.engenheiro_nome}`,
                   motivo: motivoSemEngenheiro(menuProjeto),
@@ -1063,59 +1092,37 @@ export default function ProjetosTable({
                   autoFocus={i === opcoes.findIndex((o) => !o.motivo)}
                   onClick={opcao.abrir}
                   disabled={Boolean(opcao.motivo)}
-                  className="flex w-full items-center gap-3 rounded-lg border border-gray-200 px-4 py-3 text-left transition-colors hover:border-tecpred-primary hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-gray-200 disabled:hover:bg-transparent"
+                  className="flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors outline-none hover:border-primary/40 hover:bg-secondary/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:bg-transparent"
                 >
-                  <span className="text-tecpred-primary">{opcao.icone}</span>
+                  <span className="text-primary">{opcao.icone}</span>
                   <span className="flex-1">
-                    <span className="block text-sm font-semibold text-gray-900">{opcao.titulo}</span>
-                    <span className="block text-xs text-gray-500">
+                    <span className="block text-sm font-semibold">{opcao.titulo}</span>
+                    <span className="block text-xs text-muted-foreground">
                       {opcao.motivo ? `Indisponível: ${opcao.motivo}` : opcao.detalhe}
                     </span>
                   </span>
                 </button>
               ))}
             </div>
-          </div>
-        </div>
+            <BotaoFecharDialogo onClick={fecharAcao} />
+          </DialogContent>
+        </Dialog>
       )}
 
       {dadosProjeto && (
-        <div
-          className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 p-4"
-          onClick={(e) => {
-            e.stopPropagation()
-            fecharAcao()
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="dados-projeto-titulo"
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h3 id="dados-projeto-titulo" className="text-lg font-bold text-gray-900">
-                  Cliente e descrição — {dadosProjeto.codigo_projeto}
-                </h3>
-                <p className="mt-1 text-sm text-gray-600">Vale para todas as disciplinas deste projeto.</p>
-              </div>
-              <button
-                type="button"
-                onClick={fecharAcao}
-                disabled={isActionSubmitting}
-                className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed"
-                aria-label="Fechar"
-              >
-                <X className="h-5 w-5" />
-              </button>
+        <Dialog open onOpenChange={aoMudarDialogo}>
+          <DialogContent showCloseButton={false} className="sm:max-w-md">
+            <div className="pr-8">
+              <DialogTitle className="text-base leading-snug font-semibold">
+                Cliente e descrição — {dadosProjeto.codigo_projeto}
+              </DialogTitle>
+              <DialogDescription className="mt-1">Vale para todas as disciplinas deste projeto.</DialogDescription>
             </div>
 
             <div className="space-y-4">
-              <div>
-                <label htmlFor="novo-cliente" className="mb-1 block text-sm font-medium text-gray-700">Cliente</label>
-                <input
+              <div className="space-y-1.5">
+                <Label htmlFor="novo-cliente">Cliente</Label>
+                <Input
                   id="novo-cliente"
                   type="text"
                   autoFocus
@@ -1123,14 +1130,14 @@ export default function ProjetosTable({
                   value={novoCliente}
                   onChange={(e) => setNovoCliente(e.target.value)}
                   disabled={isActionSubmitting}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-tecpred-primary disabled:bg-gray-50"
+                  className="h-9"
                 />
               </div>
 
-              <div>
-                <label htmlFor="nova-descricao" className="mb-1 block text-sm font-medium text-gray-700">
-                  Descrição <span className="font-normal text-gray-400">(opcional)</span>
-                </label>
+              <div className="space-y-1.5">
+                <Label htmlFor="nova-descricao">
+                  Descrição <span className="font-normal text-muted-foreground">(opcional)</span>
+                </Label>
                 <textarea
                   id="nova-descricao"
                   rows={3}
@@ -1138,185 +1145,155 @@ export default function ProjetosTable({
                   value={novaDescricao}
                   onChange={(e) => setNovaDescricao(e.target.value)}
                   disabled={isActionSubmitting}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-tecpred-primary disabled:bg-gray-50"
+                  className={classeCampo}
                 />
               </div>
 
               {actionError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <div className={classeErro} role="alert">
                   {actionError}
                 </div>
               )}
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={fecharAcao}
-                  disabled={isActionSubmitting}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmarAlterarDadosProjeto}
-                  disabled={isActionSubmitting || clienteNormalizado.length < 2 || !dadosMudaram}
-                  className="inline-flex items-center gap-2 rounded-lg bg-tecpred-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-tecpred-secondary disabled:cursor-not-allowed disabled:bg-gray-300"
-                >
-                  {isActionSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Salvar
-                </button>
-              </div>
             </div>
-          </div>
-        </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={fecharAcao} disabled={isActionSubmitting}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                onClick={confirmarAlterarDadosProjeto}
+                disabled={isActionSubmitting || clienteNormalizado.length < 2 || !dadosMudaram}
+              >
+                {isActionSubmitting && <Loader2 className="animate-spin" />}
+                Salvar
+              </Button>
+            </DialogFooter>
+            <BotaoFecharDialogo onClick={fecharAcao} disabled={isActionSubmitting} />
+          </DialogContent>
+        </Dialog>
       )}
 
       {prazoProjeto && (
-        <div
-          className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 p-4"
-          onClick={(e) => {
-            e.stopPropagation()
-            fecharAcao()
-          }}
-        >
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <h3 className="text-lg font-bold text-gray-900">
-                Alterar prazo — {prazoProjeto.codigo_projeto} / {prazoProjeto.engenheiro_nome}
-              </h3>
-              <button
-                type="button"
-                onClick={fecharAcao}
-                disabled={isActionSubmitting}
-                className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed"
-                aria-label="Fechar"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+        <Dialog open onOpenChange={aoMudarDialogo}>
+          <DialogContent showCloseButton={false} aria-describedby={undefined} className="sm:max-w-md">
+            <DialogTitle className="pr-8 text-base leading-snug font-semibold">
+              Alterar prazo — {prazoProjeto.codigo_projeto} / {prazoProjeto.engenheiro_nome}
+            </DialogTitle>
 
             <div className="space-y-4">
-              <div className="space-y-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+              <div className="space-y-1 rounded-lg border bg-muted/60 px-3 py-2 text-sm tabular-nums">
                 <p>Início: {formatarDataBR(prazoProjeto.data_inicio)}</p>
                 <p>Prazo atual: {formatarDataBR(prazoProjeto.data_prevista)}</p>
               </div>
 
-              <div>
-                <label htmlFor="novo-prazo" className="mb-1 block text-sm font-medium text-gray-700">Novo prazo</label>
-                <input
+              <div className="space-y-1.5">
+                <Label htmlFor="novo-prazo">Novo prazo</Label>
+                <Input
                   id="novo-prazo"
                   type="date"
                   min={toDataISO(prazoProjeto.data_inicio) ?? undefined}
                   value={novoPrazo}
                   onChange={(e) => setNovoPrazo(e.target.value)}
                   disabled={isActionSubmitting}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-tecpred-primary disabled:bg-gray-50"
+                  className="h-9 tabular-nums"
                 />
               </div>
 
               {actionError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <div className={classeErro} role="alert">
                   {actionError}
                 </div>
               )}
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={fecharAcao}
-                  disabled={isActionSubmitting}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmarAlterarPrazo}
-                  disabled={isActionSubmitting || !novoPrazo || novoPrazo === prazoAtualISO}
-                  className="inline-flex items-center gap-2 rounded-lg bg-tecpred-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-tecpred-secondary disabled:cursor-not-allowed disabled:bg-gray-300"
-                >
-                  {isActionSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Salvar
-                </button>
-              </div>
             </div>
-          </div>
-        </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={fecharAcao} disabled={isActionSubmitting}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                onClick={confirmarAlterarPrazo}
+                disabled={isActionSubmitting || !novoPrazo || novoPrazo === prazoAtualISO}
+              >
+                {isActionSubmitting && <Loader2 className="animate-spin" />}
+                Salvar
+              </Button>
+            </DialogFooter>
+            <BotaoFecharDialogo onClick={fecharAcao} disabled={isActionSubmitting} />
+          </DialogContent>
+        </Dialog>
       )}
 
       {deleteProjeto && (
-        <div
-          className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 p-4"
-          onClick={(e) => {
-            e.stopPropagation()
-            fecharAcao()
-          }}
-        >
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        // Dialog (e nao AlertDialog) para o clique no fundo continuar cancelando, como antes;
+        // o papel de alerta vai no role.
+        <Dialog open onOpenChange={aoMudarDialogo}>
+          <DialogContent showCloseButton={false} role="alertdialog" className="sm:max-w-md">
             {isCheckingInfo ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-              </div>
+              <>
+                <DialogTitle className="sr-only">
+                  {deleteProjeto.atribuicao_id ? 'Excluir tarefa' : 'Excluir projeto'}
+                </DialogTitle>
+                <DialogDescription className="sr-only">Verificando a tarefa</DialogDescription>
+                <div className="flex items-center justify-center py-8" role="status" aria-label="Carregando">
+                  <Loader2 className="size-8 animate-spin text-muted-foreground" />
+                </div>
+              </>
             ) : (
               <>
-                <div className="mb-4 flex items-start gap-3">
+                <div className="flex items-start gap-3">
                   <div className="rounded-lg bg-red-50 p-2 text-red-700">
-                    <AlertTriangle className="h-5 w-5" />
+                    <AlertTriangle className="size-5" aria-hidden="true" />
                   </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900">
+                  <div className="min-w-0">
+                    <DialogTitle className="text-base font-semibold">
                       {isUltimaDisciplina ? 'Excluir projeto' : 'Excluir tarefa'}
-                    </h3>
-                    <p className="mt-1 text-sm text-gray-600">
+                    </DialogTitle>
+                    <p className="mt-1 text-sm text-muted-foreground">
                       {deleteProjeto.codigo_projeto} - {getProjetoAreaDisplayName(deleteProjeto)} - {deleteProjeto.engenheiro_nome}
                     </p>
                   </div>
                 </div>
 
-                <p className="text-sm text-gray-700">
+                <DialogDescription className="text-foreground/85">
                   {!deleteProjeto.atribuicao_id
                     ? 'Este projeto nao tem tarefas atribuidas. Ao excluir, ele sera desativado e deixara de aparecer no dashboard e no chatbot.'
                     : isUltimaDisciplina
                     ? 'Este projeto possui apenas esta disciplina. Ao excluir, o projeto inteiro sera desativado e deixara de aparecer no dashboard e no chatbot.'
                     : 'Esta tarefa deixara de aparecer no dashboard e no chatbot, mas permanecera no historico do banco.'}
-                </p>
+                </DialogDescription>
 
                 {isUltimaDisciplina && (
-                  <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                     O projeto sera marcado como inativo e podera ser reativado futuramente ao cadastrar um novo projeto com o mesmo codigo.
                   </div>
                 )}
 
                 {actionError && (
-                  <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  <div className={classeErro} role="alert">
                     {actionError}
                   </div>
                 )}
 
-                <div className="mt-6 flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={fecharAcao}
-                    disabled={isActionSubmitting}
-                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed"
-                  >
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={fecharAcao} disabled={isActionSubmitting}>
                     Cancelar
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
                     onClick={confirmarExclusao}
                     disabled={isActionSubmitting || (!onExcluirTarefa && !isUltimaDisciplina) || (isUltimaDisciplina && !onExcluirProjeto)}
-                    className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                    className="bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500/40"
                   >
-                    {isActionSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {isActionSubmitting && <Loader2 className="animate-spin" />}
                     {isUltimaDisciplina ? 'Excluir projeto' : 'Excluir'}
-                  </button>
-                </div>
+                  </Button>
+                </DialogFooter>
               </>
             )}
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       <ProjetoDetalhesModal
@@ -1327,4 +1304,3 @@ export default function ProjetosTable({
     </>
   )
 }
-

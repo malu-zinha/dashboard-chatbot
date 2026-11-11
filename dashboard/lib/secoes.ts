@@ -55,3 +55,24 @@ export function filtroDoStatus(status: string): FiltroProjetos {
   if (s.includes('andamento') || s.includes('execu')) return 'em_execucao'
   return 'all'
 }
+
+// Aba da secao Projetos na URL (?filtro=...). Valor desconhecido = todos.
+const FILTROS_PROJETOS: FiltroProjetos[] = ['all', 'em_execucao', 'concluido', 'atrasado']
+export function resolverFiltroProjetos(valor: string | null | undefined): FiltroProjetos {
+  return FILTROS_PROJETOS.find((f) => f === valor) ?? 'all'
+}
+
+// Aba da secao Engenheiros na URL (?aba=...).
+export type AbaEngenheiros = 'lista' | 'execucao'
+export function resolverAbaEngenheiros(valor: string | null | undefined): AbaEngenheiros {
+  return valor === 'execucao' ? 'execucao' : 'lista'
+}
+
+/** Monta o endereco do painel: secao + parametros extras (sem os vazios). */
+export function urlDaSecao(secao: SecaoId, extras: Record<string, string | undefined> = {}): string {
+  const params = new URLSearchParams()
+  if (secao !== SECAO_PADRAO) params.set('secao', secao)
+  for (const [k, v] of Object.entries(extras)) if (v) params.set(k, v)
+  const q = params.toString()
+  return q ? `/?${q}` : '/'
+}

@@ -9,6 +9,10 @@ import {
 } from '@/lib/supabase'
 import MotivosPorTipo from '@/components/MotivosPorTipo'
 import RetrabalhoTaxaAreaChart from '@/components/RetrabalhoTaxaAreaChart'
+import { cn } from '@/lib/utils'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 interface RetrabalhoCardProps {
   data: RetrabalhoEngenheiro[]
@@ -17,6 +21,48 @@ interface RetrabalhoCardProps {
   motivosGeral?: RetrabalhoMotivo[]
   taxaAreaGeral?: RetrabalhoTaxaArea[]
   onSelectProjeto?: (projetoId: string) => void
+}
+
+const fmt1 = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+
+function iniciais(nome: string) {
+  const partes = nome.trim().split(/\s+/)
+  return ((partes[0]?.[0] ?? '') + (partes.length > 1 ? partes[partes.length - 1][0] : '')).toUpperCase()
+}
+
+// Mesmos cortes de antes: acima de 20% vermelho, acima de 10% laranja, senao verde.
+function corPercentual(pct: number) {
+  if (pct > 20) return 'text-danger'
+  if (pct > 10) return 'text-warning'
+  return 'text-success'
+}
+
+// Celula do carimbo (versao clara): rotulo, numero largo e uma linha de detalhe.
+function CelulaCarimbo({
+  rotulo,
+  valor,
+  detalhe,
+  destaque,
+}: {
+  rotulo: string
+  valor: string
+  detalhe: string
+  destaque?: boolean
+}) {
+  return (
+    <div className="flex flex-col gap-1 bg-card px-4 py-3.5">
+      <span className="text-[13px] text-muted-foreground">{rotulo}</span>
+      <span
+        className={cn(
+          'font-wide text-[2rem] leading-none font-semibold tabular-nums',
+          destaque ? 'text-primary' : 'text-foreground'
+        )}
+      >
+        {valor}
+      </span>
+      <span className="text-xs text-muted-foreground">{detalhe}</span>
+    </div>
+  )
 }
 
 export default function RetrabalhoCard({
@@ -36,156 +82,155 @@ export default function RetrabalhoCard({
     : 0
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 animate-fade-in">
-      <div className="mb-4">
-        <div className="flex items-center space-x-2">
-          <AlertCircle className="w-5 h-5 text-warning" />
-          <h3 className="text-lg font-bold text-gray-900">
-            Retrabalho por Engenheiro
-          </h3>
-        </div>
-        <p className="text-xs text-gray-500 mt-1">
-          Visao geral TecPred + por projeto (clique na % para ver datas, engenheiro e motivo)
-        </p>
-      </div>
+    <Card className="animate-fade-in">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <AlertCircle className="size-4 text-[var(--alert)]" />
+          Retrabalho por engenheiro
+        </CardTitle>
+        <CardDescription>
+          Visão geral TecPred e por projeto (clique na % para ver datas, engenheiro e motivo)
+        </CardDescription>
+      </CardHeader>
 
-      <div className="mb-6 grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="bg-linear-to-r from-warning to-orange-600 rounded-lg p-4 text-white">
-          <div className="text-sm font-medium opacity-90">Horas de Retrabalho</div>
-          <div className="text-3xl font-bold mt-1">{totalHorasRetrabalho.toFixed(1)}h</div>
-          <div className="text-xs opacity-90 mt-0.5">{totalRetrabalhos} ocorrencias</div>
-        </div>
-        <div className="bg-linear-to-r from-tecpred-primary to-tecpred-secondary rounded-lg p-4 text-white">
-          <div className="text-sm font-medium opacity-90">% Geral TecPred</div>
-          <div className="text-3xl font-bold mt-1">
-            {retrabalhoGeral ? `${retrabalhoGeral.percentual_geral_retrabalho.toFixed(1)}%` : '0%'}
+      <CardContent className="space-y-6">
+        {/* Carimbo claro: tres indicadores separados por linhas finas */}
+        <div className="overflow-hidden rounded-lg border">
+          <div className="grid grid-cols-1 gap-px bg-border sm:grid-cols-3">
+            <CelulaCarimbo
+              rotulo="Horas de retrabalho"
+              valor={`${fmt1(totalHorasRetrabalho)}h`}
+              detalhe={`${totalRetrabalhos} ocorrências`}
+            />
+            <CelulaCarimbo
+              rotulo="% geral TecPred"
+              valor={retrabalhoGeral ? `${fmt1(retrabalhoGeral.percentual_geral_retrabalho)}%` : '0%'}
+              detalhe="horas de retrabalho / horas trabalhadas totais"
+              destaque
+            />
+            <CelulaCarimbo
+              rotulo="Média por horas"
+              valor={`${fmt1(mediaGeral)}%`}
+              detalhe="média por horas dos engenheiros"
+            />
           </div>
-          <div className="text-xs opacity-90 mt-0.5">
-            horas de retrabalho / horas trabalhadas totais
-          </div>
         </div>
-        <div className="bg-linear-to-r from-danger to-red-600 rounded-lg p-4 text-white">
-          <div className="text-sm font-medium opacity-90">Media por Horas</div>
-          <div className="text-3xl font-bold mt-1">{mediaGeral.toFixed(1)}%</div>
-          <div className="text-xs opacity-90 mt-0.5">
-            media por horas dos engenheiros
-          </div>
-        </div>
-      </div>
 
-      {data.length > 0 && (
-        <div className="mb-6">
-          <h4 className="text-sm font-semibold text-gray-700 mb-3">Por engenheiro</h4>
-          <div className="space-y-3">
-            {data.slice(0, 5).map((item) => (
-              <div
-                key={item.eng_id}
-                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <div className="flex-1">
-                  <div className="font-medium text-gray-900">{item.engenheiro}</div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {item.qtde_areas_retrabalho} areas • {item.projetos_com_retrabalho} projetos
-                  </div>
-                </div>
-                <div className="text-right flex items-center space-x-3">
-                  <div>
-                    <div className="text-lg font-bold text-danger">
-                      {(item.horas_retrabalho_total || 0).toFixed(1)}h
-                    </div>
-                    <div className="text-xs text-gray-500">horas retrab.</div>
-                  </div>
-                  <div>
-                    <div
-                      className={`text-lg font-bold ${
-                        (item.retrabalho_medio_percentual || 0) > 20
-                          ? 'text-danger'
-                          : (item.retrabalho_medio_percentual || 0) > 10
-                            ? 'text-warning'
-                            : 'text-success'
-                      }`}
-                    >
-                      {(item.retrabalho_medio_percentual ?? 0).toFixed(1)}%
-                    </div>
-                    <div className="text-xs text-gray-500">por horas</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="pt-4 border-t border-gray-200">
-        <h4 className="text-sm font-semibold text-gray-700 mb-2">Por projeto</h4>
-        <p className="text-xs text-gray-500 mb-3">
-          % = horas de retrabalho / horas trabalhadas totais. Clique na % para ver areas, motivos e detalhes.
-        </p>
-        {retrabalhoPorProjeto && retrabalhoPorProjeto.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-500 border-b">
-                  <th className="py-2 pr-4">Projeto</th>
-                  <th className="py-2 pr-4">Cliente</th>
-                  <th className="py-2 pr-4 text-right">Horas retrab.</th>
-                  <th className="py-2 pr-4 text-right">Horas totais</th>
-                  <th className="py-2 pl-4 text-right">%</th>
-                </tr>
-              </thead>
-              <tbody>
-                {retrabalhoPorProjeto.map((item) => (
-                  <tr
-                    key={item.projeto_id}
-                    className="border-b last:border-0 hover:bg-gray-50 transition-colors"
+        {data.length > 0 && (
+          <section>
+            <h4 className="mb-2 text-sm font-semibold">Por engenheiro</h4>
+            <ul className="divide-y rounded-lg border">
+              {data.slice(0, 5).map((item) => {
+                const pct = item.retrabalho_medio_percentual || 0
+                return (
+                  <li
+                    key={item.eng_id}
+                    className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-muted/50"
                   >
-                    <td className="py-2 pr-4 font-medium text-gray-900">{item.codigo_projeto}</td>
-                    <td className="py-2 pr-4 text-gray-700">{item.cliente}</td>
-                    <td className="py-2 pr-4 text-right text-gray-900">
-                      {(item.horas_retrabalho_total || 0).toFixed(1)}h
-                    </td>
-                    <td className="py-2 pr-4 text-right text-gray-900">
-                      {(item.horas_trabalhadas_total || 0).toFixed(1)}h
-                    </td>
-                    <td className="py-2 pl-4 text-right">
-                      {onSelectProjeto ? (
-                        <button
-                          type="button"
-                          onClick={() => onSelectProjeto(item.projeto_id)}
-                          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200"
-                        >
-                          {item.percentual_retrabalho_projeto.toFixed(1)}%
-                        </button>
-                      ) : (
-                        <span className="text-orange-700 font-semibold">
-                          {item.percentual_retrabalho_projeto.toFixed(1)}%
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="text-sm text-gray-500 py-3">Nenhum projeto com retrabalho registrado.</p>
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                        {iniciais(item.engenheiro)}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{item.engenheiro}</div>
+                        <div className="text-xs text-muted-foreground tabular-nums">
+                          {item.qtde_areas_retrabalho} áreas, {item.projetos_com_retrabalho} projetos
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-5 text-right">
+                      <div>
+                        <div className="text-base font-semibold text-danger tabular-nums">
+                          {fmt1(item.horas_retrabalho_total || 0)}h
+                        </div>
+                        <div className="text-xs text-muted-foreground">horas retrab.</div>
+                      </div>
+                      <div>
+                        <div className={cn('text-base font-semibold tabular-nums', corPercentual(pct))}>
+                          {fmt1(item.retrabalho_medio_percentual ?? 0)}%
+                        </div>
+                        <div className="text-xs text-muted-foreground">por horas</div>
+                      </div>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
         )}
-      </div>
 
-      {taxaAreaGeral.length > 0 && (
-        <div className="pt-4 border-t border-gray-200 mt-4">
-          <h4 className="text-sm font-semibold text-gray-700 mb-1">
-            Retrabalho por area / projeto
-          </h4>
-          <RetrabalhoTaxaAreaChart data={taxaAreaGeral} onSelecionarProjeto={onSelectProjeto} />
-        </div>
-      )}
+        <Separator />
 
-      {motivosGeral.length > 0 && (
-        <div className="pt-4 border-t border-gray-200 mt-4">
-          <MotivosPorTipo data={motivosGeral} escopo="TecPred" height={280} />
-        </div>
-      )}
-    </div>
+        <section>
+          <h4 className="text-sm font-semibold">Por projeto</h4>
+          <p className="mt-0.5 mb-3 text-xs text-muted-foreground">
+            % = horas de retrabalho / horas trabalhadas totais. Clique na % para ver áreas, motivos e detalhes.
+          </p>
+          {retrabalhoPorProjeto && retrabalhoPorProjeto.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Projeto</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead className="text-right">Horas retrab.</TableHead>
+                  <TableHead className="text-right">Horas totais</TableHead>
+                  <TableHead className="text-right">%</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {retrabalhoPorProjeto.map((item) => {
+                  const pct = `${fmt1(item.percentual_retrabalho_projeto)}%`
+                  return (
+                    <TableRow key={item.projeto_id}>
+                      <TableCell className="font-medium">{item.codigo_projeto}</TableCell>
+                      <TableCell className="text-muted-foreground">{item.cliente}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {fmt1(item.horas_retrabalho_total || 0)}h
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {fmt1(item.horas_trabalhadas_total || 0)}h
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {onSelectProjeto ? (
+                          <button
+                            type="button"
+                            onClick={() => onSelectProjeto(item.projeto_id)}
+                            aria-label={`Ver retrabalho do projeto ${item.codigo_projeto}: ${pct}`}
+                            className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-700 tabular-nums transition-colors hover:bg-orange-100 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                          >
+                            {pct}
+                          </button>
+                        ) : (
+                          <span className="font-semibold text-orange-700 tabular-nums">{pct}</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          ) : (
+            <p className="py-3 text-sm text-muted-foreground">Nenhum projeto com retrabalho registrado.</p>
+          )}
+        </section>
+
+        {taxaAreaGeral.length > 0 && (
+          <>
+            <Separator />
+            <section>
+              <h4 className="mb-1 text-sm font-semibold">Retrabalho por área / projeto</h4>
+              <RetrabalhoTaxaAreaChart data={taxaAreaGeral} onSelecionarProjeto={onSelectProjeto} />
+            </section>
+          </>
+        )}
+
+        {motivosGeral.length > 0 && (
+          <>
+            <Separator />
+            <MotivosPorTipo data={motivosGeral} escopo="TecPred" height={280} />
+          </>
+        )}
+      </CardContent>
+    </Card>
   )
 }

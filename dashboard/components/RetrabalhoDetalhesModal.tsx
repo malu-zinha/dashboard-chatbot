@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import React, { useState } from 'react'
+import { ChevronRight } from 'lucide-react'
 import {
   RetrabalhoDetalheProjeto,
   RetrabalhoAreaProjeto,
@@ -10,6 +10,10 @@ import {
 import MotivosPorTipo from '@/components/MotivosPorTipo'
 import { formatarDataBR } from '@/lib/datas'
 import { normalizarTipo, rotuloTipo } from '@/lib/ocorrencias'
+import { cn } from '@/lib/utils'
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 // Etiqueta do tipo na lista de registros.
 const CLASSE_TIPO = {
@@ -26,6 +30,10 @@ function EtiquetaTipo({ tipo }: { tipo: string | null | undefined }) {
   )
 }
 
+function SemMotivo() {
+  return <span className="text-muted-foreground italic">Sem motivo informado</span>
+}
+
 interface RetrabalhoDetalhesModalProps {
   isOpen: boolean
   onClose: () => void
@@ -38,6 +46,12 @@ interface RetrabalhoDetalhesModalProps {
 
 type TabKey = 'areas' | 'motivos' | 'detalhes'
 
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'areas', label: 'Por Área' },
+  { key: 'motivos', label: 'Motivos' },
+  { key: 'detalhes', label: 'Todos os Detalhes' },
+]
+
 export default function RetrabalhoDetalhesModal({
   isOpen,
   onClose,
@@ -49,29 +63,6 @@ export default function RetrabalhoDetalhesModal({
 }: RetrabalhoDetalhesModalProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('areas')
   const [expandedAreas, setExpandedAreas] = useState<Set<string>>(new Set())
-
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') onClose()
-  }, [onClose])
-
-  useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = 'hidden'
-      return () => {
-        document.removeEventListener('keydown', handleKeyDown)
-        document.body.style.overflow = ''
-      }
-    }
-  }, [isOpen, handleKeyDown])
-
-  if (!isOpen) return null
-
-  const tabs: { key: TabKey; label: string }[] = [
-    { key: 'areas', label: 'Por Área' },
-    { key: 'motivos', label: 'Motivos' },
-    { key: 'detalhes', label: 'Todos os Detalhes' },
-  ]
 
   // Agrupar detalhes por área
   const detalhesPorArea = detalhes.reduce<Record<string, RetrabalhoDetalheProjeto[]>>(
@@ -96,208 +87,185 @@ export default function RetrabalhoDetalhesModal({
     })
   }
 
+  const totalRetrabalhos = areasProjeto.reduce((s, a) => s + a.total_retrabalhos_area, 0)
+
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div className="px-6 py-4 border-b flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-bold text-gray-900">
+    <Dialog open={isOpen} onOpenChange={(aberto) => { if (!aberto) onClose() }}>
+      <DialogContent
+        showCloseButton={false}
+        className="flex max-h-[85vh] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
+      >
+        {/* Cabecalho */}
+        <div className="malha-prancha flex items-start justify-between gap-4 px-6 py-5 text-white">
+          <div className="min-w-0">
+            <DialogTitle className="font-wide text-lg font-semibold text-white">
               Retrabalho do Projeto
-            </h3>
-            {projetoCodigo && (
-              <p className="text-xs text-gray-600 mt-1">
-                Projeto <span className="font-semibold">{projetoCodigo}</span>
-                {cliente ? ` • ${cliente}` : ''}
-              </p>
+            </DialogTitle>
+            {projetoCodigo ? (
+              <DialogDescription className="mt-1.5 text-sm text-white/65">
+                Projeto <span className="font-semibold text-white">{projetoCodigo}</span>
+                {cliente ? `, ${cliente}` : ''}
+              </DialogDescription>
+            ) : (
+              <DialogDescription className="sr-only">Detalhes de retrabalho do projeto</DialogDescription>
             )}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-sm text-gray-500 hover:text-gray-800 px-3 py-1 rounded-md hover:bg-gray-100"
-          >
-            Fechar
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-b px-6">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-3 text-sm font-semibold border-b-2 transition-colors ${
-                activeTab === tab.key
-                  ? 'border-tecpred-primary text-tecpred-primary'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
+          <DialogClose asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="shrink-0 text-white hover:bg-white/15 hover:text-white focus-visible:ring-white/50"
             >
-              {tab.label}
-            </button>
-          ))}
+              Fechar
+            </Button>
+          </DialogClose>
         </div>
 
-        {/* Content */}
-        <div className="px-6 py-4 overflow-y-auto flex-1">
+        <Tabs
+          value={activeTab}
+          onValueChange={(valor) => setActiveTab(valor as TabKey)}
+          className="min-h-0 flex-1 gap-0"
+        >
+          <div className="overflow-x-auto border-b px-4 py-1.5 sm:px-6">
+            <TabsList variant="line">
+              {TABS.map((tab) => (
+                <TabsTrigger key={tab.key} value={tab.key} className="px-3 after:bg-primary data-active:text-primary">
+                  {tab.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
 
-          {/* Aba: Por Área — expandable */}
-          {activeTab === 'areas' && (
-            <div>
-              {areasProjeto.length === 0 ? (
-                <p className="text-sm text-gray-500 py-4">
-                  Nenhum retrabalho registrado por área neste projeto.
+          {/* Aba: Por Área — expansivel */}
+          <TabsContent value="areas" className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6">
+            {areasProjeto.length === 0 ? (
+              <p className="py-4 text-sm text-muted-foreground">
+                Nenhum retrabalho registrado por área neste projeto.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Clique em uma área para ver os registros individuais.
                 </p>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-xs text-gray-500 mb-3">
-                    Clique em uma área para ver os registros individuais.
-                  </p>
-                  {areasProjeto.map((area) => {
-                    const isExpanded = expandedAreas.has(area.area_id)
-                    const registros = detalhesPorArea[area.area_id] || []
+                {areasProjeto.map((area) => {
+                  const isExpanded = expandedAreas.has(area.area_id)
+                  const registros = detalhesPorArea[area.area_id] || []
+                  const painelId = `retrabalho-area-${area.area_id}`
 
-                    return (
-                      <div
-                        key={area.area_id}
-                        className="border border-gray-200 rounded-lg overflow-hidden"
+                  return (
+                    <div key={area.area_id} className="overflow-hidden rounded-lg border">
+                      {/* Linha da área (clicável) */}
+                      <button
+                        type="button"
+                        onClick={() => toggleArea(area.area_id)}
+                        aria-expanded={isExpanded}
+                        aria-controls={painelId}
+                        className="flex w-full items-center justify-between gap-3 bg-muted/50 px-4 py-3 text-left transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset"
                       >
-                        {/* Linha da área (clicável) */}
-                        <button
-                          type="button"
-                          onClick={() => toggleArea(area.area_id)}
-                          className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
-                        >
-                          <div className="flex items-center gap-3">
-                            {isExpanded ? (
-                              <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
-                            ) : (
-                              <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                        <div className="flex min-w-0 items-center gap-3">
+                          <ChevronRight
+                            className={cn(
+                              'size-4 shrink-0 text-muted-foreground transition-transform',
+                              isExpanded && 'rotate-90'
                             )}
-                            <span className="text-xs font-mono text-gray-500">
-                              {area.area_codigo}
-                            </span>
-                            <span className="text-sm font-semibold text-gray-800">
-                              {area.area}
-                            </span>
-                          </div>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200 shrink-0">
-                            {area.total_retrabalhos_area} retrabalho{area.total_retrabalhos_area !== 1 ? 's' : ''}
-                          </span>
-                        </button>
+                          />
+                          <span className="font-mono text-xs text-muted-foreground">{area.area_codigo}</span>
+                          <span className="truncate text-sm font-semibold">{area.area}</span>
+                        </div>
+                        <span className="inline-flex shrink-0 items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700 tabular-nums">
+                          {area.total_retrabalhos_area} retrabalho{area.total_retrabalhos_area !== 1 ? 's' : ''}
+                        </span>
+                      </button>
 
-                        {/* Registros individuais da área */}
-                        {isExpanded && (
-                          <div className="divide-y divide-gray-100 bg-white">
-                            {registros.length === 0 ? (
-                              <p className="px-6 py-3 text-sm text-gray-400">
-                                Sem registros detalhados.
-                              </p>
-                            ) : (
-                              registros.map((item) => (
-                                <div
-                                  key={item.retrabalho_id}
-                                  className="px-6 py-3 flex gap-4 items-start"
-                                >
-                                  <div className="shrink-0 text-xs text-gray-500 w-20 pt-0.5">
+                      {/* Registros individuais da área */}
+                      {isExpanded && (
+                        <div id={painelId} className="divide-y bg-card">
+                          {registros.length === 0 ? (
+                            <p className="px-6 py-3 text-sm text-muted-foreground">Sem registros detalhados.</p>
+                          ) : (
+                            registros.map((item) => (
+                              <div
+                                key={item.retrabalho_id}
+                                className="flex flex-col gap-1.5 px-4 py-3 sm:flex-row sm:items-start sm:gap-4 sm:px-6"
+                              >
+                                <div className="flex gap-3 sm:contents">
+                                  <div className="shrink-0 pt-0.5 text-xs text-muted-foreground tabular-nums sm:w-20">
                                     {formatarDataBR(item.data_retrabalho)}
                                   </div>
-                                  <div className="shrink-0 text-xs font-semibold text-tecpred-primary w-28 pt-0.5">
+                                  <div className="shrink-0 pt-0.5 text-xs font-semibold text-primary sm:w-28">
                                     {item.engenheiro_nome}
                                   </div>
-                                  <div className="flex-1 text-sm text-gray-700 flex flex-wrap items-center gap-2">
-                                    <EtiquetaTipo tipo={item.tipo_retrabalho} />
-                                    {item.motivo_retrabalho || (
-                                      <span className="italic text-gray-400">Sem motivo informado</span>
-                                    )}
-                                  </div>
                                 </div>
-                              ))
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
+                                <div className="flex flex-1 flex-wrap items-center gap-2 text-sm">
+                                  <EtiquetaTipo tipo={item.tipo_retrabalho} />
+                                  {item.motivo_retrabalho || <SemMotivo />}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
 
-                  {/* Totalizador */}
-                  <div className="pt-2 flex justify-end">
-                    <span className="text-xs text-gray-500">
-                      Total:{' '}
-                      <span className="font-bold text-gray-800">
-                        {areasProjeto.reduce((s, a) => s + a.total_retrabalhos_area, 0)}
-                      </span>{' '}
-                      retrabalhos em {areasProjeto.length} área{areasProjeto.length !== 1 ? 's' : ''}
-                    </span>
-                  </div>
+                {/* Totalizador */}
+                <div className="flex justify-end pt-2">
+                  <span className="text-xs text-muted-foreground">
+                    Total:{' '}
+                    <span className="font-semibold text-foreground tabular-nums">{totalRetrabalhos}</span>{' '}
+                    retrabalhos em {areasProjeto.length} área{areasProjeto.length !== 1 ? 's' : ''}
+                  </span>
                 </div>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+          </TabsContent>
 
           {/* Aba: Motivos */}
-          {activeTab === 'motivos' && (
-            <div>
-              {motivosProjeto.length === 0 ? (
-                <p className="text-sm text-gray-500 py-4">
-                  Nenhum motivo registrado para este projeto.
-                </p>
-              ) : (
-                <MotivosPorTipo
-                  data={motivosProjeto}
-                  escopo={projetoCodigo || 'Projeto'}
-                  height={300}
-                />
-              )}
-            </div>
-          )}
+          <TabsContent value="motivos" className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6">
+            {motivosProjeto.length === 0 ? (
+              <p className="py-4 text-sm text-muted-foreground">
+                Nenhum motivo registrado para este projeto.
+              </p>
+            ) : (
+              <MotivosPorTipo data={motivosProjeto} escopo={projetoCodigo || 'Projeto'} height={300} />
+            )}
+          </TabsContent>
 
           {/* Aba: Todos os Detalhes */}
-          {activeTab === 'detalhes' && (
-            <div>
-              {detalhes.length === 0 ? (
-                <p className="text-sm text-gray-500 py-4">
-                  Nenhum retrabalho registrado para este projeto.
-                </p>
-              ) : (
-                <ul className="space-y-3">
-                  {detalhes.map((item) => (
-                    <li
-                      key={item.retrabalho_id}
-                      className="p-4 border rounded-lg bg-gray-50"
-                    >
-                      <div className="flex justify-between items-center mb-1 flex-wrap gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-gray-600">
-                            {formatarDataBR(item.data_retrabalho)}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full text-xs bg-tecpred-light text-tecpred-primary font-medium">
-                            {item.area_descricao}
-                          </span>
-                          <EtiquetaTipo tipo={item.tipo_retrabalho} />
-                        </div>
-                        <span className="text-xs text-gray-500">
-                          Engenheiro:{' '}
-                          <span className="font-semibold text-gray-800">
-                            {item.engenheiro_nome}
-                          </span>
+          <TabsContent value="detalhes" className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6">
+            {detalhes.length === 0 ? (
+              <p className="py-4 text-sm text-muted-foreground">
+                Nenhum retrabalho registrado para este projeto.
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {detalhes.map((item) => (
+                  <li key={item.retrabalho_id} className="rounded-lg border bg-muted/40 p-4">
+                    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-semibold text-muted-foreground tabular-nums">
+                          {formatarDataBR(item.data_retrabalho)}
                         </span>
+                        <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
+                          {item.area_descricao}
+                        </span>
+                        <EtiquetaTipo tipo={item.tipo_retrabalho} />
                       </div>
-                      <p className="text-sm text-gray-800 whitespace-pre-wrap">
-                        {item.motivo_retrabalho || (
-                          <span className="italic text-gray-400">Sem motivo informado</span>
-                        )}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-
-        </div>
-      </div>
-    </div>
+                      <span className="text-xs text-muted-foreground">
+                        Engenheiro: <span className="font-semibold text-foreground">{item.engenheiro_nome}</span>
+                      </span>
+                    </div>
+                    <p className="text-sm whitespace-pre-wrap">
+                      {item.motivo_retrabalho || <SemMotivo />}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   )
 }
