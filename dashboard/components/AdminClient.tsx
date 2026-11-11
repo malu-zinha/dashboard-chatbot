@@ -126,9 +126,9 @@ export default function AdminClient({ ownerId, ownerEmail }: AdminClientProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-tecpred-light">
+    <div className="min-h-screen bg-linear-to-br from-gray-50 to-tecpred-light">
       {/* Top bar */}
-      <header className="bg-gradient-to-r from-tecpred-primary via-tecpred-secondary to-tecpred-primary shadow-lg border-b-4 border-tecpred-orange">
+      <header className="bg-linear-to-r from-tecpred-primary via-tecpred-secondary to-tecpred-primary shadow-lg border-b-4 border-tecpred-orange">
         <div className="container mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Image
@@ -147,7 +147,7 @@ export default function AdminClient({ ownerId, ownerEmail }: AdminClientProps) {
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white border-opacity-20 bg-white bg-opacity-10 hover:bg-opacity-20 transition text-white text-sm font-medium"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/20 bg-white/10 hover:bg-white/20 transition text-white text-sm font-medium"
             >
               <ArrowLeft className="w-4 h-4" />
               <span className="hidden md:inline">Dashboard</span>
@@ -155,7 +155,7 @@ export default function AdminClient({ ownerId, ownerEmail }: AdminClientProps) {
             <button
               onClick={handleLogout}
               title="Sair"
-              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white border-opacity-20 bg-white bg-opacity-10 hover:bg-opacity-20 transition text-white text-sm font-medium"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/20 bg-white/10 hover:bg-white/20 transition text-white text-sm font-medium"
             >
               <LogOut className="w-4 h-4" />
               <span className="hidden md:inline">Sair</span>
@@ -183,7 +183,7 @@ export default function AdminClient({ ownerId, ownerEmail }: AdminClientProps) {
                   type="text"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-orange focus:border-transparent outline-none transition"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-orange focus:border-transparent outline-hidden transition"
                   placeholder="Nome do engenheiro"
                 />
               </div>
@@ -197,7 +197,7 @@ export default function AdminClient({ ownerId, ownerEmail }: AdminClientProps) {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-orange focus:border-transparent outline-none transition"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-orange focus:border-transparent outline-hidden transition"
                   placeholder="engenheiro@empresa.com"
                 />
               </div>
@@ -212,19 +212,19 @@ export default function AdminClient({ ownerId, ownerEmail }: AdminClientProps) {
                   minLength={6}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-orange focus:border-transparent outline-none transition"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-orange focus:border-transparent outline-hidden transition"
                   placeholder="mín. 6 caracteres"
                 />
               </div>
 
               {formError && (
-                <div className="md:col-span-3 flex items-center gap-2 text-sm text-danger bg-danger bg-opacity-10 border border-danger border-opacity-30 rounded-lg px-3 py-2">
+                <div className="md:col-span-3 flex items-center gap-2 text-sm text-danger bg-danger/10 border border-danger/30 rounded-lg px-3 py-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   {formError}
                 </div>
               )}
               {formSuccess && (
-                <div className="md:col-span-3 flex items-center gap-2 text-sm text-success bg-success bg-opacity-10 border border-success border-opacity-30 rounded-lg px-3 py-2">
+                <div className="md:col-span-3 flex items-center gap-2 text-sm text-success bg-success/10 border border-success/30 rounded-lg px-3 py-2">
                   <CheckCircle2 className="w-4 h-4 shrink-0" />
                   {formSuccess}
                 </div>
@@ -261,7 +261,7 @@ export default function AdminClient({ ownerId, ownerEmail }: AdminClientProps) {
                 <Loader2 className="w-5 h-5 animate-spin" /> Carregando...
               </div>
             ) : loadError ? (
-              <div className="flex items-center gap-2 text-sm text-danger bg-danger bg-opacity-10 border border-danger border-opacity-30 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 text-sm text-danger bg-danger/10 border border-danger/30 rounded-lg px-3 py-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 {loadError}
               </div>
@@ -292,7 +292,7 @@ export default function AdminClient({ ownerId, ownerEmail }: AdminClientProps) {
                             <span
                               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                                 isOwner
-                                  ? 'bg-tecpred-primary bg-opacity-10 text-tecpred-primary'
+                                  ? 'bg-tecpred-primary/10 text-tecpred-primary'
                                   : 'bg-gray-100 text-gray-600'
                               }`}
                             >
@@ -304,8 +304,8 @@ export default function AdminClient({ ownerId, ownerEmail }: AdminClientProps) {
                             <span
                               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                                 ativo
-                                  ? 'bg-success bg-opacity-10 text-success'
-                                  : 'bg-danger bg-opacity-10 text-danger'
+                                  ? 'bg-success/10 text-success'
+                                  : 'bg-danger/10 text-danger'
                               }`}
                             >
                               <span

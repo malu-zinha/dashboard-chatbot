@@ -117,12 +117,12 @@ export default function EngenheirosExecucaoTable({
             {filteredGroups.map((grupo) => (
               <section
                 key={grupo.eng_id}
-                className={`flex flex-shrink-0 flex-col rounded-lg border border-gray-200 bg-white ${layout.column}`}
+                className={`flex shrink-0 flex-col rounded-lg border border-gray-200 bg-white ${layout.column}`}
               >
                 <div className={`border-b border-gray-200 ${layout.colHeader}`}>
                   <div className="flex items-center gap-3">
                     <div
-                      className={`flex flex-shrink-0 items-center justify-center rounded-full bg-tecpred-primary text-white ${layout.avatar}`}
+                      className={`flex shrink-0 items-center justify-center rounded-full bg-tecpred-primary text-white ${layout.avatar}`}
                     >
                       <User className={layout.avatarIcon} />
                     </div>
@@ -140,7 +140,7 @@ export default function EngenheirosExecucaoTable({
                   {grupo.tarefas.map((tarefa) => (
                     <article
                       key={tarefa.atribuicao_id || `${tarefa.projeto_id}-${tarefa.area_display_name}`}
-                      className={`flex-shrink-0 rounded-lg border shadow-sm ${layout.taskCard} ${
+                      className={`shrink-0 rounded-lg border shadow-xs ${layout.taskCard} ${
                         tarefa.dias_atraso > 0
                           ? 'border-red-200 bg-red-50'
                           : 'border-gray-200 bg-white'

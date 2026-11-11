@@ -171,9 +171,9 @@ export default function RetrabalhoDetalhesModal({
                         >
                           <div className="flex items-center gap-3">
                             {isExpanded ? (
-                              <ChevronDown className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                              <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
                             ) : (
-                              <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                              <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                             )}
                             <span className="text-xs font-mono text-gray-500">
                               {area.area_codigo}
@@ -182,7 +182,7 @@ export default function RetrabalhoDetalhesModal({
                               {area.area}
                             </span>
                           </div>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200 flex-shrink-0">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200 shrink-0">
                             {area.total_retrabalhos_area} retrabalho{area.total_retrabalhos_area !== 1 ? 's' : ''}
                           </span>
                         </button>
@@ -200,10 +200,10 @@ export default function RetrabalhoDetalhesModal({
                                   key={item.retrabalho_id}
                                   className="px-6 py-3 flex gap-4 items-start"
                                 >
-                                  <div className="flex-shrink-0 text-xs text-gray-500 w-20 pt-0.5">
+                                  <div className="shrink-0 text-xs text-gray-500 w-20 pt-0.5">
                                     {formatarDataBR(item.data_retrabalho)}
                                   </div>
-                                  <div className="flex-shrink-0 text-xs font-semibold text-tecpred-primary w-28 pt-0.5">
+                                  <div className="shrink-0 text-xs font-semibold text-tecpred-primary w-28 pt-0.5">
                                     {item.engenheiro_nome}
                                   </div>
                                   <div className="flex-1 text-sm text-gray-700 flex flex-wrap items-center gap-2">

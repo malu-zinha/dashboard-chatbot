@@ -43,10 +43,10 @@ export default function EngenheirosTable({ isOpen, onClose, data }: EngenheirosT
   const filteredData = filterAndRank(data, searchTerm, item => [item.nome])
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col animate-fade-in" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="bg-gradient-to-r from-tecpred-primary to-tecpred-secondary p-6 rounded-t-xl">
+        <div className="bg-linear-to-r from-tecpred-primary to-tecpred-secondary p-6 rounded-t-xl">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold text-white">Listagem de Engenheiros</h2>
@@ -56,7 +56,7 @@ export default function EngenheirosTable({ isOpen, onClose, data }: EngenheirosT
             </div>
             <button
               onClick={onClose}
-              className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+              className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors"
             >
               <X className="w-6 h-6" />
             </button>

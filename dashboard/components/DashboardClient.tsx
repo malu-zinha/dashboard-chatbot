@@ -475,7 +475,7 @@ export default function DashboardClient() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-tecpred-light">
+    <div className="min-h-screen bg-linear-to-br from-gray-50 to-tecpred-light">
       <Header lastUpdate={lastUpdate} isLoading={isLoading} isConnected={realtimeConectado} />
 
       <main className="container mx-auto px-6 py-8">
@@ -510,7 +510,7 @@ export default function DashboardClient() {
         <div className="mb-6 flex flex-wrap gap-3">
           <button
             onClick={() => setShowCriarProjetoModal(true)}
-            className="px-6 py-3 bg-gradient-to-r from-tecpred-primary to-tecpred-secondary text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-semibold flex items-center gap-2 border-2 border-tecpred-primary"
+            className="px-6 py-3 bg-linear-to-r from-tecpred-primary to-tecpred-secondary text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-semibold flex items-center gap-2 border-2 border-tecpred-primary"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
@@ -521,7 +521,7 @@ export default function DashboardClient() {
           </button>
           <button
             onClick={() => setShowAtribuirTaskModal(true)}
-            className="px-6 py-3 bg-gradient-to-r from-tecpred-primary to-tecpred-secondary text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-semibold flex items-center gap-2 border-2 border-tecpred-primary"
+            className="px-6 py-3 bg-linear-to-r from-tecpred-primary to-tecpred-secondary text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-semibold flex items-center gap-2 border-2 border-tecpred-primary"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
@@ -709,7 +709,7 @@ export default function DashboardClient() {
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-4">
                   <div
-                    className="bg-gradient-to-r from-tecpred-primary to-tecpred-secondary h-4 rounded-full transition-all duration-500"
+                    className="bg-linear-to-r from-tecpred-primary to-tecpred-secondary h-4 rounded-full transition-all duration-500"
                     style={{ width: `${visaoGeral?.percentual_concluido_medio || 0}%` }}
                   ></div>
                 </div>

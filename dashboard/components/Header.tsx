@@ -25,7 +25,7 @@ export default function Header({ lastUpdate, isLoading, isConnected = true }: He
   }
 
   return (
-    <header className="bg-gradient-to-r from-tecpred-primary via-tecpred-secondary to-tecpred-primary shadow-lg border-b-4 border-tecpred-orange overflow-visible">
+    <header className="bg-linear-to-r from-tecpred-primary via-tecpred-secondary to-tecpred-primary shadow-lg border-b-4 border-tecpred-orange overflow-visible">
       <div className="container mx-auto px-0 py-1 pl-0">
         <div className="flex items-center justify-between">
           {/* Logo */}
@@ -42,7 +42,7 @@ export default function Header({ lastUpdate, isLoading, isConnected = true }: He
               <h2 className="text-white text-lg font-semibold">
                 Dashboard Executivo
               </h2>
-              <p className="text-white text-opacity-80 text-sm flex items-center gap-1">
+              <p className="text-white/80 text-sm flex items-center gap-1">
                 <span className="w-2 h-2 bg-tecpred-orange rounded-full animate-pulse"></span>
                 Visão em Tempo Real
               </p>
@@ -51,7 +51,7 @@ export default function Header({ lastUpdate, isLoading, isConnected = true }: He
 
           {/* Status */}
           <div className="flex items-center space-x-4 pr-6">
-            <div className="flex items-center space-x-2 bg-white bg-opacity-10 backdrop-blur-sm px-4 py-2 rounded-lg border border-white border-opacity-20">
+            <div className="flex items-center space-x-2 bg-white/10 backdrop-blur-xs px-4 py-2 rounded-lg border border-white/20">
               <RefreshCw 
                 className={`w-4 h-4 text-tecpred-orange ${isLoading ? 'animate-spin' : ''}`} 
               />
@@ -69,8 +69,8 @@ export default function Header({ lastUpdate, isLoading, isConnected = true }: He
             
             <div className={`flex items-center space-x-2 px-3 py-2 rounded-lg border ${
               isConnected
-                ? 'bg-success bg-opacity-20 border-success'
-                : 'bg-danger bg-opacity-20 border-danger'
+                ? 'bg-success/20 border-success'
+                : 'bg-danger/20 border-danger'
             }`}>
               <div className={`w-3 h-3 rounded-full shadow-lg ${
                 isConnected
@@ -86,7 +86,7 @@ export default function Header({ lastUpdate, isLoading, isConnected = true }: He
               <Link
                 href="/admin"
                 title="Painel administrativo"
-                className="flex items-center space-x-2 px-3 py-2 rounded-lg border border-white border-opacity-20 bg-white bg-opacity-10 hover:bg-opacity-20 transition text-white text-sm font-medium"
+                className="flex items-center space-x-2 px-3 py-2 rounded-lg border border-white/20 bg-white/10 hover:bg-white/20 transition text-white text-sm font-medium"
               >
                 <Shield className="w-4 h-4" />
                 <span className="hidden md:inline">Admin</span>
@@ -96,7 +96,7 @@ export default function Header({ lastUpdate, isLoading, isConnected = true }: He
             <button
               onClick={handleLogout}
               title="Sair"
-              className="flex items-center space-x-2 px-3 py-2 rounded-lg border border-white border-opacity-20 bg-white bg-opacity-10 hover:bg-opacity-20 transition text-white text-sm font-medium"
+              className="flex items-center space-x-2 px-3 py-2 rounded-lg border border-white/20 bg-white/10 hover:bg-white/20 transition text-white text-sm font-medium"
             >
               <LogOut className="w-4 h-4" />
               <span className="hidden md:inline">Sair</span>

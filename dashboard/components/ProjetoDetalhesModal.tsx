@@ -108,7 +108,7 @@ export default function ProjetoDetalhesModal({
 
   return (
     <div 
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" 
+      className="fixed inset-0 z-70 flex items-center justify-center bg-black/50 p-4" 
       onClick={onClose}
     >
       <div 
@@ -116,7 +116,7 @@ export default function ProjetoDetalhesModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-tecpred-primary to-tecpred-secondary px-6 py-4">
+        <div className="bg-linear-to-r from-tecpred-primary to-tecpred-secondary px-6 py-4">
           <div className="flex items-start justify-between">
             <div>
               <h3 className="text-xl font-bold text-white">
@@ -159,7 +159,7 @@ export default function ProjetoDetalhesModal({
           {/* Atraso */}
           {projeto.dias_atraso > 0 && (
             <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-              <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
+              <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
               <span className="text-sm text-red-700">
                 <span className="font-bold">{projeto.dias_atraso} dia(s)</span> de atraso
               </span>
@@ -169,7 +169,7 @@ export default function ProjetoDetalhesModal({
           {/* Concluido */}
           {projeto.data_conclusao && (
             <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
-              <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
+              <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
               <span className="text-sm text-green-700">
                 Concluido em <span className="font-bold">{formatarDataBR(projeto.data_conclusao)}</span>
               </span>
@@ -179,7 +179,7 @@ export default function ProjetoDetalhesModal({
           {/* Informacoes */}
           <div className="space-y-3">
             <div className="flex items-start gap-3">
-              <User className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
+              <User className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Engenheiro</p>
                 <p className="text-sm font-medium text-gray-900">{projeto.engenheiro_nome}</p>
@@ -187,7 +187,7 @@ export default function ProjetoDetalhesModal({
             </div>
 
             <div className="flex items-start gap-3">
-              <Layers className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
+              <Layers className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Area / Disciplina</p>
                 <p className="text-sm font-medium text-gray-900">
@@ -200,7 +200,7 @@ export default function ProjetoDetalhesModal({
             </div>
 
             <div className="flex items-start gap-3">
-              <Calendar className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
+              <Calendar className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Datas</p>
                 <div className="text-sm text-gray-900 space-y-0.5">
@@ -215,7 +215,7 @@ export default function ProjetoDetalhesModal({
 
             {projeto.descricao && (
               <div className="flex items-start gap-3">
-                <Clock className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                <Clock className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
                 <div>
                   <p className="text-xs text-gray-500 uppercase tracking-wide">Descricao</p>
                   <p className="text-sm text-gray-700">{projeto.descricao}</p>
@@ -227,7 +227,7 @@ export default function ProjetoDetalhesModal({
           {/* Observacoes do Engenheiro */}
           <div className="border-t pt-4">
             <div className="flex items-start gap-3">
-              <MessageSquare className="h-4 w-4 text-tecpred-primary mt-0.5 flex-shrink-0" />
+              <MessageSquare className="h-4 w-4 text-tecpred-primary mt-0.5 shrink-0" />
               <div className="flex-1">
                 <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">
                   Observacoes do Engenheiro
@@ -250,7 +250,7 @@ export default function ProjetoDetalhesModal({
           {/* Relato diario do chatbot */}
           <div className="border-t pt-4">
             <div className="flex items-start gap-3">
-              <Clock className="h-4 w-4 text-tecpred-primary mt-0.5 flex-shrink-0" />
+              <Clock className="h-4 w-4 text-tecpred-primary mt-0.5 shrink-0" />
               <div className="flex-1">
                 <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">
                   Relato diario no chatbot

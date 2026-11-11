@@ -1,6 +1,64 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@theme {
+  --color-tecpred-primary: #2e3192;
+  --color-tecpred-secondary: #4a4fb7;
+  --color-tecpred-accent: #6b70d9;
+  --color-tecpred-dark: #1a1d5e;
+  --color-tecpred-light: #e8e9f8;
+  --color-tecpred-white: #ffffff;
+  --color-tecpred-orange: #ff6b35;
+  --color-tecpred-coral: #ff8c61;
+
+  --color-success: #10b981;
+  --color-warning: #ff6b35;
+  --color-danger: #ef4444;
+  --color-info: #2e3192;
+
+  --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-fade-in: fadeIn 0.5s ease-in;
+
+  @keyframes fadeIn {
+    0% {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+
+  /* v3 mostrava a mao em todo botao; o v4 voltou ao padrao do navegador. */
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+
+  /* v3 usava gray-400 no placeholder; o v4 usa a cor do texto com 50%. */
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-gray-400);
+  }
+}
 
 :root {
   --tecpred-primary: #2E3192;

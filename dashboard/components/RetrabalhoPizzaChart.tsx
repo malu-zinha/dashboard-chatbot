@@ -100,7 +100,7 @@ export default function RetrabalhoPizzaChart({
 
       {/* Pizza a esquerda e lista a direita; em tela estreita, uma embaixo da outra. */}
       <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-8 max-w-3xl mx-auto">
-        <div className="w-full md:w-1/2 flex-shrink-0">
+        <div className="w-full md:w-1/2 shrink-0">
           <ResponsiveContainer width="100%" height={height}>
             <PieChart>
               <Pie
@@ -125,16 +125,16 @@ export default function RetrabalhoPizzaChart({
           {data.map((item, index) => (
             <div
               key={item.motivo_retrabalho}
-              className="flex items-center justify-between py-1 px-2 rounded hover:bg-gray-50"
+              className="flex items-center justify-between py-1 px-2 rounded-sm hover:bg-gray-50"
             >
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <div
-                  className="w-3 h-3 rounded-full flex-shrink-0"
+                  className="w-3 h-3 rounded-full shrink-0"
                   style={{ backgroundColor: corDoMotivo(item.motivo_retrabalho, index) }}
                 />
                 <span className="text-xs text-gray-700 truncate">{item.motivo_retrabalho}</span>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+              <div className="flex items-center gap-2 shrink-0 ml-2">
                 <span className="text-xs font-bold text-gray-900">{item.quantidade}</span>
                 <span className="text-xs text-gray-400">
                   ({total > 0 ? Math.round((item.quantidade / total) * 100) : 0}%)
