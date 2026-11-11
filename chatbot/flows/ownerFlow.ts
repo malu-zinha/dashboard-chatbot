@@ -14,6 +14,7 @@ import { normalizeProjectCode, validateWhatsapp } from '../../logic/validation/v
 import { redactSecrets } from '../../logic/security/redactSecrets.ts';
 import { resumoTexto } from '../../logic/security/mascararPII.ts';
 import { dataLocalBR } from '../../logic/datas/dataLocal.ts';
+import { rotuloTipoOcorrencia } from '../../logic/retrabalho/tipoOcorrencia.ts';
 
 // Lazy loading para evitar problemas com dotenv
 let supabaseServiceInstance: SupabaseService | null = null;
@@ -635,9 +636,7 @@ export class OwnerFlow {
       msg += `👷 ${ret.engenheiro_nome}\n`;
       msg += `📋 ${ret.codigo_projeto} - ${ret.area_descricao}\n`;
       msg += `❗ Motivo: ${ret.motivo_retrabalho}\n`;
-      if (ret.tipo_retrabalho) {
-        msg += `📊 Tipo: ${ret.tipo_retrabalho}\n`;
-      }
+      msg += `📊 Tipo: ${rotuloTipoOcorrencia(ret.tipo_retrabalho)}\n`;
       msg += `\n`;
     });
     

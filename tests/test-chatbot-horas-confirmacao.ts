@@ -9,6 +9,7 @@ import { EngineerProjectFlow, MOTIVOS_RETRABALHO } from '../chatbot/flows/engine
 
 interface Gravacao {
   necessitou: boolean
+  tipo?: string
   motivo?: string
   horasTotal: number
   horasRetrabalho: number
@@ -29,12 +30,12 @@ function criarFlow() {
       _atribuicaoId: string,
       necessitou: boolean,
       motivo: string | undefined,
-      _tipo: string | undefined,
+      tipo: string | undefined,
       _descricao: string | undefined,
       horasTotal: number,
       horasRetrabalho: number
     ) => {
-      gravacoes.push({ necessitou, motivo, horasTotal, horasRetrabalho })
+      gravacoes.push({ necessitou, tipo, motivo, horasTotal, horasRetrabalho })
       return { ok: true }
     },
   }
@@ -64,7 +65,8 @@ const enviar = async (flow: any, msg: string): Promise<string> =>
   const { flow, gravacoes } = criarFlow()
 
   await enviar(flow, '8') // horas trabalhadas
-  await enviar(flow, '1') // teve retrabalho
+  await enviar(flow, '1') // teve retrabalho ou paralisacao
+  await enviar(flow, '1') // retrabalho
   await enviar(flow, '3') // motivo
   const resumo = await enviar(flow, '2') // horas de retrabalho
 
@@ -94,6 +96,7 @@ const enviar = async (flow: any, msg: string): Promise<string> =>
 
   await enviar(flow, '8')
   await enviar(flow, '1')
+  await enviar(flow, '1')
   await enviar(flow, '3')
   await enviar(flow, '2')
   const repergunta = await enviar(flow, '2') // corrigir
@@ -107,15 +110,17 @@ const enviar = async (flow: any, msg: string): Promise<string> =>
   assert.equal(flow.state.motivoRetrabalho, undefined)
   assert.equal(flow.state.horasRetrabalho, undefined)
   assert.equal(flow.state.teveRetrabalho, undefined)
+  assert.equal(flow.state.tipoOcorrencia, undefined)
 
-  // Refazendo a sequencia, grava so os valores novos
+  // Refazendo a sequencia (agora como paralisacao), grava so os valores novos
   await enviar(flow, '4')
   await enviar(flow, '1')
+  await enviar(flow, '2') // paralisacao
   await enviar(flow, '1')
   await enviar(flow, '1')
   await enviar(flow, '1') // confirmar
   assert.deepEqual(gravacoes, [
-    { necessitou: true, motivo: MOTIVOS_RETRABALHO[0], horasTotal: 4, horasRetrabalho: 1 },
+    { necessitou: true, tipo: 'paralisacao', motivo: MOTIVOS_RETRABALHO[0], horasTotal: 4, horasRetrabalho: 1 },
   ])
 
   console.log('   ✅ "2" reabre a pergunta de horas e limpa o retrabalho obsoleto')
@@ -128,6 +133,7 @@ const enviar = async (flow: any, msg: string): Promise<string> =>
   const { flow, gravacoes } = criarFlow()
 
   await enviar(flow, '8')
+  await enviar(flow, '1')
   await enviar(flow, '1')
   await enviar(flow, '3')
   await enviar(flow, '2')
@@ -149,12 +155,13 @@ const enviar = async (flow: any, msg: string): Promise<string> =>
 
   await enviar(flow, '8')
   await enviar(flow, '1')
+  await enviar(flow, '1')
   await enviar(flow, '3')
   await enviar(flow, '2')
   const gravado = await enviar(flow, '1') // confirmar
 
   assert.deepEqual(gravacoes, [
-    { necessitou: true, motivo: MOTIVO_ESCOLHIDO, horasTotal: 8, horasRetrabalho: 2 },
+    { necessitou: true, tipo: 'retrabalho', motivo: MOTIVO_ESCOLHIDO, horasTotal: 8, horasRetrabalho: 2 },
   ])
   assert.equal(flow.state.step, 'observacoes_pergunta')
   assert.match(gravado, /Retrabalho registrado: 2h de 8h \(25\.0%\)/)
@@ -174,16 +181,16 @@ const enviar = async (flow: any, msg: string): Promise<string> =>
 
   assert.equal(flow.state.step, 'horas_confirmar')
   assert.match(resumo, /Horas trabalhadas: \*8h\*/)
-  assert.match(resumo, /Sem retrabalho/)
+  assert.match(resumo, /Sem retrabalho nem paralisação hoje/)
   assert.doesNotMatch(resumo, /%/, 'sem retrabalho nao ha percentual a mostrar')
   assert.equal(gravacoes.length, 0)
 
   const gravado = await enviar(flow, '1')
   assert.deepEqual(gravacoes, [
-    { necessitou: false, motivo: undefined, horasTotal: 8, horasRetrabalho: 0 },
+    { necessitou: false, tipo: undefined, motivo: undefined, horasTotal: 8, horasRetrabalho: 0 },
   ])
   assert.equal(flow.state.step, 'observacoes_pergunta')
-  assert.match(gravado, /Sem retrabalho!/)
+  assert.match(gravado, /Sem retrabalho nem paralisação!/)
   assert.match(gravado, /Quer adicionar observações/)
 
   // O incidente de 28/09: registrarRetrabalho terminava buscando o ultimo retrabalho, que filtra
@@ -210,15 +217,16 @@ const enviar = async (flow: any, msg: string): Promise<string> =>
     atualizarFeitoDia: async () => ({ ok: true }),
     registrarRetrabalho: async (
       _id: string, necessitou: boolean, motivo: string | undefined,
-      _t: undefined, _d: undefined, horasTotal: number, horasRetrabalho: number
+      tipo: string | undefined, _d: undefined, horasTotal: number, horasRetrabalho: number
     ) => {
       if (falhar) return { ok: false, motivo: 'erro_rpc', mensagem: 'falha simulada' }
-      gravacoes.push({ necessitou, motivo, horasTotal, horasRetrabalho })
+      gravacoes.push({ necessitou, tipo, motivo, horasTotal, horasRetrabalho })
       return { ok: true }
     },
   }
 
   await enviar(flow, '8')
+  await enviar(flow, '1')
   await enviar(flow, '1')
   await enviar(flow, '3')
   await enviar(flow, '2')
@@ -234,7 +242,7 @@ const enviar = async (flow: any, msg: string): Promise<string> =>
   falhar = false
   const gravado = await enviar(flow, '1')
   assert.deepEqual(gravacoes, [
-    { necessitou: true, motivo: MOTIVO_ESCOLHIDO, horasTotal: 8, horasRetrabalho: 2 },
+    { necessitou: true, tipo: 'retrabalho', motivo: MOTIVO_ESCOLHIDO, horasTotal: 8, horasRetrabalho: 2 },
   ])
   assert.match(gravado, /Retrabalho registrado: 2h de 8h \(25\.0%\)/)
   assert.equal(flow.state.step, 'observacoes_pergunta')
@@ -251,6 +259,7 @@ const enviar = async (flow: any, msg: string): Promise<string> =>
   await enviar(flow, '7,5')
   await enviar(flow, '1')
   await enviar(flow, '1')
+  await enviar(flow, '1')
   const resumo = await enviar(flow, '1,5')
 
   assert.match(resumo, /Horas trabalhadas: \*7\.5h\*/)
@@ -258,10 +267,73 @@ const enviar = async (flow: any, msg: string): Promise<string> =>
 
   await enviar(flow, '1')
   assert.deepEqual(gravacoes, [
-    { necessitou: true, motivo: MOTIVOS_RETRABALHO[0], horasTotal: 7.5, horasRetrabalho: 1.5 },
+    { necessitou: true, tipo: 'retrabalho', motivo: MOTIVOS_RETRABALHO[0], horasTotal: 7.5, horasRetrabalho: 1.5 },
   ])
 
   console.log('   ✅ 7,5 / 1,5 chegam ao resumo e ao banco como 7.5 / 1.5')
+}
+
+// =====================================================
+// Paralisacao: mesmos 6 motivos, textos proprios, tipo gravado
+// =====================================================
+{
+  const { flow, gravacoes } = criarFlow()
+
+  await enviar(flow, '8')
+  const tipo = await enviar(flow, '1') // teve retrabalho ou paralisacao
+  assert.equal(flow.state.step, 'ocorrencia_tipo')
+  assert.match(tipo, /🔀 \*O que aconteceu\?\*/)
+  assert.match(tipo, /1️⃣ Retrabalho\n2️⃣ Paralisação/)
+
+  const invalido = await enviar(flow, '3')
+  assert.match(invalido, /❌ Opção inválida\. Digite \*1\* para Retrabalho ou \*2\* para Paralisação/)
+  assert.equal(flow.state.step, 'ocorrencia_tipo')
+
+  const motivos = await enviar(flow, '2') // paralisacao
+  assert.match(motivos, /⚠️ \*Motivo da paralisação\*/)
+  MOTIVOS_RETRABALHO.forEach((motivo, i) => {
+    assert.ok(motivos.includes(`${i + 1}️⃣ ${motivo}`), `paralisacao precisa oferecer "${motivo}"`)
+  })
+
+  const horas = await enviar(flow, '4') // Projeto Suspenso
+  assert.match(horas, /✅ Motivo registrado: Projeto Suspenso/)
+  assert.match(horas, /Quantas horas foram gastas na paralisação\?/)
+
+  const resumo = await enviar(flow, '3')
+  assert.match(resumo, /Motivo da paralisação: Projeto Suspenso/)
+  assert.match(resumo, /Horas de paralisação: \*3h\* \(37\.5%\)/)
+  assert.doesNotMatch(resumo, /retrabalho/i, 'resumo de paralisacao nao pode falar em retrabalho')
+
+  const gravado = await enviar(flow, '1')
+  assert.deepEqual(gravacoes, [
+    { necessitou: true, tipo: 'paralisacao', motivo: 'Projeto Suspenso', horasTotal: 8, horasRetrabalho: 3 },
+  ])
+  assert.match(gravado, /✅ Paralisação registrada: 3h de 8h \(37\.5%\)/)
+
+  console.log('   ✅ paralisacao -> 6 motivos, textos de paralisacao, tipo gravado')
+}
+
+// "Sim" e depois voltar para trocar de retrabalho para paralisacao nao deixa o tipo velho
+{
+  const { flow, gravacoes } = criarFlow()
+
+  await enviar(flow, '8')
+  await enviar(flow, '1')
+  await enviar(flow, '1') // retrabalho
+  const voltou = await enviar(flow, '0')
+  assert.equal(flow.state.step, 'ocorrencia_tipo')
+  assert.match(voltou, /O que aconteceu\?/)
+  assert.doesNotMatch(voltou, /❌/)
+
+  await enviar(flow, '2') // paralisacao
+  await enviar(flow, '6')
+  await enviar(flow, '1')
+  await enviar(flow, '1')
+  assert.deepEqual(gravacoes, [
+    { necessitou: true, tipo: 'paralisacao', motivo: 'Outro', horasTotal: 8, horasRetrabalho: 1 },
+  ])
+
+  console.log('   ✅ voltar e trocar de retrabalho para paralisacao grava paralisacao')
 }
 
 console.log('test-chatbot-horas-confirmacao: OK')
