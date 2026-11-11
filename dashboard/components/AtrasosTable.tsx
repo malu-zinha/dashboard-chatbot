@@ -26,7 +26,7 @@ export default function AtrasosTable({ data, acao }: AtrasosTableProps) {
           <AlertTriangle className="size-4 text-amber-600" />
           Atrasos por engenheiro
         </CardTitle>
-        <CardDescription>Quem tem projetos ou áreas com prazo vencido</CardDescription>
+        <CardDescription>Projetos e áreas com prazo vencido, por engenheiro</CardDescription>
         {acao && <CardAction>{acao}</CardAction>}
       </CardHeader>
       <CardContent>
@@ -40,10 +40,10 @@ export default function AtrasosTable({ data, acao }: AtrasosTableProps) {
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead>Engenheiro</TableHead>
-                <TableHead className="text-center">Projetos atrasados</TableHead>
-                <TableHead className="text-center">Áreas atrasadas</TableHead>
-                <TableHead className="text-center">Média de atraso</TableHead>
-                <TableHead className="text-right">Atraso máximo</TableHead>
+                <TableHead className="text-center">Projetos</TableHead>
+                <TableHead className="text-center">Áreas</TableHead>
+                <TableHead className="text-center">Média</TableHead>
+                <TableHead className="text-right">Máximo</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

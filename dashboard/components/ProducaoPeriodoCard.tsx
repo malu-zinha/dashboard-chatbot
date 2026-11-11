@@ -10,6 +10,20 @@ import {
   getProducaoDetalheEngenheiro,
   type ProducaoPeriodo,
 } from '@/lib/producaoPeriodo'
+import { cn } from '@/lib/utils'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 function parseTaxa(raw: string): number | null {
   const t = raw.trim().replace(/\s/g, '').replace(',', '.')
@@ -83,217 +97,205 @@ export default function ProducaoPeriodoCard() {
   const algumValorPreenchido = (rows || []).some((row) => parseTaxa(taxas[row.eng_id] || '') !== null)
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 animate-fade-in">
-      <div className="mb-4">
-        <div className="flex items-center space-x-2">
-          <Calculator className="w-5 h-5 text-tecpred-primary" />
-          <h3 className="text-lg font-bold text-gray-900">
-            Producao por engenheiro no periodo
-          </h3>
-        </div>
-        <p className="text-xs text-gray-500 mt-1">
+    <Card className="animate-fade-in">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Calculator className="size-4 text-primary" />
+          Producao por engenheiro no periodo
+        </CardTitle>
+        <CardDescription className="text-xs">
           Horas do apontamento diario no WhatsApp. Dia sem registro = 0h.
           Valor = horas trabalhadas (o total do dia, que ja inclui o retrabalho) × valor da hora (nao grava a tarifa).
-        </p>
-      </div>
+        </CardDescription>
+      </CardHeader>
 
-      <form onSubmit={handleConsultar} className="flex flex-wrap items-end gap-3 mb-4">
-        <div>
-          <label htmlFor="producao-inicio" className="block text-xs font-medium text-gray-600 mb-1">
-            Data inicio
-          </label>
-          <input
-            id="producao-inicio"
-            type="date"
-            value={dataInicio}
-            onChange={(e) => setDataInicio(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-tecpred-primary focus:border-transparent"
-          />
-        </div>
-        <div>
-          <label htmlFor="producao-fim" className="block text-xs font-medium text-gray-600 mb-1">
-            Data fim
-          </label>
-          <input
-            id="producao-fim"
-            type="date"
-            value={dataFim}
-            onChange={(e) => setDataFim(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-tecpred-primary focus:border-transparent"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="px-4 py-2 bg-tecpred-primary text-white rounded-lg hover:bg-tecpred-secondary transition-colors text-sm disabled:opacity-60"
+      <CardContent className="space-y-4">
+        <form
+          onSubmit={handleConsultar}
+          className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/40 p-3"
         >
-          {isLoading ? 'Consultando...' : 'Consultar'}
-        </button>
-      </form>
+          <div className="grid gap-1.5">
+            <Label htmlFor="producao-inicio" className="text-xs text-muted-foreground">
+              Data inicio
+            </Label>
+            <Input
+              id="producao-inicio"
+              type="date"
+              value={dataInicio}
+              onChange={(e) => setDataInicio(e.target.value)}
+              className="h-9 w-auto bg-card tabular-nums"
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="producao-fim" className="text-xs text-muted-foreground">
+              Data fim
+            </Label>
+            <Input
+              id="producao-fim"
+              type="date"
+              value={dataFim}
+              onChange={(e) => setDataFim(e.target.value)}
+              className="h-9 w-auto bg-card tabular-nums"
+            />
+          </div>
+          <Button type="submit" disabled={isLoading} className="h-9 px-4">
+            {isLoading ? 'Consultando...' : 'Consultar'}
+          </Button>
+        </form>
 
-      {errorMessage && (
-        <p className="text-sm text-danger mb-3">{errorMessage}</p>
-      )}
+        {errorMessage && (
+          <p role="alert" className="text-sm text-danger">{errorMessage}</p>
+        )}
 
-      {consultou && rows && rows.length === 0 && !isLoading && (
-        <p className="text-sm text-gray-500 py-3">
-          Nenhum engenheiro com horas registradas neste periodo.
-        </p>
-      )}
+        {consultou && rows && rows.length === 0 && !isLoading && (
+          <p className="py-3 text-sm text-muted-foreground">
+            Nenhum engenheiro com horas registradas neste periodo.
+          </p>
+        )}
 
-      {rows && rows.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-500 border-b">
-                <th className="py-2 pr-4">Engenheiro</th>
-                <th className="py-2 pr-4 text-right">Horas trabalhadas (total)</th>
-                <th className="py-2 pr-4 text-right">Dessas, retrabalho</th>
-                <th className="py-2 pr-4 text-right">Valor da hora</th>
-                <th className="py-2 pl-4 text-right">Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const taxa = parseTaxa(taxas[row.eng_id] || '')
-                const valor = taxa === null ? null : row.horas_trabalhadas_total * taxa
-                return (
-                  <tr
-                    key={row.eng_id}
-                    className={`border-b last:border-0 transition-colors ${
-                      selectedEngId === row.eng_id ? 'bg-tecpred-light/70' : 'hover:bg-gray-50'
-                    }`}
-                  >
-                    <td className="py-2 pr-4">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedEngId(row.eng_id)}
-                        className="text-left font-semibold text-tecpred-primary hover:text-tecpred-secondary hover:underline focus:outline-hidden focus:ring-2 focus:ring-tecpred-primary focus:ring-offset-2 rounded-sm"
-                      >
-                        {row.engenheiro}
-                      </button>
-                    </td>
-                    <td className="py-2 pr-4 text-right text-gray-900">
-                      {formatHoras(row.horas_trabalhadas_total)}
-                    </td>
-                    <td className="py-2 pr-4 text-right text-gray-500">
-                      {formatHoras(row.horas_retrabalho_total)}
-                    </td>
-                    <td className="py-2 pr-4 text-right">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        pattern="[0-9]+([,.][0-9]{0,2})?"
-                        aria-label={`Valor da hora para ${row.engenheiro}`}
-                        placeholder="0,00"
-                        value={taxas[row.eng_id] ?? ''}
-                        onChange={(e) =>
-                          setTaxas((prev) => ({ ...prev, [row.eng_id]: e.target.value }))
-                        }
-                        className="w-28 ml-auto px-2 py-1 border border-gray-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-tecpred-primary focus:border-transparent"
-                      />
-                    </td>
-                    <td className="py-2 pl-4 text-right font-semibold text-gray-900">
-                      {valor === null ? '—' : formatReais(valor)}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="border-t font-semibold text-gray-900">
-                <td className="py-2 pr-4">Total</td>
-                <td className="py-2 pr-4 text-right">{formatHoras(totalHoras)}</td>
-                <td className="py-2 pr-4 text-right text-gray-600">{formatHoras(totalRetrabalho)}</td>
-                <td className="py-2 pr-4" />
-                <td className="py-2 pl-4 text-right">
-                  {algumValorPreenchido ? formatReais(totalValor) : '—'}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+        {rows && rows.length > 0 && (
+          <div className="space-y-5">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Engenheiro</TableHead>
+                  <TableHead className="text-right">Horas trabalhadas (total)</TableHead>
+                  <TableHead className="text-right">Dessas, retrabalho</TableHead>
+                  <TableHead className="text-right">Valor da hora</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => {
+                  const taxa = parseTaxa(taxas[row.eng_id] || '')
+                  const valor = taxa === null ? null : row.horas_trabalhadas_total * taxa
+                  const selecionado = selectedEngId === row.eng_id
+                  return (
+                    <TableRow
+                      key={row.eng_id}
+                      data-state={selecionado ? 'selected' : undefined}
+                      className={cn(selecionado && 'bg-accent hover:bg-accent')}
+                    >
+                      <TableCell>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedEngId(row.eng_id)}
+                          aria-pressed={selecionado}
+                          className="rounded-sm text-left font-semibold text-primary underline-offset-4 hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                        >
+                          {row.engenheiro}
+                        </button>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatHoras(row.horas_trabalhadas_total)}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground tabular-nums">
+                        {formatHoras(row.horas_retrabalho_total)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          pattern="[0-9]+([,.][0-9]{0,2})?"
+                          aria-label={`Valor da hora para ${row.engenheiro}`}
+                          placeholder="0,00"
+                          value={taxas[row.eng_id] ?? ''}
+                          onChange={(e) =>
+                            setTaxas((prev) => ({ ...prev, [row.eng_id]: e.target.value }))
+                          }
+                          className="ml-auto w-28 bg-card text-right tabular-nums"
+                        />
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {valor === null ? '—' : formatReais(valor)}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+              <TableFooter>
+                <TableRow className="hover:bg-transparent">
+                  <TableCell className="font-semibold">Total</TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">{formatHoras(totalHoras)}</TableCell>
+                  <TableCell className="text-right text-muted-foreground tabular-nums">{formatHoras(totalRetrabalho)}</TableCell>
+                  <TableCell />
+                  <TableCell className="text-right font-semibold tabular-nums">
+                    {algumValorPreenchido ? formatReais(totalValor) : '—'}
+                  </TableCell>
+                </TableRow>
+              </TableFooter>
+            </Table>
 
-          {detalheSelecionado && periodoConsultado && (
-            <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h4 className="text-base font-bold text-gray-900">
-                    Projetos no periodo - {detalheSelecionado.engenheiro}
-                  </h4>
-                  <p className="text-xs text-gray-500">
-                    {periodoConsultado.dataInicio} a {periodoConsultado.dataFim}
-                  </p>
-                </div>
-                <div className="text-sm text-gray-700 sm:text-right">
-                  <div className="font-semibold text-gray-900">
-                    {formatHoras(detalheSelecionado.horas_trabalhadas_total)}
+            {detalheSelecionado && periodoConsultado && (
+              <section className="overflow-hidden rounded-lg border">
+                <div className="flex flex-col gap-2 border-b bg-muted/40 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h4 className="text-base font-semibold">
+                      Projetos no periodo - {detalheSelecionado.engenheiro}
+                    </h4>
+                    <p className="text-xs text-muted-foreground tabular-nums">
+                      {periodoConsultado.dataInicio} a {periodoConsultado.dataFim}
+                    </p>
                   </div>
-                  <div className="text-xs text-gray-500">
-                    dessas, {formatHoras(detalheSelecionado.horas_retrabalho_total)} de retrabalho
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 space-y-3">
-                {detalheSelecionado.projetos.map((projeto) => (
-                  <div
-                    key={projeto.projeto_id}
-                    className="rounded-lg border border-gray-200 bg-white p-3"
-                  >
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <div className="font-semibold text-gray-900">
-                          {projeto.codigo_projeto}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {projeto.cliente}
-                        </div>
-                      </div>
-                      <div className="text-sm text-gray-700 sm:text-right">
-                        <span className="font-semibold text-gray-900">
-                          {formatHoras(projeto.horas_trabalhadas_total)}
-                        </span>
-                        <span className="mx-2 text-gray-300">|</span>
-                        <span>{formatHoras(projeto.horas_retrabalho_total)} retrab.</span>
-                      </div>
+                  <div className="sm:text-right">
+                    <div className="font-wide text-xl font-semibold tabular-nums">
+                      {formatHoras(detalheSelecionado.horas_trabalhadas_total)}
                     </div>
+                    <div className="text-xs text-muted-foreground tabular-nums">
+                      dessas, {formatHoras(detalheSelecionado.horas_retrabalho_total)} de retrabalho
+                    </div>
+                  </div>
+                </div>
 
-                    <div className="mt-3 overflow-x-auto">
-                      <table className="min-w-full text-xs">
-                        <thead>
-                          <tr className="border-b text-left text-gray-500">
-                            <th className="py-2 pr-4">Area / disciplina</th>
-                            <th className="py-2 pr-4 text-right">Horas trabalhadas (total)</th>
-                            <th className="py-2 pl-4 text-right">Dessas, retrabalho</th>
-                          </tr>
-                        </thead>
-                        <tbody>
+                <div className="space-y-3 p-4">
+                  {detalheSelecionado.projetos.map((projeto) => (
+                    <div key={projeto.projeto_id} className="rounded-lg border bg-card p-3">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="font-semibold text-primary">{projeto.codigo_projeto}</div>
+                          <div className="text-xs text-muted-foreground">{projeto.cliente}</div>
+                        </div>
+                        <div className="text-sm sm:text-right tabular-nums">
+                          <span className="font-semibold">{formatHoras(projeto.horas_trabalhadas_total)}</span>
+                          <span className="mx-2 text-border">|</span>
+                          <span className="text-muted-foreground">
+                            {formatHoras(projeto.horas_retrabalho_total)} retrab.
+                          </span>
+                        </div>
+                      </div>
+
+                      <Table className="mt-3 text-xs">
+                        <TableHeader>
+                          <TableRow className="hover:bg-transparent">
+                            <TableHead className="h-8 text-xs text-muted-foreground">Area / disciplina</TableHead>
+                            <TableHead className="h-8 text-right text-xs text-muted-foreground">Horas trabalhadas (total)</TableHead>
+                            <TableHead className="h-8 text-right text-xs text-muted-foreground">Dessas, retrabalho</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
                           {projeto.disciplinas.map((disciplina) => (
-                            <tr
+                            <TableRow
                               key={`${projeto.projeto_id}-${disciplina.area_id}-${disciplina.instancia_label || disciplina.area_codigo}`}
-                              className="border-b last:border-0"
                             >
-                              <td className="py-2 pr-4 font-medium text-gray-800">
-                                {disciplina.disciplina}
-                              </td>
-                              <td className="py-2 pr-4 text-right text-gray-900">
+                              <TableCell className="font-medium">{disciplina.disciplina}</TableCell>
+                              <TableCell className="text-right tabular-nums">
                                 {formatHoras(disciplina.horas_trabalhadas_total)}
-                              </td>
-                              <td className="py-2 pl-4 text-right text-gray-600">
+                              </TableCell>
+                              <TableCell className="text-right text-muted-foreground tabular-nums">
                                 {formatHoras(disciplina.horas_retrabalho_total)}
-                              </td>
-                            </tr>
+                              </TableCell>
+                            </TableRow>
                           ))}
-                        </tbody>
-                      </table>
+                        </TableBody>
+                      </Table>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

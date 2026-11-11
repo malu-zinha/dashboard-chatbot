@@ -12,13 +12,17 @@ interface ProjetosStatusChartProps {
   onSelecionarStatus?: (status: string) => void
 }
 
-const CORES: Record<string, string> = {
-  'Concluído': 'var(--success)',
-  'Em Andamento': 'var(--primary)',
-  'Atrasado': 'var(--alert)',
-  'Aguardando': 'var(--warning)',
+// Casa pelo comeco do nome: o banco usa "Aguardando Início", "Em Andamento" etc.
+function corDoStatus(status: string): string {
+  const s = status.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  if (s.startsWith('conclu')) return 'var(--success)'
+  if (s.startsWith('atrasad')) return 'var(--alert)'
+  if (s.startsWith('aguard')) return 'var(--warning)'
+  if (s.includes('andamento') || s.includes('execu')) return 'var(--primary)'
+  return 'var(--chart-3)'
 }
-const corDoStatus = (status: string) => CORES[status] ?? 'var(--chart-3)'
+
+const pct = (n: number) => `${Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
 
 // "Escala grafica": uma barra dividida por status, com a cota de cada trecho por cima,
 // como as cotas de um desenho tecnico.
@@ -36,7 +40,7 @@ export default function ProjetosStatusChart({ data, onSelecionarStatus }: Projet
           {onSelecionarStatus ? ', clique num trecho para ver a lista' : ''}
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-1 flex-col justify-center gap-8">
+      <CardContent className="flex flex-col gap-6">
         {total === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">Nenhum projeto ativo.</p>
         ) : (
@@ -68,7 +72,7 @@ export default function ProjetosStatusChart({ data, onSelecionarStatus }: Projet
                   <TooltipTrigger asChild>
                     <button
                       type="button"
-                      aria-label={`${item.status}: ${item.quantidade} projetos (${item.percentual}%)`}
+                      aria-label={`${item.status}: ${item.quantidade} projetos (${pct(item.percentual)})`}
                       onClick={() => onSelecionarStatus?.(item.status)}
                       onMouseEnter={() => setAtivo(item.status)}
                       onMouseLeave={() => setAtivo(null)}
@@ -83,7 +87,7 @@ export default function ProjetosStatusChart({ data, onSelecionarStatus }: Projet
                     />
                   </TooltipTrigger>
                   <TooltipContent>
-                    {item.status}: {item.quantidade} ({item.percentual}%)
+                    {item.status}: {item.quantidade} ({pct(item.percentual)})
                   </TooltipContent>
                 </Tooltip>
               ))}
@@ -108,7 +112,7 @@ export default function ProjetosStatusChart({ data, onSelecionarStatus }: Projet
                 </span>
                 <span className="text-sm tabular-nums">
                   <span className="font-semibold">{item.quantidade}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">{item.percentual}%</span>
+                  <span className="ml-2 text-xs text-muted-foreground">{pct(item.percentual)}</span>
                 </span>
               </>
             )

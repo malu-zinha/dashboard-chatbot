@@ -3,8 +3,12 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { LogIn, Loader2 } from 'lucide-react'
+import { LogIn, Loader2, AlertCircle } from 'lucide-react'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 export default function LoginForm() {
   const router = useRouter()
@@ -39,88 +43,107 @@ export default function LoginForm() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-linear-to-br from-tecpred-primary via-tecpred-secondary to-tecpred-primary px-4">
-      <div className="w-full max-w-md">
-        <div className="flex justify-center mb-6">
-          <Image
-            src="/logo.png"
-            alt="TecPred"
-            width={320}
-            height={101}
-            priority
-            className="h-24 w-auto brightness-110 contrast-125 drop-shadow-[0_2px_10px_rgba(255,255,255,0.45)]"
-          />
-        </div>
+    <main className="flex min-h-svh flex-col bg-background lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+      {/* Prancha azul: faixa compacta no celular, coluna inteira no desktop */}
+      <section className="malha-prancha flex flex-col gap-3 px-4 py-5 text-white sm:px-8 lg:justify-between lg:gap-10 lg:px-14 lg:py-12">
+        <Image
+          src="/logo-menu.png"
+          alt="TecPred"
+          width={480}
+          height={110}
+          priority
+          className="h-8 w-auto self-start sm:h-9 lg:h-11"
+        />
 
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <h1 className="text-2xl font-bold text-gray-800 text-center mb-1">
-            Entrar na plataforma
-          </h1>
-          <p className="text-sm text-gray-500 text-center mb-6">
-            Acesso restrito · TecPred Dashboard
+        <div className="lg:max-w-md">
+          <p className="hidden text-xs font-medium tracking-wide text-white/55 lg:block">Painel TecPred</p>
+          <p className="font-wide hidden text-4xl leading-[1.1] font-semibold lg:mt-3 lg:block xl:text-5xl">
+            Acompanhe a produção da engenharia
           </p>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-orange focus:border-transparent outline-hidden transition"
-                placeholder="voce@empresa.com"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                Senha
-              </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-orange focus:border-transparent outline-hidden transition"
-                placeholder="••••••••"
-              />
-            </div>
-
-            {error && (
-              <div className="text-sm text-danger bg-danger/10 border border-danger/30 rounded-lg px-3 py-2">
-                {error}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 bg-tecpred-primary hover:bg-tecpred-secondary text-white font-semibold py-2.5 rounded-lg transition disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> Entrando...
-                </>
-              ) : (
-                <>
-                  <LogIn className="w-4 h-4" /> Entrar
-                </>
-              )}
-            </button>
-          </form>
+          <p className="text-sm text-white/70 lg:mt-5 lg:text-base">
+            Projetos, engenheiros e prazos em tempo real.
+          </p>
         </div>
 
-        <p className="text-center text-white/70 text-xs mt-6">
-          Esqueceu a senha? Fale com o administrador.
-        </p>
-      </div>
+        {/* Carimbo da prancha (so no desktop) */}
+        <dl className="hidden w-fit grid-cols-2 border border-white/25 text-xs lg:grid">
+          <div className="border-r border-white/25 px-4 py-2.5">
+            <dt className="text-white/55">Acesso</dt>
+            <dd className="mt-0.5 font-medium">Restrito à equipe</dd>
+          </div>
+          <div className="px-4 py-2.5">
+            <dt className="text-white/55">Atualização</dt>
+            <dd className="mt-0.5 font-medium">Ao vivo</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section className="flex flex-1 flex-col items-center justify-center gap-6 px-4 py-10 sm:px-6">
+        <Card className="w-full max-w-sm gap-0 py-0 shadow-sm">
+          <CardHeader className="border-b py-5">
+            <CardTitle className="text-xl">
+              <h1>Entrar na plataforma</h1>
+            </CardTitle>
+            <CardDescription>Acesso restrito ao painel TecPred</CardDescription>
+          </CardHeader>
+
+          <CardContent className="py-5">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid gap-1.5">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-10"
+                  placeholder="voce@empresa.com"
+                />
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="password">Senha</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="h-10"
+                  placeholder="••••••••"
+                />
+              </div>
+
+              {error && (
+                <div
+                  role="alert"
+                  className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger"
+                >
+                  <AlertCircle className="size-4 shrink-0" />
+                  {error}
+                </div>
+              )}
+
+              <Button type="submit" disabled={loading} className="h-10 w-full font-semibold">
+                {loading ? (
+                  <>
+                    <Loader2 className="animate-spin" /> Entrando...
+                  </>
+                ) : (
+                  <>
+                    <LogIn /> Entrar
+                  </>
+                )}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <p className="text-center text-xs text-muted-foreground">Esqueceu a senha? Fale com o administrador.</p>
+      </section>
     </main>
   )
 }

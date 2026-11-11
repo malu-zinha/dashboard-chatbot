@@ -1,9 +1,12 @@
 'use client'
 
-import React, { useEffect, useCallback, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { X, Calendar, User, Layers, Clock, AlertTriangle, CheckCircle, MessageSquare } from 'lucide-react'
 import { formatarDataBR } from '@/lib/datas'
 import { fetchApontamentosAtribuicao, type ResultadoApontamentos } from '@/lib/supabase'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 interface Projeto {
   atribuicao_id?: string
@@ -36,22 +39,13 @@ interface ProjetoDetalhesModalProps {
 export default function ProjetoDetalhesModal({
   isOpen,
   onClose,
-  projeto,
+  projeto: projetoAtual,
 }: ProjetoDetalhesModalProps) {
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') onClose()
-  }, [onClose])
-
-  useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = 'hidden'
-      return () => {
-        document.removeEventListener('keydown', handleKeyDown)
-        document.body.style.overflow = ''
-      }
-    }
-  }, [isOpen, handleKeyDown])
+  // O painel desliza para fora depois que o pai zera o projeto: guardamos o ultimo exibido
+  // para a animacao de saida nao renderizar um painel vazio.
+  const [ultimoProjeto, setUltimoProjeto] = useState<Projeto | null>(projetoAtual)
+  if (projetoAtual && projetoAtual !== ultimoProjeto) setUltimoProjeto(projetoAtual)
+  const projeto = projetoAtual ?? ultimoProjeto
 
   // O resultado carrega o id que o produziu. Sem isso, o intervalo entre trocar de projeto e
   // o efeito rodar mostraria o relato do projeto anterior como se fosse do novo.
@@ -74,7 +68,7 @@ export default function ProjetoDetalhesModal({
     }
   }, [isOpen, atribuicaoId])
 
-  if (!isOpen || !projeto) return null
+  if (!projeto) return null
 
   // Efeito roda depois da pintura: ate ele responder, o estado honesto e "carregando", nao
   // "nao ha registro". Afirmar ausencia antes de olhar e o mesmo erro que esta branch corrige.
@@ -85,72 +79,78 @@ export default function ProjetoDetalhesModal({
     ? resultado.registros.filter((a) => a.feito_texto?.trim())
     : []
 
-
+  // Mesma ordem de antes: concluido, atrasado, aguardando, em andamento.
   const getStatusColor = () => {
     if (projeto.data_conclusao || projeto.percentual_andamento >= 100) {
-      return 'bg-success text-white'
+      return 'bg-emerald-50 text-emerald-800 ring-emerald-200'
     }
     if (projeto.dias_atraso > 0) {
-      return 'bg-danger text-white'
+      return 'bg-orange-50 text-orange-800 ring-orange-200'
     }
     if (projeto.status_descricao?.toLowerCase().includes('aguard')) {
-      return 'bg-yellow-400 text-white'
+      return 'bg-amber-50 text-amber-800 ring-amber-200'
     }
-    return 'bg-info text-white'
+    return 'bg-secondary text-primary ring-primary/15'
   }
 
-  const getProgressColor = () => {
-    if (projeto.percentual_andamento >= 100) return 'bg-success'
-    if (projeto.percentual_andamento >= 75) return 'bg-info'
-    if (projeto.percentual_andamento >= 50) return 'bg-warning'
-    return 'bg-gray-400'
-  }
+  const concluido = projeto.percentual_andamento >= 100
+  const percentual = Math.min(Math.max(projeto.percentual_andamento, 0), 100)
 
   return (
-    <div 
-      className="fixed inset-0 z-70 flex items-center justify-center bg-black/50 p-4" 
-      onClick={onClose}
+    <Sheet
+      open={isOpen && projetoAtual !== null}
+      onOpenChange={(aberto) => {
+        if (!aberto) onClose()
+      }}
     >
-      <div 
-        className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden" 
-        onClick={(e) => e.stopPropagation()}
+      <SheetContent
+        side="right"
+        showCloseButton={false}
+        className="gap-0 overflow-hidden p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-[520px]"
       >
-        {/* Header */}
-        <div className="bg-linear-to-r from-tecpred-primary to-tecpred-secondary px-6 py-4">
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="text-xl font-bold text-white">
+        {/* Cabecalho: prancha azul */}
+        <div className="malha-prancha shrink-0 px-5 py-5 text-white sm:px-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <SheetTitle className="font-wide text-xl leading-tight font-semibold text-white">
                 {projeto.codigo_projeto}
-              </h3>
-              <p className="text-white/80 text-sm mt-1">
+              </SheetTitle>
+              <SheetDescription className="mt-1 text-sm text-white/65">
                 {projeto.cliente}
-              </p>
+              </SheetDescription>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="text-white/80 hover:text-white hover:bg-white/20 p-1.5 rounded-lg transition-colors"
+              aria-label="Fechar"
+              title="Fechar"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-white/75 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
             >
-              <X className="h-5 w-5" />
+              <X className="size-5" />
             </button>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="px-6 py-5 overflow-y-auto flex-1 space-y-5">
+        {/* Conteudo */}
+        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
           {/* Status e Progresso */}
-          <div className="flex items-center justify-between gap-4">
-            <span className={`px-3 py-1.5 text-sm font-semibold rounded-full ${getStatusColor()}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span
+              className={cn(
+                'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset',
+                getStatusColor()
+              )}
+            >
               {projeto.status_descricao}
             </span>
-            <div className="flex items-center gap-2 flex-1 max-w-[200px]">
-              <div className="flex-1 bg-gray-200 rounded-full h-2.5">
+            <div className="flex min-w-[160px] max-w-[220px] flex-1 items-center gap-2">
+              <div className="hachura relative h-2 flex-1 overflow-hidden rounded-full bg-muted text-primary/15">
                 <div
-                  className={`h-2.5 rounded-full ${getProgressColor()}`}
-                  style={{ width: `${Math.min(projeto.percentual_andamento, 100)}%` }}
+                  className={cn('h-full rounded-full', concluido ? 'bg-[var(--success)]' : 'bg-primary')}
+                  style={{ width: `${percentual}%` }}
                 />
               </div>
-              <span className="text-sm font-bold text-gray-700 w-12 text-right">
+              <span className="w-12 text-right text-sm font-semibold tabular-nums">
                 {projeto.percentual_andamento.toFixed(0)}%
               </span>
             </div>
@@ -158,112 +158,108 @@ export default function ProjetoDetalhesModal({
 
           {/* Atraso */}
           {projeto.dias_atraso > 0 && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-              <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
-              <span className="text-sm text-red-700">
-                <span className="font-bold">{projeto.dias_atraso} dia(s)</span> de atraso
+            <div className="flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
+              <AlertTriangle className="size-4 shrink-0 text-[var(--alert)]" />
+              <span className="text-sm text-orange-900">
+                <span className="font-semibold tabular-nums">{projeto.dias_atraso} dia(s)</span> de atraso
               </span>
             </div>
           )}
 
           {/* Concluido */}
           {projeto.data_conclusao && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
-              <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
-              <span className="text-sm text-green-700">
-                Concluido em <span className="font-bold">{formatarDataBR(projeto.data_conclusao)}</span>
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+              <CheckCircle className="size-4 shrink-0 text-emerald-600" />
+              <span className="text-sm text-emerald-800">
+                Concluido em <span className="font-semibold tabular-nums">{formatarDataBR(projeto.data_conclusao)}</span>
               </span>
             </div>
           )}
 
           {/* Informacoes */}
-          <div className="space-y-3">
-            <div className="flex items-start gap-3">
-              <User className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
-              <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Engenheiro</p>
-                <p className="text-sm font-medium text-gray-900">{projeto.engenheiro_nome}</p>
+          <div className="divide-y rounded-xl border">
+            <div className="flex items-start gap-3 px-4 py-3">
+              <User className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">Engenheiro</p>
+                <p className="text-sm font-medium">{projeto.engenheiro_nome}</p>
               </div>
             </div>
 
-            <div className="flex items-start gap-3">
-              <Layers className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
-              <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Area / Disciplina</p>
-                <p className="text-sm font-medium text-gray-900">
+            <div className="flex items-start gap-3 px-4 py-3">
+              <Layers className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">Area / Disciplina</p>
+                <p className="text-sm font-medium">
                   {projeto.area_descricao}
                   {projeto.instancia_label && (
-                    <span className="text-gray-500"> ({projeto.instancia_label})</span>
+                    <span className="text-muted-foreground"> ({projeto.instancia_label})</span>
                   )}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-start gap-3">
-              <Calendar className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
-              <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Datas</p>
-                <div className="text-sm text-gray-900 space-y-0.5">
-                  <p>Inicio: <span className="font-medium">{formatarDataBR(projeto.data_inicio)}</span></p>
-                  <p>Prevista: <span className="font-medium">{formatarDataBR(projeto.data_prevista)}</span></p>
+            <div className="flex items-start gap-3 px-4 py-3">
+              <Calendar className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">Datas</p>
+                <div className="space-y-0.5 text-sm">
+                  <p>Inicio: <span className="font-medium tabular-nums">{formatarDataBR(projeto.data_inicio)}</span></p>
+                  <p>Prevista: <span className="font-medium tabular-nums">{formatarDataBR(projeto.data_prevista)}</span></p>
                   {projeto.data_conclusao && (
-                    <p>Conclusao: <span className="font-medium">{formatarDataBR(projeto.data_conclusao)}</span></p>
+                    <p>Conclusao: <span className="font-medium tabular-nums">{formatarDataBR(projeto.data_conclusao)}</span></p>
                   )}
                 </div>
               </div>
             </div>
 
             {projeto.descricao && (
-              <div className="flex items-start gap-3">
-                <Clock className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">Descricao</p>
-                  <p className="text-sm text-gray-700">{projeto.descricao}</p>
+              <div className="flex items-start gap-3 px-4 py-3">
+                <Clock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">Descricao</p>
+                  <p className="text-sm text-foreground/85">{projeto.descricao}</p>
                 </div>
               </div>
             )}
           </div>
 
           {/* Observacoes do Engenheiro */}
-          <div className="border-t pt-4">
+          <section className="border-t pt-4">
             <div className="flex items-start gap-3">
-              <MessageSquare className="h-4 w-4 text-tecpred-primary mt-0.5 shrink-0" />
-              <div className="flex-1">
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">
-                  Observacoes do Engenheiro
-                </p>
+              <MessageSquare className="mt-0.5 size-4 shrink-0 text-primary" />
+              <div className="min-w-0 flex-1">
+                <h3 className="mb-2 text-sm font-semibold">Observacoes do engenheiro</h3>
                 {projeto.motivo_aguardo ? (
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
-                    <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                  <div className="rounded-lg border bg-muted/60 px-4 py-3">
+                    <p className="text-sm whitespace-pre-wrap text-foreground/85">
                       {projeto.motivo_aguardo}
                     </p>
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-400 italic">
+                  <p className="text-sm text-muted-foreground italic">
                     Nenhuma observacao registrada.
                   </p>
                 )}
               </div>
             </div>
-          </div>
+          </section>
 
           {/* Relato diario do chatbot */}
-          <div className="border-t pt-4">
+          <section className="border-t pt-4">
             <div className="flex items-start gap-3">
-              <Clock className="h-4 w-4 text-tecpred-primary mt-0.5 shrink-0" />
-              <div className="flex-1">
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">
-                  Relato diario no chatbot
-                </p>
+              <Clock className="mt-0.5 size-4 shrink-0 text-primary" />
+              <div className="min-w-0 flex-1">
+                <h3 className="mb-2 text-sm font-semibold">Relato diario no chatbot</h3>
 
                 {!atribuicaoId ? (
-                  <p className="text-sm text-gray-400 italic">
+                  <p className="text-sm text-muted-foreground italic">
                     Sem atribuicao ativa — nao ha relato diario para consultar.
                   </p>
                 ) : resultado === null ? (
-                  <p className="text-sm text-gray-400 italic">Carregando...</p>
+                  <p className="text-sm text-muted-foreground italic" role="status">Carregando...</p>
                 ) : !resultado.ok ? (
-                  <p className="text-sm text-gray-400 italic">
+                  <p className="text-sm text-muted-foreground italic">
                     Nao foi possivel carregar o relato diario. Tente reabrir o projeto.
                   </p>
                 ) : relatosDiarios.length > 0 ? (
@@ -271,12 +267,12 @@ export default function ProjetoDetalhesModal({
                     {relatosDiarios.map((registro) => (
                       <li
                         key={registro.data_registro}
-                        className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2"
+                        className="rounded-lg border bg-muted/60 px-4 py-2"
                       >
-                        <p className="text-xs font-semibold text-tecpred-primary">
+                        <p className="text-xs font-semibold text-primary tabular-nums">
                           {formatarDataBR(registro.data_registro)}
                         </p>
-                        <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                        <p className="text-sm whitespace-pre-wrap text-foreground/85">
                           {registro.feito_texto}
                         </p>
                       </li>
@@ -287,10 +283,10 @@ export default function ProjetoDetalhesModal({
                   // 203 registros, 1 unico com feito_texto. Ausencia aqui nao diz nada sobre o
                   // trabalho feito, e a tela precisa dizer isso — nao so o comentario.
                   <div>
-                    <p className="text-sm text-gray-400 italic">
+                    <p className="text-sm text-muted-foreground italic">
                       Nenhum registro diario gravado para esta disciplina.
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       O relato diario so passou a ser gravado em 04/10/2026. Antes disso ele era
                       perdido na gravacao, entao a ausencia aqui nao indica falta de trabalho.
                     </p>
@@ -298,20 +294,16 @@ export default function ProjetoDetalhesModal({
                 )}
               </div>
             </div>
-          </div>
+          </section>
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t bg-gray-50 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
+        {/* Rodape */}
+        <div className="flex shrink-0 justify-end border-t bg-muted/50 px-5 py-3 sm:px-6">
+          <Button type="button" variant="outline" onClick={onClose}>
             Fechar
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+      </SheetContent>
+    </Sheet>
   )
 }

@@ -8,7 +8,7 @@ import assert from 'node:assert/strict'
 import * as secNs from '../dashboard/lib/secoes.ts'
 
 const sec = ((secNs as any).default ?? secNs) as typeof import('../dashboard/lib/secoes.ts')
-const { secoesVisiveis, resolverSecao, filtroDoStatus, infoSecao } = sec
+const { secoesVisiveis, resolverSecao, filtroDoStatus, infoSecao, resolverFiltroProjetos, resolverAbaEngenheiros, urlDaSecao } = sec
 
 // Producao e so do dono, no menu e na URL
 assert.ok(secoesVisiveis(true).some((s) => s.id === 'producao'))
@@ -29,5 +29,16 @@ assert.equal(filtroDoStatus('Em Andamento'), 'em_execucao')
 assert.equal(filtroDoStatus('Atrasado'), 'atrasado')
 assert.equal(filtroDoStatus('Aguardando'), 'all')
 console.log('   ✅ clique no status abre a lista certa')
+
+// Abas na URL
+assert.equal(resolverFiltroProjetos('atrasado'), 'atrasado')
+assert.equal(resolverFiltroProjetos('qualquer'), 'all')
+assert.equal(resolverFiltroProjetos(null), 'all')
+assert.equal(resolverAbaEngenheiros('execucao'), 'execucao')
+assert.equal(resolverAbaEngenheiros('x'), 'lista')
+assert.equal(urlDaSecao('visao-geral'), '/')
+assert.equal(urlDaSecao('projetos', { filtro: 'atrasado' }), '/?secao=projetos&filtro=atrasado')
+assert.equal(urlDaSecao('projetos', { filtro: undefined }), '/?secao=projetos')
+console.log('   ✅ abas de Projetos e Engenheiros vem da URL; link montado sem parametro vazio')
 
 console.log('test-dashboard-secoes: OK')

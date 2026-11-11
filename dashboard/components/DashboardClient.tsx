@@ -3,25 +3,25 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
-import {
-  Briefcase,
-  CheckCircle,
-  Play,
-  AlertTriangle,
-  FolderPlus,
-  UserPlus,
-  Layers,
-  LayoutList,
-  KanbanSquare,
-} from 'lucide-react'
+import { FolderPlus, UserPlus } from 'lucide-react'
+import { toast } from 'sonner'
 import Header from '@/components/Header'
 import AppSidebar from '@/components/painel/AppSidebar'
-import AtalhoCard from '@/components/painel/AtalhoCard'
 import PranchaResumo from '@/components/painel/PranchaResumo'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { filtroDoStatus, infoSecao, resolverSecao, type FiltroProjetos, type SecaoId } from '@/lib/secoes'
+import {
+  filtroDoStatus,
+  infoSecao,
+  resolverAbaEngenheiros,
+  resolverFiltroProjetos,
+  resolverSecao,
+  urlDaSecao,
+  type FiltroProjetos,
+  type SecaoId,
+} from '@/lib/secoes'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AtrasosTable from '@/components/AtrasosTable'
 import RetrabalhoDetalhesModal from '@/components/RetrabalhoDetalhesModal'
 import ProjetosTable from '@/components/ProjetosTable'
@@ -171,8 +171,10 @@ export default function DashboardClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const secao = resolverSecao(searchParams.get('secao'), isOwner)
-  const irPara = (destino: SecaoId) => {
-    router.push(destino === 'visao-geral' ? '/' : `/?secao=${destino}`, { scroll: false })
+  const filtroProjetos = resolverFiltroProjetos(searchParams.get('filtro'))
+  const abaEngenheiros = resolverAbaEngenheiros(searchParams.get('aba'))
+  const irPara = (destino: SecaoId, extras: Record<string, string | undefined> = {}) => {
+    router.push(urlDaSecao(destino, extras), { scroll: false })
     window.scrollTo({ top: 0 })
   }
   const engenheirosExecucao = useMemo(() => buildEngenheirosExecucao(projetos), [projetos])
@@ -324,22 +326,22 @@ export default function DashboardClient() {
 
   const handleAtribuirTask = async (data: TaskData) => {
     if (!isSupabaseConfigured) {
-      alert('Supabase não está configurado. Não é possível salvar o projeto.')
+      toast.error('Supabase não está configurado. Não é possível salvar o projeto.')
       return
     }
     try {
       const result = await atribuirProjetoComPavimentos(data)
 
       if (!result.success) {
-        alert(`Erro ao atribuir projeto: ${result.error}`)
+        toast.error(`Erro ao atribuir projeto: ${result.error}`)
         return
       }
 
-      alert(`Projeto ${data.codigo_projeto} atribuido com sucesso!`)
+      toast.success(`Projeto ${data.codigo_projeto} atribuido com sucesso!`)
       loadData()
     } catch (err) {
       console.error('Erro ao atribuir task:', err)
-      alert('Erro inesperado ao atribuir projeto. Tente novamente em alguns instantes.')
+      toast.error('Erro inesperado ao atribuir projeto. Tente novamente em alguns instantes.')
     }
   }
 
@@ -496,19 +498,43 @@ export default function DashboardClient() {
     )
   }
 
-  // Abre a lista de projetos com o filtro pedido (KPIs, grafico de status, secao Projetos).
+  // Abre a lista de projetos com o filtro pedido (carimbo, grafico de status). Normal: aba
+  // da secao Projetos. Tela cheia: o modal de sempre, ocupando a tela.
   const abrirProjetos = (filtro: FiltroProjetos, telaCheia = false) => {
-    setModalFullscreen(telaCheia)
+    if (!telaCheia) {
+      irPara('projetos', { filtro: filtro === 'all' ? undefined : filtro })
+      return
+    }
+    setModalFullscreen(true)
     if (filtro === 'all') setShowProjetosModal(true)
     if (filtro === 'concluido') setShowProjetosConcluidosModal(true)
     if (filtro === 'em_execucao') setShowProjetosExecucaoModal(true)
     if (filtro === 'atrasado') setShowAtrasadosModal(true)
   }
 
+  // Quadro "em execucao": aba da secao Engenheiros, ou o modal em tela cheia.
   const abrirEngenheirosExecucao = (busca = '', telaCheia = false) => {
     setBuscaEngenheirosExecucao(busca)
-    setModalFullscreen(telaCheia)
+    if (!telaCheia) {
+      irPara('engenheiros', { aba: 'execucao' })
+      return
+    }
+    setModalFullscreen(true)
     setShowEngenheirosExecucaoModal(true)
+  }
+
+  // Props da lista de projetos: iguais no modal e na secao.
+  const propsProjetos = {
+    data: projetos,
+    color: 'warning' as const,
+    onVerRetrabalho: handleVerRetrabalhoFromTable,
+    engenheiros,
+    onTransferirResponsavel: isOwner ? handleTransferirResponsavel : undefined,
+    onAlterarDadosProjeto: isOwner ? handleAlterarDadosProjeto : undefined,
+    onExcluirTarefa: handleExcluirTarefa,
+    onExcluirProjeto: handleExcluirProjeto,
+    onAlterarPrazo: isOwner ? handleAlterarPrazo : undefined,
+    avisosPrazo: isOwner ? avisosPrazo : undefined,
   }
 
   const info = infoSecao(secao)
@@ -531,10 +557,10 @@ export default function DashboardClient() {
   return (
     <SidebarProvider>
       <AppSidebar secaoAtiva={secao} onSelecionar={irPara} />
-      <SidebarInset>
+      <SidebarInset className="min-w-0">
         <Header lastUpdate={lastUpdate} isLoading={isLoading} isConnected={realtimeConectado} titulo={info.titulo} />
 
-        <main className="mx-auto w-full max-w-[1500px] flex-1 space-y-6 p-4 md:p-6 lg:p-8">
+        <main className="mx-auto w-full min-w-0 max-w-[1500px] flex-1 space-y-6 p-4 md:p-6 lg:p-8">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">{info.titulo}</h1>
@@ -585,98 +611,101 @@ export default function DashboardClient() {
                 onAbrirEngenheiros={(telaCheia) => abrirEngenheirosExecucao('', telaCheia)}
               />
 
-              <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <ProjetosStatusChart
-                  data={projetosStatus}
-                  onSelecionarStatus={(status) => abrirProjetos(filtroDoStatus(status))}
-                />
+              {/* Esquerda: status e atrasos empilhados; direita: carga (lista longa). Cada card
+                  fica com a propria altura, sem esticar para acompanhar o vizinho. */}
+              <section className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+                <div className="flex min-w-0 flex-col gap-6">
+                  <ProjetosStatusChart
+                    data={projetosStatus}
+                    onSelecionarStatus={(status) => abrirProjetos(filtroDoStatus(status))}
+                  />
+                  <AtrasosTable
+                    data={atrasosEngenheiro}
+                    acao={
+                      <Button variant="outline" size="sm" onClick={() => irPara('engenheiros')}>
+                        Ver todos os engenheiros
+                      </Button>
+                    }
+                  />
+                </div>
                 <CargaTrabalhoChart
                   data={cargaTrabalho}
                   onSelecionarEngenheiro={(nome) => abrirEngenheirosExecucao(nome)}
                 />
               </section>
-
-              <AtrasosTable
-                data={atrasosEngenheiro}
-                acao={
-                  <Button variant="outline" size="sm" onClick={() => setShowEngenheirosModal(true)}>
-                    Ver todos os engenheiros
-                  </Button>
-                }
-              />
             </>
           )}
 
           {!carregandoPrimeiraVez && secao === 'projetos' && (
-            <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <AtalhoCard
-                titulo="Todos os projetos"
-                descricao="Busca, filtros, prazos, PDF e ações"
-                icone={Briefcase}
-                valor={visaoGeral?.total_projetos || 0}
-                onClick={() => abrirProjetos('all')}
+            <Tabs
+              value={filtroProjetos}
+              onValueChange={(v) => irPara('projetos', { filtro: v === 'all' ? undefined : v })}
+              className="min-w-0 gap-4"
+            >
+              <TabsList className="h-auto flex-wrap">
+                <TabsTrigger value="all">
+                  Todos <span className="ml-1 tabular-nums text-muted-foreground">{visaoGeral?.total_projetos || 0}</span>
+                </TabsTrigger>
+                <TabsTrigger value="em_execucao">
+                  Em execução <span className="ml-1 tabular-nums text-muted-foreground">{visaoGeral?.projetos_em_execucao || 0}</span>
+                </TabsTrigger>
+                <TabsTrigger value="concluido">
+                  Concluídos <span className="ml-1 tabular-nums text-muted-foreground">{visaoGeral?.projetos_concluidos || 0}</span>
+                </TabsTrigger>
+                <TabsTrigger value="atrasado">
+                  Atrasados <span className="ml-1 tabular-nums text-[var(--alert)]">{visaoGeral?.projetos_atrasados || 0}</span>
+                </TabsTrigger>
+              </TabsList>
+              <ProjetosTable
+                embutido
+                isOpen
+                onClose={() => {}}
+                initialFilter={filtroProjetos}
+                title="Projetos"
+                {...propsProjetos}
+                fullscreen={false}
+                onToggleFullscreen={() => {}}
               />
-              <AtalhoCard
-                titulo="Em execução"
-                descricao={`${visaoGeral?.areas_ativas || 0} áreas ativas`}
-                icone={Play}
-                valor={visaoGeral?.projetos_em_execucao || 0}
-                onClick={() => abrirProjetos('em_execucao')}
-              />
-              <AtalhoCard
-                titulo="Concluídos"
-                descricao="Com filtro por período de conclusão"
-                icone={CheckCircle}
-                tom="sucesso"
-                valor={visaoGeral?.projetos_concluidos || 0}
-                onClick={() => abrirProjetos('concluido')}
-              />
-              <AtalhoCard
-                titulo="Atrasados"
-                descricao="Prazo vencido"
-                icone={AlertTriangle}
-                tom="perigo"
-                valor={visaoGeral?.projetos_atrasados || 0}
-                onClick={() => abrirProjetos('atrasado')}
-              />
-            </section>
+            </Tabs>
           )}
 
           {!carregandoPrimeiraVez && secao === 'engenheiros' && (
-            <>
-              <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <AtalhoCard
-                  titulo="Listagem de engenheiros"
-                  descricao="Projetos, áreas, progresso, retrabalho e atrasos de cada um"
-                  icone={LayoutList}
-                  valor={engenheiros.length}
-                  onClick={() => setShowEngenheirosModal(true)}
+            <Tabs
+              value={abaEngenheiros}
+              onValueChange={(v) => irPara('engenheiros', { aba: v === 'lista' ? undefined : v })}
+              className="min-w-0 gap-4"
+            >
+              <TabsList>
+                <TabsTrigger value="lista">
+                  Listagem <span className="ml-1 tabular-nums text-muted-foreground">{engenheiros.length}</span>
+                </TabsTrigger>
+                <TabsTrigger value="execucao">
+                  Em execução <span className="ml-1 tabular-nums text-muted-foreground">{engenheirosExecucao.length}</span>
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="lista" className="space-y-6">
+                <EngenheirosTable embutido isOpen onClose={() => {}} data={engenheiros} />
+                <CargaTrabalhoChart
+                  data={cargaTrabalho}
+                  onSelecionarEngenheiro={(nome) => abrirEngenheirosExecucao(nome)}
                 />
-                <AtalhoCard
-                  titulo="Em execução"
-                  descricao={`${totalTarefasEngenheirosExecucao} tarefa(s) em execução, por engenheiro`}
-                  icone={KanbanSquare}
-                  valor={engenheirosExecucao.length}
-                  onClick={() => abrirEngenheirosExecucao()}
+              </TabsContent>
+              <TabsContent value="execucao">
+                <EngenheirosExecucaoTable
+                  embutido
+                  isOpen
+                  onClose={() => {}}
+                  projetos={projetos}
+                  fullscreen={false}
+                  onToggleFullscreen={() => abrirEngenheirosExecucao(buscaEngenheirosExecucao, true)}
+                  buscaInicial={buscaEngenheirosExecucao}
                 />
-              </section>
-              <CargaTrabalhoChart
-                data={cargaTrabalho}
-                onSelecionarEngenheiro={(nome) => abrirEngenheirosExecucao(nome)}
-              />
-            </>
+              </TabsContent>
+            </Tabs>
           )}
 
           {!carregandoPrimeiraVez && secao === 'areas' && (
-            <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <AtalhoCard
-                titulo="Listagem de áreas"
-                descricao="Tempo médio, projetos, áreas ativas e taxa de conclusão"
-                icone={Layers}
-                valor={areas.length}
-                onClick={() => setShowAreasModal(true)}
-              />
-            </section>
+            <AreasTable embutido isOpen onClose={() => {}} data={areas} />
           )}
 
           {!carregandoPrimeiraVez && secao === 'retrabalho' && (
