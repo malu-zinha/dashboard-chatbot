@@ -165,23 +165,23 @@ assert.match(
 )
 assert.match(
   gerarPdfContent,
-  /RELATORIO DE PROJETO CONCLUIDO/,
-  'PDF deve ter titulo RELATORIO DE PROJETO CONCLUIDO'
+  /RELATÓRIO DE PROJETO CONCLUÍDO/,
+  'PDF deve ter titulo RELATÓRIO DE PROJETO CONCLUÍDO'
 )
 assert.match(
   gerarPdfContent,
-  /Tempo total de execucao/,
-  'PDF deve exibir Tempo total de execucao'
+  /Tempo total de execução/,
+  'PDF deve exibir Tempo total de execução'
 )
 assert.match(
   gerarPdfContent,
-  /Dias de retrabalho/,
-  'PDF deve exibir Dias de retrabalho'
+  /Retrabalho \(dias · horas\)/,
+  'PDF deve exibir o retrabalho (dias e horas)'
 )
 assert.match(
   gerarPdfContent,
-  /Dias de paralisacao/,
-  'PDF deve exibir Dias de paralisacao'
+  /Paralisação \(dias · horas\)/,
+  'PDF deve exibir a paralisação (dias e horas)'
 )
 assert.match(
   gerarPdfContent,
