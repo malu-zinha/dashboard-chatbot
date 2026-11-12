@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import dynamic from 'next/dynamic'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { FolderPlus, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import Header from '@/components/Header'
@@ -97,6 +97,15 @@ function indexarAvisos(linhas: AvisoPrazoLinha[]): Record<string, AvisoPrazoLinh
   return porAtribuicao
 }
 
+function CarregandoSecao() {
+  return (
+    <div role="status" className="space-y-4">
+      <p className="text-sm text-muted-foreground">Carregando seção...</p>
+      <Skeleton className="h-80 rounded-xl" />
+    </div>
+  )
+}
+
 const ProjetosStatusChart = dynamic(() => import('@/components/ProjetosStatusChart'), {
   ssr: false,
 })
@@ -105,9 +114,11 @@ const CargaTrabalhoChart = dynamic(() => import('@/components/CargaTrabalhoChart
 })
 const RetrabalhoCard = dynamic(() => import('@/components/RetrabalhoCard'), {
   ssr: false,
+  loading: CarregandoSecao,
 })
 const ProducaoPeriodoCard = dynamic(() => import('@/components/ProducaoPeriodoCard'), {
   ssr: false,
+  loading: CarregandoSecao,
 })
 
 export default function DashboardClient() {
@@ -168,13 +179,14 @@ export default function DashboardClient() {
   const [buscaEngenheirosExecucao, setBuscaEngenheirosExecucao] = useState('')
 
   // Secao do menu lateral, guardada na URL (?secao=...).
-  const router = useRouter()
   const searchParams = useSearchParams()
   const secao = resolverSecao(searchParams.get('secao'), isOwner)
   const filtroProjetos = resolverFiltroProjetos(searchParams.get('filtro'))
   const abaEngenheiros = resolverAbaEngenheiros(searchParams.get('aba'))
   const irPara = (destino: SecaoId, extras: Record<string, string | undefined> = {}) => {
-    router.push(urlDaSecao(destino, extras), { scroll: false })
+    // So muda a secao local: preserva / ou /inicio sem esperar outra ida ao servidor.
+    const consulta = urlDaSecao(destino, extras).slice(1)
+    window.history.pushState(null, '', window.location.pathname + consulta)
     window.scrollTo({ top: 0 })
   }
   const engenheirosExecucao = useMemo(() => buildEngenheirosExecucao(projetos), [projetos])
